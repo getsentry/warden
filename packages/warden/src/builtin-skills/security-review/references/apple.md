@@ -6,23 +6,25 @@ Load a topic file only when the change needs more depth than this page.
 
 ## Platform Entry Points
 
+- main, @main, @UIApplicationMain, AppDelegate functions
+
 - Custom URL scheme handlers, Universal Links, App Intents, Siri/Shortcuts, share sheet, and app extensions are potentially caller-controlled entry points. Another app or webpage can invoke them.
-- `WKWebView` script handlers and `evaluateJavaScript` run in the loaded page's trust. Treat page JS as untrusted unless the URL and navigation are proven first-party.
-- `UserDefaults`, sandbox files, logs, and the general pasteboard are not secret stores. Backups can read defaults and most files.
-- `LAContext.evaluatePolicy` proves user presence. It does not bind that proof to a secret. Keychain access control does.
-- ATS already encrypts `URLSession`. Report trust kill-switches and cleartext secrets, not missing pinning.
 
 ## High-Signal Patterns
 
-| Pattern | Vulnerable | Safer |
-|---------|------------|-------|
-| Deep-link session | `onOpenURL` / `application(_:open:)` applies `token` or `code` from the URL | One-time server-validated code. Do not persist the raw URL. |
-| Privileged deep link | Scheme or Universal Link transfers funds, changes email, or deletes data from query items | Allowlisted actions. Re-auth on the server for irreversible work. |
-| Unencrypted secret | Refresh token or private key in `UserDefaults`, a file, logs, or `UIPasteboard.general`, including after propagating through other variables or encoding | Keychain with a tight accessibility class. Do not log or paste secrets. |
-| Boolean local auth | `evaluatePolicy` then read an ACL-less Keychain item or defaults token | Store the secret with `SecAccessControl` and read it with `SecItemCopyMatching`. |
-| Accept-any-cert | `URLSession` / `WKNavigationDelegate` challenge handler calls `.useCredential` without `SecTrustEvaluateWithError` | Omit the callback, or evaluate `serverTrust` and cancel on failure. |
-| WebView bridge | `WKScriptMessageHandler` returns a token or starts a payment; reply via `evaluateJavaScript("cb('\(secret)')")` | Origin-check `frameInfo.securityOrigin`. Reply with `WKScriptMessageHandlerWithReply`. |
-| Unsafe unarchive | `NSKeyedUnarchiver.unarchiveObject(with:)` on scheme, pasteboard, or extension data | `JSONDecoder` or `unarchivedObject(ofClass:from:)`. |
+
+| Pattern              | Vulnerable                                                                                                                                               | Safer                                                                                  |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| Deep-link session    | `onOpenURL` / `application(_:open:)` applies `token` or `code` from the URL                                                                              | One-time server-validated code. Do not persist the raw URL.                            |
+| Privileged deep link | Scheme or Universal Link transfers funds, changes email, or deletes data from query items                                                                | Allowlisted actions. Re-auth on the server for irreversible work.                      |
+| Unencrypted secret   | Refresh token or private key in `UserDefaults`, a file, logs, or `UIPasteboard.general`, including after propagating through other variables or encoding | Keychain with a tight accessibility class. Do not log or paste secrets.                |
+| Boolean local auth   | `evaluatePolicy` then read an ACL-less Keychain item or defaults token                                                                                   | Store the secret with `SecAccessControl` and read it with `SecItemCopyMatching`.       |
+| Accept-any-cert      | `URLSession` / `WKNavigationDelegate` challenge handler calls `.useCredential` without `SecTrustEvaluateWithError`                                       | Omit the callback, or evaluate `serverTrust` and cancel on failure.                    |
+| WebView bridge       | `WKScriptMessageHandler` returns a token or starts a payment; reply via `evaluateJavaScript("cb('\(secret)')")`                                          | Origin-check `frameInfo.securityOrigin`. Reply with `WKScriptMessageHandlerWithReply`. |
+| Unsafe unarchive     | `NSKeyedUnarchiver.unarchiveObject(with:)` on scheme, pasteboard, or extension data                                                                      | `JSONDecoder` or `unarchivedObject(ofClass:from:)`.                                    |
+
+
+
 
 ## False-Positive Controls
 
@@ -35,14 +37,18 @@ Load a topic file only when the change needs more depth than this page.
 
 ## Deeper Notes
 
-| Open when the change is about... | Read |
-|----------------------------------|------|
-| Schemes, Universal Links, App Intents, pasteboard, App Groups, extensions | `references/apple/ipc.md` |
-| `UserDefaults`, files, logs, backups, Keychain accessibility | `references/apple/storage.md` |
-| `LAContext` or biometric UI used as a gate | `references/apple/auth.md` |
-| Trust challenges or cleartext secret traffic | `references/apple/network.md` |
-| `WKWebView` bridges, `evaluateJavaScript`, `UIWebView` | `references/apple/webview.md` |
-| CryptoKit, CommonCrypto, hardcoded keys | `references/apple/crypto.md` |
+
+| Open when the change is about...                                          | Read                          |
+| ------------------------------------------------------------------------- | ----------------------------- |
+| Schemes, Universal Links, App Intents, pasteboard, App Groups, extensions | `references/apple/ipc.md`     |
+| `UserDefaults`, files, logs, backups, Keychain accessibility              | `references/apple/storage.md` |
+| `LAContext` or biometric UI used as a gate                                | `references/apple/auth.md`    |
+| Trust challenges or cleartext secret traffic                              | `references/apple/network.md` |
+| `WKWebView` bridges, `evaluateJavaScript`, `UIWebView`                    | `references/apple/webview.md` |
+| CryptoKit, CommonCrypto, hardcoded keys                                   | `references/apple/crypto.md`  |
+
+
+
 
 ## Minimal Examples
 
@@ -74,3 +80,4 @@ let access = SecAccessControlCreateWithFlags(
 // SecItemAdd with kSecAttrAccessControl: access
 // Later SecItemCopyMatching triggers the system prompt. No LAContext.
 ```
+

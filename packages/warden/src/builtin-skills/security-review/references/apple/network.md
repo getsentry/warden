@@ -6,7 +6,7 @@ ATS already encrypts `URLSession` traffic. Missing pinning is not a finding. Rep
 
 ## Attackers
 
-Remote MITM on the local network, hostile Wi-Fi, or a compromised captive portal. Same-device apps are not the primary network attacker.
+Remote MITM on the local network, hostile Wi-Fi, or a compromised captive portal.
 
 ## High-Signal Patterns
 
@@ -21,7 +21,7 @@ Remote MITM on the local network, hostile Wi-Fi, or a compromised captive portal
 
 - A `URLSessionDelegate` or `WKNavigationDelegate` authentication-challenge handler accepts server trust without a successful `SecTrustEvaluateWithError`.
 - Login, token refresh, or other secret-bearing requests are sent over `http://`, or over a socket API that bypasses ATS.
-- Production code installs a custom trust that always succeeds (including `#if DEBUG` blocks that still compile into the reviewed production target).
+- Production code installs a custom trust that always succeeds
 
 ## Do Not Report
 
@@ -77,7 +77,3 @@ func urlSession(_ session: URLSession, didReceive challenge: URLAuthenticationCh
     completionHandler(.useCredential, URLCredential(trust: trust))
 }
 ```
-
-## ObjC Leads
-
-`URLSession:didReceiveChallenge:completionHandler:`, `webView:didReceiveAuthenticationChallenge:completionHandler:`, `SecTrustEvaluate`, `NSAllowsArbitraryLoads` only as a lead for a cleartext secret path.

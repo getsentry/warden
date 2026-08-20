@@ -8,17 +8,19 @@ A hook that flips the `evaluatePolicy` reply to `true` therefore unlocks any pat
 
 ## High-Signal Patterns
 
-| Pattern | Vulnerable | Safer |
-|---------|------------|-------|
-| Boolean gate | `evaluatePolicy` then reveal a secret, set a session, or call a privileged API | Store the secret with `SecAccessControl`. Read it with `SecItemCopyMatching`. No separate `evaluatePolicy`. |
-| ACL-less Keychain | `evaluatePolicy` then `SecItemCopyMatching` without `kSecAttrAccessControl` | Add the item with `SecAccessControlCreateWithFlags` and `.biometryCurrentSet` or `.userPresence`. |
-| UI lock only | Lock screen dismissed on LA success; token stays in `UserDefaults` or memory | Drop in-memory secrets on lock. Next use is a Keychain read that triggers the system prompt. |
+
+| Pattern           | Vulnerable                                                                               | Safer                                                                                                                 |
+| ----------------- | ---------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| Boolean gate      | `LAContext.evaluatePolicy` then reveal a secret, set a session, or call a privileged API | Store the secret with `SecAccessControl`. Read it with `SecItemCopyMatching`. No separate `LAContext.evaluatePolicy`. |
+| ACL-less Keychain | `LAContext.evaluatePolicy` then `SecItemCopyMatching` without `kSecAttrAccessControl`    | Add the item with `SecAccessControlCreateWithFlags` and `.biometryCurrentSet` or `.userPresence`.                     |
+| UI lock only      | Lock screen dismissed on LA success; token stays in `UserDefaults` or memory             | Drop in-memory secrets on lock. Next use is a Keychain read that triggers the system prompt.                          |
+
 
 Optional: pass an `LAContext` as `kSecUseAuthenticationContext` to customize the Keychain prompt. That is still Keychain-gated, not a boolean gate.
 
 ## Report When
 
-- `evaluatePolicy` is the only check before a privileged action or before reading a token that is already in memory, `UserDefaults`, or an ACL-less Keychain item.
+- `LAContext.evaluatePolicy` is the only check before a privileged action or before reading a token that is already in memory, `UserDefaults`, or an ACL-less Keychain item.
 
 ## Do Not Report
 
@@ -29,7 +31,7 @@ Optional: pass an `LAContext` as `kSecUseAuthenticationContext` to customize the
 
 ## Trace
 
-1. Find `evaluatePolicy`.
+1. Find `LAContext.evaluatePolicy`.
 2. On success, name the secret or privileged call.
 3. If the secret is in Keychain, check the add/update query for `kSecAttrAccessControl`.
 4. Report only if that ACL is missing and the secret or action is already available to the process.
@@ -69,6 +71,3 @@ let access = SecAccessControlCreateWithFlags(
 // SecItemCopyMatching presents the system prompt and returns the item only on success.
 ```
 
-## ObjC Leads
-
-`-[LAContext evaluatePolicy:localizedReason:reply:]`, `SecAccessControlCreateWithFlags`, `kSecAttrAccessControl`, `kSecUseAuthenticationContext`.

@@ -6,17 +6,19 @@ Open when reviewing CryptoKit, CommonCrypto, `SecKey`, hardcoded keys, or random
 
 ## Attackers
 
-Remote and same-device attackers who can read the app binary, a backup, or a ciphertext they were given. They cannot be assumed to have a debugger.
+Remote and same-device attackers who can read the app binary, a backup, or a ciphertext they were given.
 
 ## High-Signal Patterns
 
-| Pattern | Vulnerable | Safer |
-|---------|------------|-------|
-| Hardcoded private key / AES key / HMAC secret | `SymmetricKey(data: Data(base64Encoded: "…")!)`, PEM in source, `SecKeyCreateWithData` on a bundled private key used for auth | Keychain / Secure Enclave generated keys. No long-lived private material in the repo. |
-| Hardcoded bearer token | `let apiKey = "sk_live_…"` sent as auth | Server-side secret. Public client IDs are fine. |
-| Broken cipher for a secret | `kCCAlgorithmDES`, `kCCAlgorithmAES` + `kCCOptionECBMode`, RC4, XOR "encryption" of a token | CryptoKit `AES.GCM` or `ChaChaPoly` with a Keychain key |
-| Broken hash for a password / token | `Insecure.MD5` / `Insecure.SHA1` / `CC_MD5` of a password | System Keychain, or a real KDF (`CryptoKit` / `SecKey`) on the server |
-| Predictable secret | `Int.random`, `drand48`, `arc4random` used as a session token or reset code | `SecureEnclave` / `SymmetricKey` / `SecRandomCopyBytes` |
+
+| Pattern                                       | Vulnerable                                                                                                                                              | Safer                                                                                 |
+| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| Hardcoded private key / AES key / HMAC secret | `SymmetricKey(data: Data(base64Encoded: "…")!)`, PEM in source or bundled on file system, `SecKeyCreateWithData` on a bundled private key used for auth | Keychain / Secure Enclave generated keys. No long-lived private material in the repo. |
+| Hardcoded bearer token                        | `let apiKey = "sk_live_…"` sent as auth                                                                                                                 | Server-side secret. Public client IDs are fine.                                       |
+| Broken cipher for a secret                    | `kCCAlgorithmDES`, `kCCAlgorithmAES` + `kCCOptionECBMode`, RC4, XOR "encryption" of a token                                                             | CryptoKit `AES.GCM` or `ChaChaPoly` with a Keychain key                               |
+| Broken hash for a password / token            | `Insecure.MD5` / `Insecure.SHA1` / `CC_MD5` of a password                                                                                               | System Keychain, or a real KDF (`CryptoKit` / `SecKey`) on the server                 |
+| Predictable secret                            | `Int.random`, `drand48`, `arc4random` used as a session token or reset code                                                                             | `SecureEnclave` / `SymmetricKey` / `SecRandomCopyBytes`                               |
+
 
 ## Report When
 
@@ -30,7 +32,7 @@ Remote and same-device attackers who can read the app binary, a backup, or a cip
 - `arc4random` for UI, jitter, or analytics.
 - CommonCrypto AES-GCM/CBC with a Keychain key and a random IV, even if CryptoKit would be nicer.
 - Missing Secure Enclave.
-- Public client IDs, example keys, test fixtures, `sk_test_` confined to tests.
+- Public client IDs, example keys, test fixtures, keys confined to tests.
 - Certificate pinning helpers.
 
 ## Trace
@@ -72,6 +74,3 @@ let key = SymmetricKey(size: .bits256)
 let digest = Insecure.MD5.hash(data: fileData)
 ```
 
-## ObjC Leads
-
-`CCCrypt`, `CC_MD5`, `SecKeyCreateWithData`, literal `NSString` keys, `arc4random` / `rand` used as tokens.

@@ -6,25 +6,29 @@ Not applicable on watchOS. JavaScript in the page can call every `WKScriptMessag
 
 ## Attackers
 
-| Source | Trust |
-|--------|--------|
-| Remote URL, or a URL taken from a scheme/link | Untrusted page + JS |
-| HTML string built from user / scheme / network input | Injection → JS |
-| Trusted first-party page, but handler also exposed to iframes / navigations | Origin confusion |
-| `UIWebView` + `JSExport` / `JSContext` | Always-on JS, weaker isolation |
+
+| Source                                                                      | Trust                          |
+| --------------------------------------------------------------------------- | ------------------------------ |
+| Remote URL, or a URL taken from a scheme/link                               | Untrusted page + JS            |
+| HTML string built from user / scheme / network input                        | Injection → JS                 |
+| Trusted first-party page, but handler also exposed to iframes / navigations | Origin confusion               |
+| `UIWebView` + `JSExport` / `JSContext`                                      | Always-on JS, weaker isolation |
+
 
 Need a path for attacker JS: injected HTML, attacker URL, or a bridge that is still attached after navigation to an untrusted origin.
 
 ## High-Signal Patterns
 
-| Pattern | Vulnerable | Safer |
-|---------|------------|-------|
-| Privileged bridge | `WKScriptMessageHandler` returns tokens, starts payments, or opens `file://` without origin checks | Minimize methods. Validate `message.frameInfo.securityOrigin`. Refuse unexpected hosts. |
-| Reply via `evaluateJavaScript` | Handler does `evaluateJavaScript("cb('\(token)')")` | `WKScriptMessageHandlerWithReply`. Never interpolate secrets into JS. |
-| Untrusted load | `webView.load(URLRequest(url: userURL))` or `loadHTMLString(userHTML, …)` with JS on | Allowlisted https hosts, or disable JS (`WKPreferences.isJavaScriptEnabled = false` where possible) and no bridge. |
-| Local file + JS | `loadFileURL` / `allowFileAccessFromFileURLs` with attacker-influenced HTML | Do not combine file access and untrusted HTML. Prefer `QLPreviewController` for files. |
-| `UIWebView` bridge | `JSContext` / `JSExport` on `UIWebView` | `WKWebView` + restricted handlers. Report `UIWebView` only with a bridge or untrusted content. |
-| Sensitive write into DOM | `evaluateJavaScript("document.body.innerHTML = '\(secret)'")` in `.page` | Native UI overlay, or a non-page `WKContentWorld` that still must not share the secret with page JS. |
+
+| Pattern                        | Vulnerable                                                                                         | Safer                                                                                                              |
+| ------------------------------ | -------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| Privileged bridge              | `WKScriptMessageHandler` returns tokens, starts payments, or opens `file://` without origin checks | Minimize methods. Validate `message.frameInfo.securityOrigin`. Refuse unexpected hosts.                            |
+| Reply via `evaluateJavaScript` | Handler does `evaluateJavaScript("cb('\(token)')")`                                                | `WKScriptMessageHandlerWithReply`. Never interpolate secrets into JS.                                              |
+| Untrusted load                 | `webView.load(URLRequest(url: userURL))` or `loadHTMLString(userHTML, …)` with JS on               | Allowlisted https hosts, or disable JS (`WKPreferences.isJavaScriptEnabled = false` where possible) and no bridge. |
+| Local file + JS                | `loadFileURL` / `allowFileAccessFromFileURLs` with attacker-influenced HTML                        | Do not combine file access and untrusted HTML. Prefer `QLPreviewController` for files.                             |
+| `UIWebView` bridge             | `JSContext` / `JSExport` on `UIWebView`                                                            | `WKWebView` + restricted handlers. Report `UIWebView` only with a bridge or untrusted content.                     |
+| Sensitive write into DOM       | `evaluateJavaScript("document.body.innerHTML = '\(secret)'")` in `.page`                           | Native UI overlay, or a non-page `WKContentWorld` that still must not share the secret with page JS.               |
+
 
 ## Report When
 
@@ -92,6 +96,3 @@ func userContentController(_ ucc: WKUserContentController, didReceive message: W
 }
 ```
 
-## ObjC Leads
-
-`WKWebView`, `addScriptMessageHandler:name:`, `evaluateJavaScript:completionHandler:`, `UIWebView`, `JSContext`, `JSExport`.

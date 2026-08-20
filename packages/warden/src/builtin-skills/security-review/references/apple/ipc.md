@@ -6,27 +6,25 @@ Any other app or webpage can invoke a registered custom scheme. Universal Links 
 
 ## Attackers
 
-| Source | Trust |
-|--------|--------|
-| `myapp://…` from Safari, Notes, another app, QR, push | Untrusted. Scheme is not an identity. |
-| `https://app.example.com/…` Universal Link | Host is associated, path/query are attacker-controlled. |
-| App Intent / Siri / Shortcuts / Spotlight | Untrusted caller. Same checks as the in-app action. |
-| `UIPasteboard.general` | Other apps can plant or, on older iOS, read. |
-| App Group container / `UserDefaults(suiteName:)` | Every app and extension in the group. |
-| App extension (`NSExtension`) | Host app may be hostile. Validate every payload. |
+| Source                                                | Trust                                                     |
+| ----------------------------------------------------- | --------------------------------------------------------- |
+| `myapp://…` from Safari, Notes, another app, QR, push | Untrusted. Path/query/parameters are attacker-controlled. |
+| `https://app.example.com/…` Universal Link            | Host is associated, path/query are attacker-controlled.   |
+| App Intent / Siri / Shortcuts / Spotlight             | Untrusted caller. Same checks as the in-app action.       |
+| `UIPasteboard.general`                                | Other apps can plant or, on older iOS, read.              |
+| App extension (`NSExtension`)                         | Host app may be hostile. Validate every payload.          |
 
 ## High-Signal Patterns
 
-| Pattern | Vulnerable | Safer |
-|---------|------------|-------|
-| Privileged scheme action | `onOpenURL` / `application(_:open:options:)` transfers money, changes email, applies a token, or deletes data from query items | Allowlisted actions. Server re-auth for irreversible work. Ignore unknown hosts/paths. |
-| Token in a scheme | `myapp://auth?token=` or `myapp://reset?code=` consumed as a session | One-time server-validated code. Prefer Universal Links for auth redirects. Never persist the raw URL. |
-| Unvalidated file/url param | Scheme/link path opens `WKWebView`, `Data(contentsOf:)`, or a filesystem path | Exact allowlist of hosts or resource IDs. No `..`. No `file:` unless you built it. |
-| Missing source check on an internal scheme | Internal-only action accepted from any caller | Same-team `sourceApplication` allowlist, or do not use a custom scheme for internal IPC |
-| App Intent side effect | `@AppIntent` performs the same privileged mutation as an in-app button with no auth re-check | Re-run the same authorization as the UI path. Do not put secrets in intent parameters or results. |
-| General pasteboard secret | `UIPasteboard.general.string = refreshToken` | Do not write secrets. If the user copies, that is their action, not a finding. |
-| App Group secret | Token in `UserDefaults(suiteName:)` or a file under `containerURL(forSecurityApplicationGroupIdentifier:)` | Keychain with an explicit access group, or do not share the secret. |
-| Unsafe unarchive of IPC | `NSKeyedUnarchiver.unarchiveObject(with: urlPayload)` / `decodeObject(forKey:)` on scheme, pasteboard, or extension data | `JSONDecoder` or `unarchivedObject(ofClass:from:)`. Never decode arbitrary classes. |
+| Pattern                                    | Vulnerable                                                                                                                     | Safer                                                                                                 |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------- |
+| Privileged scheme action                   | `onOpenURL` / `application(_:open:options:)` transfers money, changes email, applies a token, or deletes data from query items | Allowlisted actions. Server re-auth for irreversible work. Ignore unknown hosts/paths.                |
+| Token in a scheme                          | `myapp://auth?token=` or `myapp://reset?code=` consumed as a session                                                           | One-time server-validated code. Prefer Universal Links for auth redirects. Never persist the raw URL. |
+| Unvalidated file/url param                 | Scheme/link path opens `WKWebView`, `Data(contentsOf:)`, or a filesystem path                                                  | Exact allowlist of hosts or resource IDs. No `..`. No `file:` unless you built it.                    |
+| Missing source check on an internal scheme | Internal-only action accepted from any caller                                                                                  | Same-team `sourceApplication` allowlist, or do not use a custom scheme for internal IPC               |
+| App Intent side effect                     | `@AppIntent` performs the same privileged mutation as an in-app button with no auth re-check                                   | Re-run the same authorization as the UI path. Do not put secrets in intent parameters or results.     |
+| General pasteboard secret                  | `UIPasteboard.general.string = refreshToken`                                                                                   | Do not write secrets. If the user copies, that is their action, not a finding.                        |
+| Unsafe unarchive of IPC                    | `NSKeyedUnarchiver.unarchiveObject(with: urlPayload)` / `decodeObject(forKey:)` on scheme, pasteboard, or extension data       | `JSONDecoder` or `unarchivedObject(ofClass:from:)`. Never decode arbitrary classes.                   |
 
 ## Report When
 
@@ -34,7 +32,6 @@ Any other app or webpage can invoke a registered custom scheme. Universal Links 
 - Auth tokens or codes arrive in a scheme/link and are stored or used as a session without single-use server validation.
 - An App Intent / extension entry point mutates sensitive state or returns a secret, and the in-app path would have required a stronger check.
 - A secret is written to `UIPasteboard.general` by app code.
-- A secret is written to an App Group container that another target in the repo can read.
 - Attacker-controlled bytes are deserialized with an open `NSKeyedUnarchiver`.
 
 ## Do Not Report
@@ -43,7 +40,6 @@ Any other app or webpage can invoke a registered custom scheme. Universal Links 
 - Universal Links that open a product page after parsing an ID, with the server enforcing authz.
 - Missing `sourceApplication` on a documented public deep link that cannot do harm.
 - User-initiated copy of a password field.
-- App Groups used for non-secrets (widgets, shared theme).
 - `NSKeyedUnarchiver` of bundled or otherwise trusted constants.
 
 ## Trace
@@ -96,6 +92,3 @@ Any app or page can set the user's session.
 UIPasteboard.general.string = session.refreshToken
 ```
 
-## ObjC Leads
-
-`application:openURL:options:`, `application:continueUserActivity:restorationHandler:`, `UIPasteboard.generalPasteboard`, `NSUserDefaults` with a suite name, `NSKeyedUnarchiver`.
