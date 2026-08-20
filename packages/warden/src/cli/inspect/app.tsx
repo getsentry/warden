@@ -27,7 +27,7 @@ import { flatFindingList } from './grouping.js';
 import { SourcePane } from './panes/source-pane.js';
 import { FindingsPane } from './panes/findings-pane.js';
 import { ReviewPane } from './panes/review-pane.js';
-import { VerdictModal, VERDICT_HOTKEYS } from './panes/verdict-modal.js';
+import { VerdictOverlay, VERDICT_HOTKEYS } from './panes/verdict-modal.js';
 import type { VerdictHotkey } from './panes/verdict-modal.js';
 import type { ReviewVerdict } from './reviews.js';
 import { upsertReview, saveReviews, loadReviews } from './reviews.js';
@@ -265,27 +265,19 @@ export function InspectApp({
         >
           <ReviewPane finding={selectedFinding} height={reviewHeight} width={rightWidth} />
         </Box>
-
-        {/* Verdict modal overlay — rendered as last child on the right column */}
-        {modal !== null && modalFinding !== null && (
-          <Box
-            position="absolute"
-            flexDirection="column"
-            alignItems="center"
-            justifyContent="center"
-            width="100%"
-            height="100%"
-          >
-            <VerdictModal
-              verdict={modal.verdict}
-              findingTitle={modalFinding.finding.title}
-              onConfirm={handleModalConfirm}
-              onCancel={handleModalCancel}
-              initialComment={modalFinding.review?.comment ?? ''}
-            />
-          </Box>
-        )}
       </Box>
+
+      {modal !== null && modalFinding !== null && (
+        <VerdictOverlay
+          width={columns}
+          height={rows}
+          verdict={modal.verdict}
+          findingTitle={modalFinding.finding.title}
+          onConfirm={handleModalConfirm}
+          onCancel={handleModalCancel}
+          initialComment={modalFinding.review?.comment ?? ''}
+        />
+      )}
     </Box>
   );
 }

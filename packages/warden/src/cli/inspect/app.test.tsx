@@ -4,10 +4,12 @@
  * to stretch the frame and short ones left a gap.
  */
 
+import { Box, Text } from 'ink';
 import { render } from 'ink-testing-library';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { Finding } from '../../types/index.js';
 import { InspectApp } from './app.js';
+import { VerdictOverlay } from './panes/verdict-modal.js';
 import type { InspectSession } from './session.js';
 
 const COLUMNS = 100;
@@ -144,5 +146,57 @@ describe('InspectApp layout', () => {
 
     short.unmount();
     long.unmount();
+  });
+
+  it('centers an opaque verdict modal over the full terminal', () => {
+    const view = render(
+      <Box width={COLUMNS} height={ROWS}>
+        <Box width={COLUMNS} height={ROWS} flexDirection="column">
+          {Array.from({ length: ROWS }, (_, i) => (
+            <Text key={i}>{'X'.repeat(COLUMNS)}</Text>
+          ))}
+        </Box>
+        <VerdictOverlay
+          width={COLUMNS}
+          height={ROWS}
+          verdict="true_positive"
+          findingTitle="SQL injection risk"
+          onConfirm={() => undefined}
+          onCancel={() => undefined}
+        />
+      </Box>,
+    );
+
+    const frame = view.lastFrame() ?? '';
+    const visible = frame.replace(ANSI_SGR, '');
+    const lines = visible.split('\n');
+    const modalTop = lines.findIndex((line) => line.includes('╔'));
+    const modalBottom = lines.findIndex((line) => line.includes('╚'));
+    const modalLine = lines[modalTop] ?? '';
+    const left = modalLine.indexOf('╔');
+    const right = modalLine.lastIndexOf('╗');
+
+    expect(modalTop).toBeGreaterThan(-1);
+    expect(modalBottom).toBeGreaterThan(modalTop);
+    expect(left).toBeGreaterThan(-1);
+    expect(right).toBeGreaterThan(left);
+    expect(visible).toContain('True Positive');
+    expect(visible).toContain('Comment (optional):');
+
+    const modalWidth = right - left + 1;
+    const modalHeight = modalBottom - modalTop + 1;
+    expect(left).toBe(Math.floor((COLUMNS - modalWidth) / 2));
+    expect(modalTop).toBeGreaterThanOrEqual(Math.floor((ROWS - modalHeight) / 2));
+    expect(modalTop).toBeLessThanOrEqual(Math.ceil((ROWS - modalHeight) / 2));
+
+    const interiors = lines.slice(modalTop + 1, modalBottom).map((line) => line.slice(left + 1, right));
+    expect(interiors.some((line) => line.includes('X'))).toBe(false);
+
+    const open = frameSize(frame);
+    expect(open.rows).toBe(ROWS);
+    expect(open.columns).toBe(COLUMNS);
+    expect(open.overflowing).toEqual([]);
+
+    view.unmount();
   });
 });

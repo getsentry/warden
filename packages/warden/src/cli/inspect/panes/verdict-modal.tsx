@@ -28,6 +28,9 @@ export const VERDICT_HOTKEYS = {
 
 export type VerdictHotkey = keyof typeof VERDICT_HOTKEYS;
 
+/** Fixed modal width, including the double-line border. */
+export const VERDICT_MODAL_WIDTH = 60;
+
 // ---------------------------------------------------------------------------
 // Display helpers
 // ---------------------------------------------------------------------------
@@ -61,9 +64,38 @@ export interface VerdictModalProps {
   initialComment?: string;
 }
 
+export interface VerdictOverlayProps extends VerdictModalProps {
+  /** Full terminal width so the overlay covers both columns. */
+  width: number;
+  /** Full terminal height so the overlay covers both columns. */
+  height: number;
+}
+
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
+
+/** Full-terminal overlay that centers an opaque verdict modal. */
+export function VerdictOverlay({
+  width,
+  height,
+  ...modalProps
+}: VerdictOverlayProps): React.ReactElement {
+  return (
+    <Box
+      position="absolute"
+      top={0}
+      left={0}
+      flexDirection="column"
+      alignItems="center"
+      justifyContent="center"
+      width={width}
+      height={height}
+    >
+      <VerdictModal {...modalProps} />
+    </Box>
+  );
+}
 
 export function VerdictModal({
   verdict,
@@ -116,40 +148,40 @@ export function VerdictModal({
 
   useInput(handleInput);
 
+  const innerWidth = VERDICT_MODAL_WIDTH - 6; // border (2) + paddingX (4)
+  const title = findingTitle.length > 36 ? findingTitle.slice(0, 33) + '...' : findingTitle;
+
   return (
-    // Full-screen overlay using absolute positioning via zIndex + alignItems.
-    // Ink doesn't support z-index or absolute positioning natively, so we
-    // render this as the last child in a relative-positioned container with
-    // marginTop auto to push it visually to the centre of the right column.
     <Box
       flexDirection="column"
       borderStyle="double"
       borderColor={color}
+      backgroundColor="black"
       paddingX={2}
       paddingY={1}
-      width={60}
+      width={VERDICT_MODAL_WIDTH}
     >
-      {/* Header */}
-      <Box marginBottom={1}>
-        <Text bold color={color}>
+      <Box width={innerWidth} marginBottom={1}>
+        <Text bold color={color} backgroundColor="black">
           {label}
         </Text>
-        <Text dimColor> — </Text>
-        <Text dimColor>{findingTitle.length > 36 ? findingTitle.slice(0, 33) + '...' : findingTitle}</Text>
+        <Text dimColor backgroundColor="black"> — </Text>
+        <Text dimColor backgroundColor="black">{title}</Text>
       </Box>
 
-      {/* Comment input */}
-      <Box flexDirection="column">
-        <Text bold dimColor>Comment (optional):</Text>
-        <Box marginTop={1}>
-          <Text color="white">{comment}</Text>
-          <Text color="cyan">▌</Text>
+      <Box flexDirection="column" width={innerWidth}>
+        <Text bold dimColor backgroundColor="black">Comment (optional):</Text>
+        <Box width={innerWidth} marginTop={1}>
+          <Text color="white" backgroundColor="black">
+            {comment}
+            <Text color="cyan" backgroundColor="black">▌</Text>
+            {' '.repeat(Math.max(0, innerWidth - [...comment].length - 1))}
+          </Text>
         </Box>
       </Box>
 
-      {/* Footer */}
-      <Box marginTop={1}>
-        <Text dimColor>Enter to confirm · Esc to cancel</Text>
+      <Box width={innerWidth} marginTop={1}>
+        <Text dimColor backgroundColor="black">Enter to confirm · Esc to cancel</Text>
       </Box>
     </Box>
   );
