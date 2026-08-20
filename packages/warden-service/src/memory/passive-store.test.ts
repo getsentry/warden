@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import type { DatabaseClient, QueryResult, WardenDatabase } from '../db/database.js';
 import type { PassiveEvidence } from './passive.js';
-import { applyMemorySupersessionDecision, persistPassiveMemoryCandidate } from './passive-store.js';
+import {
+  applyMemorySupersessionDecision,
+  persistPassiveMemoryCandidate,
+  refreshReviewEvidenceCounts,
+} from './passive-store.js';
 
 function evidence(index: number): PassiveEvidence {
   return {
@@ -12,6 +16,26 @@ function evidence(index: number): PassiveEvidence {
     title: 'Unsafe sink',
     description: 'Untrusted input reaches a sink.',
     outcome: 'resolved',
+    observedAt: `2026-08-${String(index).padStart(2, '0')}T10:00:00.000Z`,
+  };
+}
+
+function reviewEvidence(
+  index: number,
+  verdict: NonNullable<PassiveEvidence['verdict']>,
+  comment: string,
+): PassiveEvidence {
+  return {
+    findingId: `00000000-0000-4000-8000-${String(index).padStart(12, '0')}`,
+    reviewId: `30000000-0000-4000-8000-${String(index).padStart(12, '0')}`,
+    runId: `20000000-0000-4000-8000-${String(index).padStart(12, '0')}`,
+    skill: 'security',
+    title: 'Unsafe sink',
+    description: 'Untrusted input reaches a sink.',
+    verdict,
+    comment,
+    pathFamily: 'src/auth',
+    source: 'review',
     observedAt: `2026-08-${String(index).padStart(2, '0')}T10:00:00.000Z`,
   };
 }
@@ -154,5 +178,67 @@ describe('passive memory persistence', () => {
     })).resolves.toBe(true);
     expect(statements.some((sql) => sql.includes("lifecycle = 'active'"))).toBe(true);
     expect(statements.some((sql) => sql.includes("lifecycle = 'superseded'"))).toBe(true);
+  });
+
+  it('persists a false-positive review comment as finding_review evidence',
+    async () => {
+      const source = [reviewEvidence(1, 'false_positive', 'Test fixtures, not a real sink.')];
+      const statements: { sql: string; values: readonly unknown[] }[] = [];
+      const database = databaseFor((sql, values) => {
+        statements.push({ sql, values });
+        if (sql.includes('FROM finding_reviews fr')) return {
+          rows: [{ finding_id: source[0]!.findingId, review_id: source[0]!.reviewId, run_id: source[0]!.runId }],
+          rowCount: 1,
+        };
+        if (sql.includes('SELECT id, lifecycle FROM memories')) return { rows: [], rowCount: 0 };
+        if (sql.includes('INSERT INTO memories')) return { rows: [{ id: 'memory-fp' }], rowCount: 1 };
+        return { rows: [], rowCount: 0 };
+      });
+
+      await expect(persistPassiveMemoryCandidate(database, {
+        tenantId: 'tenant-1', repositoryId: 'repository-1',
+        proposal: {
+          kind: 'false_positive',
+          content: 'Test fixtures, not a real sink.',
+          evidenceIds: [source[0]!.reviewId!],
+          skill: 'security',
+          pathFamily: 'src/auth',
+          confidence: 0.6,
+        },
+        evidence: source,
+        modelVersion: 'model-v1',
+      })).resolves.toEqual({ id: 'memory-fp', lifecycle: 'candidate', created: true });
+      const inserted = statements.find((item) => item.sql.includes('INSERT INTO memories'));
+      expect(inserted?.values[4]).toBe('candidate');
+      expect(inserted?.values[8]).toBe('security');
+      expect(inserted?.values[10]).toBe('src/auth');
+      const evidenceInsert = statements.find((item) => item.sql.includes('INSERT INTO memory_evidence'));
+      expect(evidenceInsert?.sql).toContain("'finding_review'");
+      expect(evidenceInsert?.values[3]).toBe(source[0]!.reviewId);
+    });
+
+  it('raises contradiction_count on an FP candidate after a true-positive relabel', async () => {
+    const statements: { sql: string; values: readonly unknown[] }[] = [];
+    const database = databaseFor((sql, values) => {
+      statements.push({ sql, values });
+      if (sql.includes('FROM finding_reviews fr')) return {
+        rows: [{ finding_id: 'finding-1', review_id: 'review-1', run_id: 'run-1' }], rowCount: 1,
+      };
+      if (sql.includes('SELECT m.id, m.kind')) return {
+        rows: [{ id: 'memory-fp', kind: 'false_positive' }], rowCount: 1,
+      };
+      if (sql.includes('count(*) FILTER')) return {
+        rows: [{ support_count: 0, contradiction_count: 1, independent_runs: 0 }], rowCount: 1,
+      };
+      return { rows: [], rowCount: 0 };
+    });
+
+    await refreshReviewEvidenceCounts(database, {
+      tenantId: 'tenant-1',
+      repositoryId: 'repository-1',
+      reviewIds: ['review-1'],
+    });
+    const update = statements.find((item) => item.sql.includes('UPDATE memories SET'));
+    expect(update?.values).toEqual(expect.arrayContaining(['tenant-1', 'memory-fp', 0, 1]));
   });
 });

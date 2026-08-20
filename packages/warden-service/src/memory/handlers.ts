@@ -6,6 +6,8 @@ import {
   PASSIVE_MEMORY_MODEL_VERSION,
   PassiveExtractionInputSchema,
   PassiveMemoryProposalSchema,
+  isReviewEvidence,
+  pathFamilyFromLocation,
   proposePassiveMemory,
   type PassiveEvidence,
   type PassiveExtractionInput,
@@ -14,6 +16,7 @@ import {
 import {
   defaultPassivePromotionPolicy,
   persistPassiveMemoryCandidate,
+  refreshReviewEvidenceCounts,
   type PassivePromotionPolicy,
 } from './passive-store.js';
 
@@ -33,12 +36,17 @@ export interface MemoryJobHandlerOptions {
 
 interface EvidenceRow extends Record<string, unknown> {
   finding_id: string;
-  observation_id: string;
+  observation_id: string | null;
+  review_id: string | null;
   run_id: string;
   skill: string;
   title: string;
   description: string;
-  outcome: PassiveEvidence['outcome'];
+  outcome: PassiveEvidence['outcome'] | null;
+  verdict: PassiveEvidence['verdict'] | null;
+  comment: string | null;
+  location_path: string | null;
+  source: 'observation' | 'review' | null;
   observed_at: Date | string;
 }
 
@@ -55,33 +63,111 @@ function isVectorUnavailable(error: unknown): boolean {
 
 async function loadEvidence(database: WardenDatabase, tenantId: string, repositoryId: string, runId: string) {
   const result = await database.query<EvidenceRow>(`
-    SELECT finding_id, observation_id, run_id, skill, title, description, outcome, observed_at
+    SELECT finding_id, observation_id, review_id, run_id, skill, title, description,
+      outcome, verdict, comment, location_path, source, observed_at
     FROM (
-      SELECT f.id AS finding_id, fo.id AS observation_id, r.id AS run_id,
-        se.skill, f.title, f.description, fo.outcome, fo.observed_at
-      FROM finding_observations fo
-      JOIN findings f ON f.id = fo.finding_id AND f.tenant_id = fo.tenant_id
-      JOIN runs r ON r.id = fo.run_id AND r.tenant_id = fo.tenant_id
-      JOIN repositories repo ON repo.id = r.repository_id AND repo.tenant_id = r.tenant_id
-      JOIN skill_executions se ON se.id = f.skill_execution_id AND se.tenant_id = f.tenant_id
-      WHERE fo.tenant_id = $1 AND r.repository_id = $2 AND repo.memory_enabled = true
-        AND r.data_profile IN ('findings', 'code')
-        AND fo.outcome IN ('posted', 'resolved', 'rejected', 'revised')
-      ORDER BY (r.id = $3) DESC, fo.observed_at DESC, fo.id DESC
+      SELECT finding_id, observation_id, review_id, run_id, skill, title, description,
+        outcome, verdict, comment, location_path, source, observed_at
+      FROM (
+        SELECT
+          f.id AS finding_id,
+          NULL::uuid AS observation_id,
+          fr.id AS review_id,
+          r.id AS run_id,
+          se.skill,
+          f.title,
+          f.description,
+          NULL::text AS outcome,
+          fr.verdict,
+          fr.comment,
+          loc.path AS location_path,
+          'review'::text AS source,
+          fr.updated_at AS observed_at
+        FROM finding_reviews fr
+        JOIN findings f ON f.id = fr.finding_id AND f.tenant_id = fr.tenant_id
+        JOIN runs r ON r.id = fr.run_id AND r.tenant_id = fr.tenant_id
+        JOIN repositories repo ON repo.id = r.repository_id AND repo.tenant_id = r.tenant_id
+        JOIN skill_executions se ON se.id = f.skill_execution_id AND se.tenant_id = f.tenant_id
+        LEFT JOIN LATERAL (
+          SELECT path FROM finding_locations
+          WHERE tenant_id = f.tenant_id AND finding_id = f.id
+          ORDER BY ordinal ASC, id ASC
+          LIMIT 1
+        ) loc ON true
+        WHERE fr.tenant_id = $1 AND r.repository_id = $2 AND repo.memory_enabled = true
+          AND r.data_profile IN ('findings', 'code')
+        UNION ALL
+        SELECT
+          f.id AS finding_id,
+          fo.id AS observation_id,
+          NULL::uuid AS review_id,
+          r.id AS run_id,
+          se.skill,
+          f.title,
+          f.description,
+          fo.outcome,
+          NULL::text AS verdict,
+          NULL::text AS comment,
+          loc.path AS location_path,
+          'observation'::text AS source,
+          fo.observed_at AS observed_at
+        FROM finding_observations fo
+        JOIN findings f ON f.id = fo.finding_id AND f.tenant_id = fo.tenant_id
+        JOIN runs r ON r.id = fo.run_id AND r.tenant_id = fo.tenant_id
+        JOIN repositories repo ON repo.id = r.repository_id AND repo.tenant_id = r.tenant_id
+        JOIN skill_executions se ON se.id = f.skill_execution_id AND se.tenant_id = f.tenant_id
+        LEFT JOIN LATERAL (
+          SELECT path FROM finding_locations
+          WHERE tenant_id = f.tenant_id AND finding_id = f.id
+          ORDER BY ordinal ASC, id ASC
+          LIMIT 1
+        ) loc ON true
+        WHERE fo.tenant_id = $1 AND r.repository_id = $2 AND repo.memory_enabled = true
+          AND r.data_profile IN ('findings', 'code')
+          AND fo.outcome IN ('posted', 'resolved', 'rejected', 'revised')
+          AND NOT EXISTS (
+            SELECT 1 FROM finding_reviews reviewed
+            WHERE reviewed.tenant_id = fo.tenant_id AND reviewed.finding_id = fo.finding_id
+          )
+      ) combined
+      ORDER BY (run_id = $3) DESC, (source = 'review') DESC, observed_at DESC,
+        COALESCE(review_id, observation_id) DESC
       LIMIT 100
     ) evidence
-    ORDER BY observed_at, observation_id
+    ORDER BY observed_at, COALESCE(review_id, observation_id)
   `, [tenantId, repositoryId, runId]);
-  return result.rows.map((row): PassiveEvidence => ({
-    findingId: row.finding_id,
-    observationId: row.observation_id,
-    runId: row.run_id,
-    skill: row.skill,
-    title: row.title,
-    description: row.description.slice(0, 2_000),
-    outcome: row.outcome,
-    observedAt: iso(row.observed_at),
-  }));
+  return result.rows.flatMap((row): PassiveEvidence[] => {
+    const pathFamily = pathFamilyFromLocation(row.location_path);
+    const description = row.description.slice(0, 2_000);
+    if (row.source === 'review' && row.review_id && row.verdict) {
+      return [{
+        findingId: row.finding_id,
+        reviewId: row.review_id,
+        runId: row.run_id,
+        skill: row.skill,
+        title: row.title,
+        description,
+        verdict: row.verdict,
+        comment: row.comment ?? '',
+        ...(pathFamily ? { pathFamily } : {}),
+        source: 'review',
+        observedAt: iso(row.observed_at),
+      }];
+    }
+    if (!row.observation_id || !row.outcome) return [];
+    return [{
+      findingId: row.finding_id,
+      observationId: row.observation_id,
+      runId: row.run_id,
+      skill: row.skill,
+      title: row.title,
+      description,
+      outcome: row.outcome,
+      ...(pathFamily ? { pathFamily } : {}),
+      source: 'observation',
+      observedAt: iso(row.observed_at),
+    }];
+  });
 }
 
 function deterministicProposals(evidence: readonly PassiveEvidence[]): PassiveMemoryProposal[] {
@@ -145,6 +231,7 @@ export function createMemoryJobHandlers(database: WardenDatabase, options: Memor
         : { proposals: deterministicProposals(evidence), modelVersion: PASSIVE_MEMORY_MODEL_VERSION };
       await recordExtractionUsage(database, job, job.entityId, job.attempts, extracted.usage);
       const proposals = extracted.proposals.map((proposal) => PassiveMemoryProposalSchema.parse(proposal));
+      const policy = options.promotionPolicy ?? defaultPassivePromotionPolicy;
       for (const proposal of proposals) {
         const persisted = await persistPassiveMemoryCandidate(database, {
           tenantId: job.tenantId,
@@ -153,7 +240,7 @@ export function createMemoryJobHandlers(database: WardenDatabase, options: Memor
           evidence,
           modelVersion: extracted.modelVersion,
           extractionUsage: extractionProvenance(extracted.usage),
-          policy: options.promotionPolicy ?? defaultPassivePromotionPolicy,
+          policy,
         });
         if (persisted?.lifecycle === 'active' && options.embedding) {
           await database.query(`
@@ -171,6 +258,12 @@ export function createMemoryJobHandlers(database: WardenDatabase, options: Memor
           ]);
         }
       }
+      await refreshReviewEvidenceCounts(database, {
+        tenantId: job.tenantId,
+        repositoryId: job.repositoryId,
+        reviewIds: evidence.filter((item) => isReviewEvidence(item)).map((item) => item.reviewId!),
+        policyVersion: policy.version,
+      });
       return { complete: true };
     },
     async memory_embed(job) {

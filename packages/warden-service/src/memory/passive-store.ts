@@ -1,9 +1,12 @@
 import { createHash } from 'node:crypto';
-import type { WardenDatabase } from '../db/database.js';
+import type { DatabaseClient, WardenDatabase } from '../db/database.js';
 import type { MemoryOperationUsage } from './store.js';
 import {
   evaluateMemoryEvidence,
+  isReviewEvidence,
   PASSIVE_MEMORY_POLICY_VERSION,
+  PassiveEvidenceSchema,
+  passiveEvidenceId,
   type PassiveEvidence,
   type PassiveMemoryProposal,
 } from './passive.js';
@@ -30,6 +33,180 @@ export interface PersistPassiveMemoryInput {
   policy?: PassivePromotionPolicy;
 }
 
+interface StoredObservation extends Record<string, unknown> {
+  finding_id: string;
+  observation_id: string;
+  run_id: string;
+}
+
+interface StoredReview extends Record<string, unknown> {
+  finding_id: string;
+  review_id: string;
+  run_id: string;
+}
+
+async function lockObservations(
+  client: DatabaseClient,
+  tenantId: string,
+  repositoryId: string,
+  observationIds: readonly string[],
+): Promise<StoredObservation[]> {
+  if (observationIds.length === 0) return [];
+  const stored = await client.query<StoredObservation>(`
+    SELECT f.id AS finding_id, fo.id AS observation_id, r.id AS run_id
+    FROM finding_observations fo
+    JOIN findings f ON f.id = fo.finding_id AND f.tenant_id = fo.tenant_id
+    JOIN runs r ON r.id = fo.run_id AND r.tenant_id = fo.tenant_id
+    WHERE fo.tenant_id = $1 AND r.repository_id = $2 AND fo.id = ANY($3::uuid[])
+    FOR SHARE OF fo, f, r
+  `, [tenantId, repositoryId, observationIds]);
+  return stored.rows;
+}
+
+async function lockReviews(
+  client: DatabaseClient,
+  tenantId: string,
+  repositoryId: string,
+  reviewIds: readonly string[],
+): Promise<StoredReview[]> {
+  if (reviewIds.length === 0) return [];
+  const stored = await client.query<StoredReview>(`
+    SELECT f.id AS finding_id, fr.id AS review_id, r.id AS run_id
+    FROM finding_reviews fr
+    JOIN findings f ON f.id = fr.finding_id AND f.tenant_id = fr.tenant_id
+    JOIN runs r ON r.id = fr.run_id AND r.tenant_id = fr.tenant_id
+    WHERE fr.tenant_id = $1 AND r.repository_id = $2 AND fr.id = ANY($3::uuid[])
+    FOR SHARE OF fr, f, r
+  `, [tenantId, repositoryId, reviewIds]);
+  return stored.rows;
+}
+
+async function attachEvidence(
+  client: DatabaseClient,
+  tenantId: string,
+  memoryId: string,
+  observations: readonly StoredObservation[],
+  reviews: readonly StoredReview[],
+): Promise<void> {
+  for (const evidence of observations) {
+    await client.query(`
+      INSERT INTO memory_evidence (tenant_id, memory_id, finding_id, observation_id, evidence_kind)
+      SELECT $1, $2, $3, $4, 'finding_observation'
+      WHERE NOT EXISTS (
+        SELECT 1 FROM memory_evidence
+        WHERE tenant_id = $1 AND memory_id = $2 AND observation_id = $4
+      )
+    `, [tenantId, memoryId, evidence.finding_id, evidence.observation_id]);
+  }
+  for (const evidence of reviews) {
+    await client.query(`
+      INSERT INTO memory_evidence (tenant_id, memory_id, finding_id, review_id, evidence_kind)
+      SELECT $1, $2, $3, $4, 'finding_review'
+      WHERE NOT EXISTS (
+        SELECT 1 FROM memory_evidence
+        WHERE tenant_id = $1 AND memory_id = $2 AND review_id = $4
+      )
+    `, [tenantId, memoryId, evidence.finding_id, evidence.review_id]);
+  }
+}
+
+async function recountMemory(
+  client: DatabaseClient,
+  tenantId: string,
+  memoryId: string,
+  kind: PassiveMemoryProposal['kind'],
+): Promise<{ support_count: number; contradiction_count: number; independent_runs: number } | undefined> {
+  const totals = await client.query<{
+    support_count: number;
+    contradiction_count: number;
+    independent_runs: number;
+  }>(`
+    SELECT
+      count(*) FILTER (WHERE
+        (outcome IS NOT NULL AND (
+          ($3::memory_kind = 'false_positive' AND outcome = 'rejected')
+          OR ($3::memory_kind = 'confirmed_pattern' AND outcome IN ('resolved', 'revised'))
+          OR ($3::memory_kind IN ('convention', 'review_guidance') AND outcome IN ('posted', 'resolved', 'revised'))
+        ))
+        OR (verdict IS NOT NULL AND (
+          ($3::memory_kind = 'false_positive' AND verdict = 'false_positive')
+          OR ($3::memory_kind = 'confirmed_pattern' AND verdict = 'true_positive')
+          OR ($3::memory_kind = 'review_guidance' AND verdict = 'mitigated')
+        ))
+      )::integer AS support_count,
+      count(*) FILTER (WHERE
+        (outcome IS NOT NULL AND (
+          ($3::memory_kind = 'false_positive' AND outcome IN ('posted', 'resolved', 'revised'))
+          OR ($3::memory_kind <> 'false_positive' AND outcome = 'rejected')
+        ))
+        OR (verdict IS NOT NULL AND (
+          ($3::memory_kind = 'false_positive' AND verdict = 'true_positive')
+          OR ($3::memory_kind = 'confirmed_pattern' AND verdict = 'false_positive')
+        ))
+      )::integer AS contradiction_count,
+      count(DISTINCT run_id) FILTER (WHERE
+        (outcome IS NOT NULL AND (
+          ($3::memory_kind = 'false_positive' AND outcome = 'rejected')
+          OR ($3::memory_kind = 'confirmed_pattern' AND outcome IN ('resolved', 'revised'))
+          OR ($3::memory_kind IN ('convention', 'review_guidance') AND outcome IN ('posted', 'resolved', 'revised'))
+        ))
+        OR (verdict IS NOT NULL AND (
+          ($3::memory_kind = 'false_positive' AND verdict = 'false_positive')
+          OR ($3::memory_kind = 'confirmed_pattern' AND verdict = 'true_positive')
+          OR ($3::memory_kind = 'review_guidance' AND verdict = 'mitigated')
+        ))
+      )::integer AS independent_runs
+    FROM (
+      SELECT observation_run.id AS run_id, observation.outcome AS outcome, NULL::text AS verdict
+      FROM memory_evidence me
+      JOIN finding_observations observation ON observation.id = me.observation_id AND observation.tenant_id = me.tenant_id
+      JOIN runs observation_run ON observation_run.id = observation.run_id AND observation_run.tenant_id = observation.tenant_id
+      WHERE me.tenant_id = $1 AND me.memory_id = $2 AND me.observation_id IS NOT NULL
+      UNION ALL
+      SELECT review_run.id AS run_id, NULL::text AS outcome, review.verdict AS verdict
+      FROM memory_evidence me
+      JOIN finding_reviews review ON review.id = me.review_id AND review.tenant_id = me.tenant_id
+      JOIN runs review_run ON review_run.id = review.run_id AND review_run.tenant_id = review.tenant_id
+      WHERE me.tenant_id = $1 AND me.memory_id = $2 AND me.review_id IS NOT NULL
+    ) evidence
+  `, [tenantId, memoryId, kind]);
+  return totals.rows[0];
+}
+
+async function recountRelatedReviewMemories(
+  client: DatabaseClient,
+  input: {
+    tenantId: string;
+    repositoryId: string;
+    memoryId?: string;
+    reviewIds: readonly string[];
+    policyVersion: string;
+  },
+): Promise<void> {
+  if (input.reviewIds.length === 0) return;
+  const related = await client.query<{ id: string; kind: PassiveMemoryProposal['kind'] }>(`
+    SELECT m.id, m.kind
+    FROM memories m
+    WHERE m.tenant_id = $1 AND m.repository_id = $2
+      AND m.lifecycle IN ('candidate', 'active')
+      AND ($3::uuid IS NULL OR m.id <> $3)
+      AND EXISTS (
+        SELECT 1 FROM memory_evidence me
+        WHERE me.tenant_id = m.tenant_id AND me.memory_id = m.id AND me.review_id = ANY($4::uuid[])
+      )
+    FOR UPDATE OF m
+  `, [input.tenantId, input.repositoryId, input.memoryId ?? null, input.reviewIds]);
+  for (const memory of related.rows) {
+    const counts = await recountMemory(client, input.tenantId, memory.id, memory.kind);
+    if (!counts) continue;
+    await client.query(`
+      UPDATE memories SET
+        support_count = $3, contradiction_count = $4, policy_version = $5, updated_at = now()
+      WHERE tenant_id = $1 AND id = $2
+    `, [input.tenantId, memory.id, counts.support_count, counts.contradiction_count, input.policyVersion]);
+  }
+}
+
 /** Persist an inactive evidence-backed candidate, reusing exact eligible duplicates transactionally. */
 export async function persistPassiveMemoryCandidate(
   database: WardenDatabase,
@@ -40,21 +217,18 @@ export async function persistPassiveMemoryCandidate(
   if (!decision.eligible) return null;
   const normalized = input.proposal.content.trim();
   const contentHash = createHash('sha256').update(normalized).digest('hex');
+  const parsedEvidence = input.evidence.map((item) => PassiveEvidenceSchema.parse(item));
+  const selected = parsedEvidence.filter((item) => input.proposal.evidenceIds.includes(passiveEvidenceId(item)));
+  const observationIds = [...new Set(
+    selected.filter((item) => !isReviewEvidence(item)).map((item) => item.observationId!),
+  )];
+  const reviewIds = [...new Set(
+    selected.filter((item) => isReviewEvidence(item)).map((item) => item.reviewId!),
+  )];
   return database.transaction(async (client) => {
-    const observationIds = input.proposal.evidenceIds;
-    const stored = await client.query<{
-      finding_id: string;
-      observation_id: string;
-      run_id: string;
-    }>(`
-      SELECT f.id AS finding_id, fo.id AS observation_id, r.id AS run_id
-      FROM finding_observations fo
-      JOIN findings f ON f.id = fo.finding_id AND f.tenant_id = fo.tenant_id
-      JOIN runs r ON r.id = fo.run_id AND r.tenant_id = fo.tenant_id
-      WHERE fo.tenant_id = $1 AND r.repository_id = $2 AND fo.id = ANY($3::uuid[])
-      FOR SHARE OF fo, f, r
-    `, [input.tenantId, input.repositoryId, observationIds]);
-    if (stored.rows.length !== new Set(observationIds).size) return null;
+    const observations = await lockObservations(client, input.tenantId, input.repositoryId, observationIds);
+    const reviews = await lockReviews(client, input.tenantId, input.repositoryId, reviewIds);
+    if (observations.length !== observationIds.length || reviews.length !== reviewIds.length) return null;
 
     const duplicate = await client.query<{ id: string; lifecycle: 'candidate' | 'active' }>(`
       SELECT id, lifecycle FROM memories
@@ -71,42 +245,8 @@ export async function persistPassiveMemoryCandidate(
     ]);
     const existing = duplicate.rows[0];
     if (existing) {
-      for (const evidence of stored.rows) {
-        await client.query(`
-          INSERT INTO memory_evidence (tenant_id, memory_id, finding_id, observation_id, evidence_kind)
-          SELECT $1, $2, $3, $4, 'finding_observation'
-          WHERE NOT EXISTS (
-            SELECT 1 FROM memory_evidence
-            WHERE tenant_id = $1 AND memory_id = $2 AND observation_id = $4
-          )
-        `, [input.tenantId, existing.id, evidence.finding_id, evidence.observation_id]);
-      }
-      const totals = await client.query<{
-        support_count: number;
-        contradiction_count: number;
-        independent_runs: number;
-      }>(`
-        SELECT
-          count(*) FILTER (WHERE
-            ($3::memory_kind = 'false_positive' AND fo.outcome = 'rejected')
-            OR ($3::memory_kind = 'confirmed_pattern' AND fo.outcome IN ('resolved', 'revised'))
-            OR ($3::memory_kind IN ('convention', 'review_guidance') AND fo.outcome IN ('posted', 'resolved', 'revised'))
-          )::integer AS support_count,
-          count(*) FILTER (WHERE
-            ($3::memory_kind = 'false_positive' AND fo.outcome IN ('posted', 'resolved', 'revised'))
-            OR ($3::memory_kind <> 'false_positive' AND fo.outcome = 'rejected')
-          )::integer AS contradiction_count,
-          count(DISTINCT r.id) FILTER (WHERE
-            ($3::memory_kind = 'false_positive' AND fo.outcome = 'rejected')
-            OR ($3::memory_kind = 'confirmed_pattern' AND fo.outcome IN ('resolved', 'revised'))
-            OR ($3::memory_kind IN ('convention', 'review_guidance') AND fo.outcome IN ('posted', 'resolved', 'revised'))
-          )::integer AS independent_runs
-        FROM memory_evidence me
-        JOIN finding_observations fo ON fo.id = me.observation_id AND fo.tenant_id = me.tenant_id
-        JOIN runs r ON r.id = fo.run_id AND r.tenant_id = fo.tenant_id
-        WHERE me.tenant_id = $1 AND me.memory_id = $2
-      `, [input.tenantId, existing.id, input.proposal.kind]);
-      const counts = totals.rows[0];
+      await attachEvidence(client, input.tenantId, existing.id, observations, reviews);
+      const counts = await recountMemory(client, input.tenantId, existing.id, input.proposal.kind);
       if (!counts) return { ...existing, created: false };
       const shouldPromote = existing.lifecycle === 'candidate'
         && policy.autoPromote
@@ -132,6 +272,13 @@ export async function persistPassiveMemoryCandidate(
           VALUES ($1, $2, 'candidate', 'active', 'passive_policy_promotion')
         `, [input.tenantId, existing.id]);
       }
+      await recountRelatedReviewMemories(client, {
+        tenantId: input.tenantId,
+        repositoryId: input.repositoryId,
+        memoryId: existing.id,
+        reviewIds,
+        policyVersion: policy.version,
+      });
       return {
         id: existing.id,
         lifecycle: shouldPromote ? 'active' : existing.lifecycle,
@@ -143,10 +290,7 @@ export async function persistPassiveMemoryCandidate(
       && decision.independentRuns >= policy.minimumIndependentEvidence
       && decision.contradictionCount === 0;
     const lifecycle = shouldPromote ? 'active' : 'candidate';
-    const observedAt = input.evidence
-      .filter((item) => observationIds.includes(item.observationId))
-      .map((item) => item.observedAt)
-      .sort().at(-1);
+    const observedAt = selected.map((item) => item.observedAt).sort().at(-1);
     if (!observedAt) return null;
     const inserted = await client.query<{ id: string }>(`
       INSERT INTO memories (
@@ -193,17 +337,39 @@ export async function persistPassiveMemoryCandidate(
       INSERT INTO memory_lifecycle_events (tenant_id, memory_id, to_state, reason)
       VALUES ($1, $2, $3::memory_lifecycle, $4)
     `, [input.tenantId, memoryId, lifecycle, shouldPromote ? 'passive_policy_promotion' : 'passive_extract']);
-    for (const evidence of stored.rows) {
-      await client.query(`
-        INSERT INTO memory_evidence (tenant_id, memory_id, finding_id, observation_id, evidence_kind)
-        SELECT $1, $2, $3, $4, 'finding_observation'
-        WHERE NOT EXISTS (
-          SELECT 1 FROM memory_evidence
-          WHERE tenant_id = $1 AND memory_id = $2 AND observation_id = $4
-        )
-      `, [input.tenantId, memoryId, evidence.finding_id, evidence.observation_id]);
-    }
+    await attachEvidence(client, input.tenantId, memoryId, observations, reviews);
+    await recountRelatedReviewMemories(client, {
+      tenantId: input.tenantId,
+      repositoryId: input.repositoryId,
+      memoryId,
+      reviewIds,
+      policyVersion: policy.version,
+    });
     return { id: memoryId, lifecycle, created: true };
+  });
+}
+
+/** Recount memories already linked to these reviews so a relabel can contradict earlier candidates. */
+export async function refreshReviewEvidenceCounts(
+  database: WardenDatabase,
+  input: {
+    tenantId: string;
+    repositoryId: string;
+    reviewIds: readonly string[];
+    policyVersion?: string;
+  },
+): Promise<void> {
+  const reviewIds = [...new Set(input.reviewIds.filter(Boolean))];
+  if (reviewIds.length === 0) return;
+  await database.transaction(async (client) => {
+    const reviews = await lockReviews(client, input.tenantId, input.repositoryId, reviewIds);
+    if (reviews.length === 0) return;
+    await recountRelatedReviewMemories(client, {
+      tenantId: input.tenantId,
+      repositoryId: input.repositoryId,
+      reviewIds: reviews.map((item) => item.review_id),
+      policyVersion: input.policyVersion ?? defaultPassivePromotionPolicy.version,
+    });
   });
 }
 

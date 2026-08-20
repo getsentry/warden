@@ -46,7 +46,11 @@ describe('memory job handlers', () => {
     }).memory_extract;
 
     await expect(handler?.(job, { deadline: Date.now() + 5_000 })).rejects.toThrow();
-    expect(statements[0]).toContain('ORDER BY (r.id = $3) DESC, fo.observed_at DESC, fo.id DESC');
+    expect(statements[0]).toContain('FROM finding_reviews fr');
+    expect(statements[0]).toContain('FROM finding_observations fo');
+    expect(statements[0]).toContain("ORDER BY (run_id = $3) DESC, (source = 'review') DESC, observed_at DESC");
+    expect(statements[0]).toContain('COALESCE(review_id, observation_id) DESC');
+    expect(statements[0]).toContain('LIMIT 100');
     expect(statementValues[0]).toEqual([job.tenantId, job.repositoryId, job.entityId]);
     expect(statements.some((sql) => sql.includes('INSERT INTO memories'))).toBe(false);
   });
@@ -109,6 +113,61 @@ describe('memory job handlers', () => {
       [null, null, null, null],
       [null, null, null, null],
     ]);
+  });
+
+  it('prefers the current finding review over the observation for extract evidence', async () => {
+    const { database, statements } = databaseFixture();
+    const reviewRow = {
+      finding_id: 'finding-1',
+      observation_id: null,
+      review_id: 'review-1',
+      run_id: 'run-2',
+      skill: 'security',
+      title: 'Unsafe sink',
+      description: 'Unsafe input.',
+      outcome: null,
+      verdict: 'false_positive',
+      comment: 'Test fixtures, not a real sink.',
+      location_path: 'src/auth/session.ts',
+      source: 'review',
+      observed_at: new Date('2026-08-02T10:00:00.000Z'),
+    };
+    database.query = async (sql, values) => {
+      statements.push(sql.replace(/\s+/g, ' ').trim());
+      if (sql.includes('FROM finding_reviews fr')) return { rows: [reviewRow], rowCount: 1 } as never;
+      return { rows: [], rowCount: 0 } as never;
+    };
+    let extracted: { evidenceIds?: string[]; pathFamily?: string; content?: string } | undefined;
+    const handler = createMemoryJobHandlers(database, {
+      extractor: {
+        async extract(input) {
+          extracted = {
+            evidenceIds: input.evidence.map((item) => item.reviewId ?? item.observationId),
+            pathFamily: input.evidence[0]?.pathFamily,
+            content: input.evidence[0]?.comment,
+          };
+          return {
+            proposals: [{
+              kind: 'false_positive',
+              content: input.evidence[0]?.comment ?? '',
+              evidenceIds: input.evidence.map((item) => item.reviewId!),
+              skill: 'security',
+              pathFamily: input.evidence[0]?.pathFamily,
+              confidence: 0.6,
+            }],
+            modelVersion: 'test-model',
+          };
+        },
+      },
+    }).memory_extract;
+
+    await expect(handler?.(job, { deadline: Date.now() + 5_000 })).resolves.toEqual({ complete: true });
+    expect(extracted).toEqual({
+      evidenceIds: ['review-1'],
+      pathFamily: 'src/auth',
+      content: 'Test fixtures, not a real sink.',
+    });
+    expect(statements[0]).toContain('NOT EXISTS');
   });
 
   it('expires inactive memory indexes through the retention handler', async () => {
