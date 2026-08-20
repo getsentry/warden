@@ -142,12 +142,16 @@ async function insertSkills(
   const ids = new Map<string, string>();
   for (const skill of envelope.skills) {
     const counts = skill.findingCounts;
+    // now() is transaction-stable. clock_timestamp() preserves insert order
+    // so review occurrence does not fall back to random UUID primary keys.
     const result = await client.query<{ id: string }>(`
       INSERT INTO skill_executions (
         tenant_id, run_id, client_execution_id, skill, skill_digest, trigger_id, trigger_name,
-        model, runtime, status, error_code, duration_ms, finding_count, high_count, medium_count, low_count
+        model, runtime, status, error_code, duration_ms, finding_count, high_count, medium_count, low_count,
+        created_at
       ) VALUES (
-        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10::execution_status, $11, $12, $13, $14, $15, $16
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10::execution_status, $11, $12, $13, $14, $15, $16,
+        clock_timestamp()
       ) RETURNING id
     `, [
       context.tenantId,
@@ -206,8 +210,9 @@ async function insertFindings(
     const result = await client.query<{ id: string }>(`
       INSERT INTO findings (
         tenant_id, run_id, skill_execution_id, client_finding_id, reported_id, severity,
-        confidence, title, description, verification, provenance, source_evidence
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+        confidence, title, description, verification, provenance, source_evidence,
+        created_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, clock_timestamp())
       RETURNING id
     `, [
       context.tenantId,

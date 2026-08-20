@@ -158,7 +158,9 @@ describe('POST /api/v1/runs', () => {
       runId: 'stored-run-id',
       created: true,
     });
-    expect(statements.some((statement) => statement.startsWith('INSERT INTO skill_executions'))).toBe(true);
+    expect(statements.some((statement) => (
+      statement.startsWith('INSERT INTO skill_executions') && statement.includes('clock_timestamp()')
+    ))).toBe(true);
     expect(statements.some((statement) => statement.startsWith('INSERT INTO usage_line_items'))).toBe(true);
   });
 
@@ -214,6 +216,9 @@ describe('POST /api/v1/runs', () => {
     const eligible = fakeDatabase();
     expect((await request(eligible.database, findingsEnvelope('posted'))).status).toBe(201);
     expect(eligible.statements.some((statement) => statement.startsWith('INSERT INTO jobs'))).toBe(true);
+    expect(eligible.statements.some((statement) => (
+      statement.startsWith('INSERT INTO findings') && statement.includes('clock_timestamp()')
+    ))).toBe(true);
 
     const ineligible = fakeDatabase();
     expect((await request(ineligible.database, findingsEnvelope('deduped'))).status).toBe(201);
@@ -259,6 +264,22 @@ const reviewItem = {
   updatedAt: '2026-08-19T10:00:00.000Z',
 };
 
+type ReviewFindingRow = {
+  id: string;
+  client_finding_id: string;
+  reported_id: string | null;
+  skill: string;
+  created_at?: string;
+};
+
+function orderReviewFindings(findings: ReviewFindingRow[], sql: string): ReviewFindingRow[] {
+  const ordered = [...findings];
+  if (sql.includes('ORDER BY se.created_at ASC, f.created_at ASC')) {
+    ordered.sort((left, right) => (left.created_at ?? '').localeCompare(right.created_at ?? ''));
+  }
+  return ordered;
+}
+
 function reviewDatabase(options: {
   allowlist?: string[] | null;
   run?: {
@@ -273,6 +294,7 @@ function reviewDatabase(options: {
     client_finding_id: string;
     reported_id: string | null;
     skill: string;
+    created_at?: string;
   }[];
 } = {}) {
   const statements: string[] = [];
@@ -319,7 +341,7 @@ function reviewDatabase(options: {
         }] : []) as unknown as TRow[]);
       }
       if (sql.includes('FROM findings f')) {
-        return result(findings as unknown as TRow[]);
+        return result(orderReviewFindings(findings, sql) as unknown as TRow[]);
       }
       if (sql.includes('INSERT INTO finding_reviews')) {
         const findingId = String(values?.[2]);
@@ -464,17 +486,19 @@ describe('POST /api/v1/runs/:clientRunId/reviews', () => {
   });
 
   it('matches Action-rewritten ids by reported_id and 1-based occurrence', async () => {
-    const { database, reviews } = reviewDatabase({
+    const { database, reviews, statements } = reviewDatabase({
       findings: [{
-        id: 'finding-row-1',
+        id: 'ffffffff-0000-4000-8000-000000000002',
         client_finding_id: 'internal-1',
         reported_id: '7MV-5V7',
         skill: 'security',
+        created_at: '2026-08-19T10:00:00.000001Z',
       }, {
-        id: 'finding-row-2',
+        id: '00000000-0000-4000-8000-000000000001',
         client_finding_id: 'internal-2',
         reported_id: '7MV-5V7',
         skill: 'security',
+        created_at: '2026-08-19T10:00:00.000002Z',
       }],
     });
     const second = {
@@ -489,7 +513,10 @@ describe('POST /api/v1/runs/:clientRunId/reviews', () => {
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toMatchObject({ applied: 1, unmatched: [] });
-    expect(reviews.has('finding-row-1')).toBe(false);
-    expect(reviews.get('finding-row-2')).toMatchObject({ verdict: 'mitigated' });
+    expect(statements.some((statement) => (
+      statement.includes('FROM findings f') && statement.includes('ORDER BY se.created_at ASC, f.created_at ASC')
+    ))).toBe(true);
+    expect(reviews.has('ffffffff-0000-4000-8000-000000000002')).toBe(false);
+    expect(reviews.get('00000000-0000-4000-8000-000000000001')).toMatchObject({ verdict: 'mitigated' });
   });
 });

@@ -136,7 +136,7 @@ export async function publishFindingReviews(
       FROM findings f
       INNER JOIN skill_executions se ON se.id = f.skill_execution_id
       WHERE f.tenant_id = $1 AND f.run_id = $2
-      ORDER BY se.created_at ASC, se.id ASC, f.created_at ASC, f.id ASC
+      ORDER BY se.created_at ASC, f.created_at ASC
     `, [context.tenantId, run.id]);
 
     const unmatched: PublishReviewsUnmatched[] = [];
