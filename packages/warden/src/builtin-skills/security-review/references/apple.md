@@ -1,6 +1,6 @@
 # Apple Native Security Notes
 
-Use this when reviewing Swift or Objective-C on iOS, iPadOS, visionOS, watchOS, or tvOS. This reference adapts the dedicated workflow-security prior art for the broad `security-review` skill; keep findings exploit-oriented, not style-oriented.
+Use this when reviewing Swift or Objective-C on Apple platforms, including iOS, iPadOS, macOS, visionOS, watchOS, and tvOS. These examples refine the core skill; they do not add new reporting scope.
 
 Load a topic file only when the change needs more depth than this page.
 
