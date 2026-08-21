@@ -2396,6 +2396,7 @@ export async function runPRWorkflow(
               reason: 'error' as const,
             })),
           ]),
+          configuredSkills: buildConfiguredSkillsList({ allTriggers: resolvedTriggers, matchedTriggers }),
         };
         try {
           writeFindingsOutput([], context, [], findingsOptions);

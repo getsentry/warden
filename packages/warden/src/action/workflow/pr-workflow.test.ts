@@ -1882,6 +1882,16 @@ describe('runPRWorkflow', () => {
         })
       );
       expect(mockRunSkillTask).not.toHaveBeenCalled();
+      expect(mockWriteFindingsOutput).toHaveBeenCalledWith(
+        [],
+        expect.objectContaining({
+          repository: expect.objectContaining({ fullName: 'test-owner/test-repo' }),
+        }),
+        [],
+        expect.objectContaining({
+          configuredSkills: [{ name: 'test-skill', triggered: true }],
+        })
+      );
     });
 
     it('fails when findings exceed fail-on threshold and failCheck is true', async () => {
