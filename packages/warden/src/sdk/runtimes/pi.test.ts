@@ -172,6 +172,63 @@ describe('piRuntime.runSkill', () => {
     piMocks.modelRuntime.getModels.mockReturnValue([piMocks.model]);
   });
 
+  it('leaves the model untouched when no base URL override is set', async () => {
+    await piRuntime.runSkill(baseSkillRequest());
+
+    expect(createAgentSession).toHaveBeenCalledWith(
+      expect.objectContaining({ model: piMocks.model })
+    );
+  });
+
+  it('applies WARDEN_<PROVIDER>_BASE_URL to the resolved model', async () => {
+    process.env['WARDEN_OPENAI_BASE_URL'] = 'https://gateway.internal/v1';
+    try {
+      await piRuntime.runSkill(baseSkillRequest());
+
+      expect(createAgentSession).toHaveBeenCalledWith(
+        expect.objectContaining({
+          model: expect.objectContaining({ baseUrl: 'https://gateway.internal/v1' }),
+        })
+      );
+    } finally {
+      delete process.env['WARDEN_OPENAI_BASE_URL'];
+    }
+  });
+
+  it('uses the provider-specific base URL override', async () => {
+    process.env['WARDEN_ANTHROPIC_BASE_URL'] = 'https://gateway.internal';
+    try {
+      await piRuntime.runSkill({
+        ...baseSkillRequest(),
+        options: {
+          ...baseSkillRequest().options,
+          model: 'anthropic/claude-test',
+        },
+      });
+
+      expect(createAgentSession).toHaveBeenCalledWith(
+        expect.objectContaining({
+          model: expect.objectContaining({ baseUrl: 'https://gateway.internal' }),
+        })
+      );
+    } finally {
+      delete process.env['WARDEN_ANTHROPIC_BASE_URL'];
+    }
+  });
+
+  it('ignores an empty WARDEN_<PROVIDER>_BASE_URL', async () => {
+    process.env['WARDEN_OPENAI_BASE_URL'] = '';
+    try {
+      await piRuntime.runSkill(baseSkillRequest());
+
+      expect(createAgentSession).toHaveBeenCalledWith(
+        expect.objectContaining({ model: piMocks.model })
+      );
+    } finally {
+      delete process.env['WARDEN_OPENAI_BASE_URL'];
+    }
+  });
+
   it('passes read-only Pi tools and normalizes the result', async () => {
     const result = await piRuntime.runSkill(baseSkillRequest());
 

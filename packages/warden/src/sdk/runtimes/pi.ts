@@ -330,6 +330,19 @@ async function createModelRuntime(
   return modelRuntime;
 }
 
+/**
+ * Optional base-URL override for a provider, from `WARDEN_<PROVIDER>_BASE_URL`.
+ *
+ * Mirrors the existing `WARDEN_<PROVIDER>_API_KEY` convention, so pointing a provider at
+ * an OpenAI-compatible gateway (LiteLLM, a corporate proxy, a self-hosted endpoint) is the
+ * same shape of configuration as giving it a key. Unset means the provider's own default,
+ * exactly as today.
+ */
+function providerBaseUrlOverride(provider: string): string | undefined {
+  const value = process.env[`WARDEN_${provider.toUpperCase()}_BASE_URL`];
+  return value && value.length > 0 ? value : undefined;
+}
+
 function resolvePiModel(
   model: string | undefined,
   modelRuntime: ModelRuntime,
@@ -345,7 +358,9 @@ function resolvePiModel(
       `Pi model not found: ${model}. Use provider/model, for example openai/gpt-5.5.`
     );
   }
-  return resolved;
+
+  const baseUrl = providerBaseUrlOverride(provider);
+  return baseUrl ? { ...resolved, baseUrl } : resolved;
 }
 
 function resolvePiSkillTools(
