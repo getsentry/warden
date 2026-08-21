@@ -238,6 +238,9 @@ function renderSkillCI(report: SkillReport, verbosity: Verbosity = Verbosity.Nor
   if (report.failedExtractions) {
     lines.push(`  WARN: ${report.failedExtractions} finding ${pluralize(report.failedExtractions, 'extraction')} failed`);
   }
+  if (report.verifierRejections) {
+    lines.push(`  WARN: ${report.verifierRejections.count} ${pluralize(report.verifierRejections.count, 'finding')} rejected by verification`);
+  }
   if ((report.failedHunks || report.failedExtractions) && verbosity < Verbosity.Verbose) {
     lines.push('  Use -v for failure details');
   }

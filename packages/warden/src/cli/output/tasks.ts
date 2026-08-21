@@ -701,6 +701,9 @@ export async function runSkillTask(
         if (auxUsage) {
           report.auxiliaryUsage = auxUsage;
         }
+        if (processed.verifierRejections) {
+          report.verifierRejections = processed.verifierRejections;
+        }
         span.setAttribute('warden.finding.count', report.findings.length);
 
         // Emit metrics and log completion

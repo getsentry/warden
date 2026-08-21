@@ -106,6 +106,7 @@ describe('verifyFindings', () => {
       reason: 'guarded upstream',
     });
     expect(result.usage).toEqual(expect.objectContaining(makeUsage()));
+    expect(result.verifierRejections).toEqual({ count: 1, reasons: ['guarded upstream'] });
     expect(runtime.runSkill).toHaveBeenCalledWith(expect.objectContaining({
       repoPath: '/repo',
       skillName: 'test-skill:verification',
@@ -363,5 +364,57 @@ describe('verifyFindings', () => {
     expect(runtime.runSkill).toHaveBeenCalledWith(expect.objectContaining({
       tools: { allowed: ['Read', 'Grep', 'WebFetch'] },
     }));
+  });
+
+  it('omits verifierRejections when nothing is rejected', async () => {
+    const runtime = mockRuntime('{"verdict":"keep"}');
+    vi.mocked(getRuntime).mockReturnValue(runtime);
+
+    const result = await verifyFindings([makeFinding()], {
+      repoPath: '/repo',
+      skill: makeSkill(),
+    });
+
+    expect(result.verifierRejections).toBeUndefined();
+  });
+
+  it('falls back to a default reason when the verifier rejects without one', async () => {
+    const runtime = mockRuntime('{"verdict":"reject"}');
+    vi.mocked(getRuntime).mockReturnValue(runtime);
+
+    const result = await verifyFindings([makeFinding()], {
+      repoPath: '/repo',
+      skill: makeSkill(),
+    });
+
+    expect(result.verifierRejections).toEqual({ count: 1, reasons: ['No reason provided'] });
+  });
+
+  it('aggregates rejections across multiple findings', async () => {
+    const runtime: Runtime = {
+      name: 'claude',
+      runSkill: vi.fn()
+        .mockResolvedValueOnce({
+          result: { status: 'success', text: '{"verdict":"reject","reason":"first"}', errors: [], usage: makeUsage() },
+        })
+        .mockResolvedValueOnce({
+          result: { status: 'success', text: '{"verdict":"keep"}', errors: [], usage: makeUsage() },
+        })
+        .mockResolvedValueOnce({
+          result: { status: 'success', text: '{"verdict":"reject","reason":"second"}', errors: [], usage: makeUsage() },
+        }),
+      runAuxiliary: vi.fn(),
+      runSynthesis: vi.fn(),
+    } as unknown as Runtime;
+    vi.mocked(getRuntime).mockReturnValue(runtime);
+
+    const findings = [makeFinding({ id: 'A' }), makeFinding({ id: 'B' }), makeFinding({ id: 'C' })];
+    const result = await verifyFindings(findings, {
+      repoPath: '/repo',
+      skill: makeSkill(),
+    });
+
+    expect(result.findings).toHaveLength(1);
+    expect(result.verifierRejections).toEqual({ count: 2, reasons: ['first', 'second'] });
   });
 });

@@ -10,6 +10,7 @@ import {
   SkillErrorSchema,
   SourceSnippetSchema,
   UsageStatsSchema,
+  VerifierRejectionsSchema,
 } from '../types/index.js';
 import type { DedupeMatchType, FindingObservation } from './outcomes.js';
 import { FindingObservationSchema } from './outcomes.js';
@@ -204,6 +205,7 @@ export const FindingsOutputSchema = z.object({
     failedHunks: z.number().int().nonnegative().optional(),
     failedExtractions: z.number().int().nonnegative().optional(),
     error: SkillErrorSchema.optional(),
+    verifierRejections: VerifierRejectionsSchema.optional(),
     /** Stable id for this skill×trigger execution. */
     skillExecutionId: z.string().optional(),
     triggerId: z.string().optional(),
@@ -466,6 +468,7 @@ export function buildFindingsOutput(
         failedHunks: r.failedHunks,
         failedExtractions: r.failedExtractions,
         error: r.error,
+        verifierRejections: r.verifierRejections,
         skillExecutionId: meta?.skillExecutionId,
         triggerId: meta?.triggerId,
         triggerName: meta?.triggerName,
