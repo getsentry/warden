@@ -521,6 +521,13 @@ async function promptWithTimeout(
   }
 }
 
+function piExtensionPathsFromEnv(env: NodeJS.ProcessEnv = process.env): string[] {
+  return (env['WARDEN_PI_EXTENSION_PATHS'] ?? '')
+    .split(',')
+    .map((path) => path.trim())
+    .filter((path) => path.length > 0);
+}
+
 async function runPiPrompt(options: PiPromptOptions): Promise<PiPromptResult> {
   const warnings: string[] = [];
   bridgeWardenProviderApiKeyEnv();
@@ -532,11 +539,13 @@ async function runPiPrompt(options: PiPromptOptions): Promise<PiPromptResult> {
   const model = resolvePiModel(options.model, modelRuntime);
   const settingsManager = buildSettingsManager(options.timeout, options.maxRetries);
   const agentDir = getAgentDir();
+  const additionalExtensionPaths = piExtensionPathsFromEnv();
   const resourceLoader = new DefaultResourceLoader({
     cwd: options.cwd,
     agentDir,
     settingsManager,
     noExtensions: true,
+    ...(additionalExtensionPaths.length > 0 ? { additionalExtensionPaths } : {}),
     noSkills: true,
     noPromptTemplates: true,
     noThemes: true,
