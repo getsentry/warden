@@ -203,7 +203,7 @@ describe('piRuntime.runSkill', () => {
       compaction: { enabled: false },
       retry: expect.objectContaining({
         enabled: true,
-        provider: expect.objectContaining({ maxRetries: 2 }),
+        provider: expect.objectContaining({ maxRetries: 0 }),
       }),
     }));
     expect(createAgentSession).toHaveBeenCalledWith(expect.objectContaining({

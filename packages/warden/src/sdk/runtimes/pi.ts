@@ -70,6 +70,7 @@ const READ_ONLY_TOOLS: ToolName[] = ['Read', 'Grep', 'Glob'];
 const MUTATING_TOOLS: ToolName[] = ['Write', 'Edit', 'Bash'];
 const UNSUPPORTED_TOOLS: ToolName[] = ['WebFetch', 'WebSearch'];
 const DEFAULT_PI_PROVIDER_MAX_RETRIES = 2;
+const PI_SKILL_PROVIDER_MAX_RETRIES = 0;
 const PI_MODEL_REFRESH_TIMEOUT_MS = 15_000;
 /**
  * Share one network catalog refresh per provider across concurrent Pi prompts.
@@ -468,7 +469,8 @@ function buildSettingsManager(timeout: number | undefined, maxRetries: number | 
   return SettingsManager.inMemory({
     compaction: { enabled: false },
     retry: {
-      enabled: providerMaxRetries > 0,
+      // Provider retries are independent from Pi's agent-level transient retry loop.
+      enabled: true,
       provider: {
         ...(timeout !== undefined ? { timeoutMs: timeout } : {}),
         maxRetries: providerMaxRetries,
@@ -975,6 +977,7 @@ export const piRuntime: Runtime = {
             toolNames: skillTools.toolNames,
             maxTurns,
             effort,
+            maxRetries: PI_SKILL_PROVIDER_MAX_RETRIES,
             abortController,
             parentSpan: span,
             traceRecorder: request.traceRecorder,
