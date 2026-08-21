@@ -145,6 +145,9 @@ describe('history store', () => {
         start_line: 42,
         end_line: 48,
         observation_outcome: 'posted',
+        review_verdict: null,
+        review_comment: null,
+        review_updated_at: null,
         first_observed_at: '2026-08-12T10:00:00.000Z',
         observed_at: '2026-08-12T10:02:00.000Z',
         completed_at: '2026-08-12T10:01:00.000Z',
@@ -207,6 +210,9 @@ describe('history store', () => {
         start_line: 21,
         end_line: null,
         observation_outcome: null,
+        review_verdict: null,
+        review_comment: null,
+        review_updated_at: null,
         first_observed_at: null,
         observed_at: null,
         completed_at: '2026-08-19T08:38:43.933Z',
@@ -251,6 +257,9 @@ describe('history store', () => {
           title: 'Missing authorization check', description: 'The endpoint does not verify ownership.',
           path: 'src/api route.ts', start_line: 42, end_line: 48,
           observation_outcome: 'posted',
+          review_verdict: null,
+          review_comment: null,
+          review_updated_at: null,
           first_observed_at: '2026-08-12T09:55:00.000Z',
           observed_at: '2026-08-12T10:02:00.000Z',
           completed_at: '2026-08-12T10:01:00.000Z',
@@ -279,6 +288,101 @@ describe('history store', () => {
     expect(detailSql).toContain(
       'order by "finding_observations"."observed_at" asc, "finding_observations"."id" asc limit',
     );
+  });
+
+  it('includes the current review on finding detail without replacing outcome', async () => {
+    let detailSql = '';
+    const database = databaseFor((sql) => {
+      detailSql = sql;
+      return {
+        rows: [{
+          id: '00000000-0000-0000-0000-000000000020',
+          client_finding_id: 'finding-20',
+          reported_id: '7MV-5V7',
+          run_id: '00000000-0000-0000-0000-000000000021',
+          client_run_id: 'run-21',
+          head_sha: 'abc123def456',
+          source_evidence: null,
+          verification: null,
+          provider: 'github', owner: 'acme', name: 'widgets', full_name: 'acme/widgets',
+          skill: 'security-review', severity: 'high', confidence: 'high',
+          title: 'Missing authorization check', description: 'The endpoint does not verify ownership.',
+          path: 'src/api.ts', start_line: 42, end_line: 48,
+          observation_outcome: 'posted',
+          review_verdict: 'false_positive',
+          review_comment: 'Test fixture, not a real leak.',
+          review_updated_at: '2026-08-19T10:00:00.000Z',
+          first_observed_at: '2026-08-12T09:55:00.000Z',
+          observed_at: '2026-08-12T10:02:00.000Z',
+          completed_at: '2026-08-12T10:01:00.000Z',
+        }],
+        rowCount: 1,
+      };
+    });
+
+    await expect(getFindingDetail(
+      database,
+      context,
+      '00000000-0000-0000-0000-000000000020',
+    )).resolves.toMatchObject({
+      finding: {
+        outcome: 'posted',
+        review: {
+          verdict: 'false_positive',
+          comment: 'Test fixture, not a real leak.',
+          updatedAt: '2026-08-19T10:00:00.000Z',
+        },
+      },
+    });
+    expect(detailSql).toContain('left join "finding_reviews"');
+    expect(detailSql).toContain('"finding_reviews"."finding_id" = "findings"."id"');
+  });
+
+  it('filters findings by current review verdict without changing outcome', async () => {
+    let captured: { sql: string; values: readonly unknown[] } | undefined;
+    const database = databaseFor((sql, values) => {
+      captured = { sql, values };
+      return { rows: [{
+        id: '00000000-0000-0000-0000-000000000020',
+        client_finding_id: '7MV-5V7',
+        reported_id: null,
+        run_id: '00000000-0000-0000-0000-000000000021',
+        client_run_id: 'run-21',
+        provider: 'github',
+        owner: 'acme',
+        name: 'widgets',
+        full_name: 'acme/widgets',
+        skill: 'security-review',
+        severity: 'high',
+        confidence: 'high',
+        title: 'Missing authorization check',
+        description: 'The endpoint does not verify ownership.',
+        path: 'src/api.ts',
+        start_line: 42,
+        end_line: 48,
+        observation_outcome: 'posted',
+        review_verdict: 'false_positive',
+        review_comment: 'Test fixture, not a real leak.',
+        review_updated_at: '2026-08-19T10:00:00.000Z',
+        first_observed_at: '2026-08-12T10:00:00.000Z',
+        observed_at: '2026-08-12T10:02:00.000Z',
+        completed_at: '2026-08-12T10:01:00.000Z',
+      }], rowCount: 1 };
+    });
+
+    const page = await listFindings(database, context, { review: 'false_positive' });
+
+    expect(page.items[0]).toMatchObject({
+      outcome: 'posted',
+      review: {
+        verdict: 'false_positive',
+        comment: 'Test fixture, not a real leak.',
+        updatedAt: '2026-08-19T10:00:00.000Z',
+      },
+    });
+    expect(captured?.sql).toContain('left join "finding_reviews"');
+    expect(captured?.sql).toContain('"finding_reviews"."verdict" =');
+    expect(captured?.values).toContain('false_positive');
   });
 
   it('applies repository allowlists to every history read boundary', async () => {

@@ -56,6 +56,7 @@ const FindingQuerySchema = z.object({
   skill: z.string().trim().min(1).max(512).optional(),
   severity: z.enum(['high', 'medium', 'low']).optional(),
   outcome: z.enum(['posted', 'deduped', 'skipped', 'resolved', 'failed', 'rejected', 'revised']).optional(),
+  review: z.enum(['false_positive', 'true_positive', 'mitigated']).optional(),
   query: z.string().trim().min(1).max(256).optional(),
   cursor: HistoryCursorSchema.optional(),
   limit: z.coerce.number().int().min(1).max(100).optional(),

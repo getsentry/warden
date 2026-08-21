@@ -386,6 +386,16 @@ function renderFilters() {
         { value: 'failed', label: 'Failed' },
       ],
     }),
+    field(params, {
+      name: 'review',
+      label: 'Review',
+      options: [
+        { value: '', label: 'Any review' },
+        { value: 'false_positive', label: 'False positive' },
+        { value: 'true_positive', label: 'True positive' },
+        { value: 'mitigated', label: 'Mitigated' },
+      ],
+    }),
   );
   form.addEventListener('submit', (event) => {
     event.preventDefault();
@@ -486,6 +496,14 @@ function dailyChart(data) {
   return panel;
 }
 
+function formatReviewVerdict(verdict) {
+  return verdict.replaceAll('_', ' ');
+}
+
+function reviewVerdict(verdict, className) {
+  return element('span', formatReviewVerdict(verdict), className);
+}
+
 function findingLocation(finding) {
   if (!finding.location) return '—';
   const end = finding.location.endLine && finding.location.endLine !== finding.location.startLine
@@ -560,6 +578,13 @@ function findingRows(finding) {
   const severity = element('td', undefined, 'finding-severity');
   severity.append(element('span', finding.severity, `severity ${finding.severity}`));
 
+  const review = element('td', undefined, 'finding-review-cell');
+  if (finding.review) {
+    review.append(reviewVerdict(finding.review.verdict, `verdict ${finding.review.verdict}`));
+  } else {
+    review.textContent = '—';
+  }
+
   const summary = element('td', undefined, 'finding-summary');
   const summaryLayout = element('div', undefined, 'finding-summary-layout');
   const disclosure = element('span', undefined, 'finding-disclosure');
@@ -589,14 +614,14 @@ function findingRows(finding) {
   const lastObserved = document.createElement('td');
   lastObserved.append(dateTime(finding.lastObservedAt, '—'));
 
-  row.append(severity, summary, context, location, status, firstObserved, lastObserved);
+  row.append(severity, review, summary, context, location, status, firstObserved, lastObserved);
 
   const detailRow = document.createElement('tr');
   detailRow.id = `finding-detail-${finding.id}`;
   detailRow.className = 'finding-detail-row';
   detailRow.hidden = true;
   const detailCell = document.createElement('td');
-  detailCell.colSpan = 7;
+  detailCell.colSpan = 8;
   const detailContent = element('div', undefined, 'finding-detail-content');
   const description = element('div', undefined, 'finding-detail-copy');
   description.append(
@@ -647,7 +672,7 @@ function findingsSection(data, params) {
   table.className = 'finding-table';
   const head = document.createElement('thead');
   const headings = document.createElement('tr');
-  for (const label of ['Severity', 'Finding', 'Repository / skill', 'Location', 'Status', 'First observed', 'Last observed']) {
+  for (const label of ['Severity', 'Review', 'Finding', 'Repository / skill', 'Location', 'Status', 'First observed', 'Last observed']) {
     const heading = element('th', label);
     heading.scope = 'col';
     headings.append(heading);
@@ -680,6 +705,7 @@ async function renderExplore(version) {
     if (value) findings.set(name, value);
   }
   if (params.get('findingOutcome')) findings.set('outcome', params.get('findingOutcome'));
+  if (params.get('review')) findings.set('review', params.get('review'));
   if (params.get('cursor')) findings.set('cursor', params.get('cursor'));
   findings.set('limit', '30');
 
@@ -727,8 +753,11 @@ async function renderFinding(version, findingId) {
   section.append(link('Back to findings', '/'));
   const article = element('article', undefined, 'finding-page-card');
   const heading = element('div', undefined, 'finding-page-heading');
+  heading.append(element('span', finding.severity, `severity ${finding.severity}`));
+  if (finding.review) {
+    heading.append(reviewVerdict(finding.review.verdict, `verdict-capsule ${finding.review.verdict}`));
+  }
   heading.append(
-    element('span', finding.severity, `severity ${finding.severity}`),
     element('span', finding.outcome ?? 'Not reported', `finding-status ${finding.outcome ?? ''}`),
   );
 
@@ -762,12 +791,24 @@ async function renderFinding(version, findingId) {
     findingDetail('Latest outcome', finding.outcome ?? 'Not reported'),
     findingDetail('First observed', dateTime(finding.firstObservedAt)),
     findingDetail('Last observed', dateTime(finding.lastObservedAt)),
+    ...(finding.review ? [
+      findingDetail('Review updated', dateTime(finding.review.updatedAt)),
+    ] : []),
     findingDetail('Run completed', dateTime(finding.completedAt)),
     findingDetail('Run', finding.clientRunId),
     findingDetail('Commit', detail.headSha ? detail.headSha.slice(0, 12) : 'Not reported'),
   );
   details.append(metadata);
-  article.append(heading, explanation, codeContext, details);
+  article.append(heading);
+  if (finding.review?.comment) {
+    const reviewNote = element('div', undefined, `finding-review ${finding.review.verdict}`);
+    reviewNote.append(
+      element('strong', 'Review comment'),
+      element('p', finding.review.comment, 'finding-review-comment'),
+    );
+    article.append(reviewNote);
+  }
+  article.append(explanation, codeContext, details);
   section.append(article);
   content.replaceChildren(section);
 }

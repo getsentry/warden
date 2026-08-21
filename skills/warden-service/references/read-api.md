@@ -49,11 +49,14 @@ A run summary includes IDs, source, data profile, repository identity, timestamp
 | `skill` | Exact skill name |
 | `severity` | `high`, `medium`, or `low` |
 | `outcome` | `posted`, `deduped`, `skipped`, `resolved`, `failed`, `rejected`, or `revised` |
+| `review` | `false_positive`, `true_positive`, or `mitigated` |
 | `query` | Case-insensitive text searched in title, description, and path; 1 to 256 characters |
 | `cursor` | Opaque `nextCursor` from the previous page |
 | `limit` | Integer from 1 to 100; defaults to 50 |
 
-A finding includes its IDs, repository, skill, severity, optional confidence, title, description, optional location, latest outcome, observation time, and run completion time.
+A finding includes its IDs, repository, skill, severity, optional confidence, title, description, optional location, latest observation `outcome`, observation time, and run completion time. When an inspect review exists, the finding also includes `review` with `verdict`, `comment`, and `updatedAt`. `review` does not replace `outcome`.
+
+Inspect labels are a later event on an already-published run. Publish the run first. An ingest token can write reviews; personal tokens stay read-only and cannot label findings. `GET /api/v1/findings/:id` returns the same current review on the nested `finding` object.
 
 ## Cost and Outcome Filters
 

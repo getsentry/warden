@@ -35,7 +35,7 @@ pnpm --filter @sentry/warden-service cli token create \
   --tenant "$TENANT_ID" --name ingest --role ingest --repository acme/widgets
 ```
 
-The `ingest` role can submit runs and request server-side memory extraction. It cannot read findings, history, costs, or memory. Memory recall requires `read`; only combine `--role ingest --role read` on a repository-scoped token. Do not distribute a tenant-wide read token through organization-level Actions secrets.
+The `ingest` role can submit runs, write inspect reviews, and request server-side memory extraction. It cannot read findings, history, costs, or memory. Memory recall requires `read`; only combine `--role ingest --role read` on a repository-scoped token. Do not distribute a tenant-wide read token through organization-level Actions secrets.
 
 The dashboard uses the same stateless Better Auth Google OAuth design as Junior:
 
@@ -50,7 +50,7 @@ Deploy and check `/health` and `/ready`. Vercel calls `/api/internal/jobs/tick` 
 
 ## Read the API from an Agent
 
-Open **API access** in the dashboard and create a personal token. The token is shown once, expires after 90 days, and accepts only `GET` and `HEAD` read requests. It cannot ingest runs, call memory recall, change memory, administer retention, delete data, or manage tokens.
+Open **API access** in the dashboard and create a personal token. The token is shown once, expires after 90 days, and accepts only `GET` and `HEAD` read requests. It cannot ingest runs, write inspect reviews, call memory recall, change memory, administer retention, delete data, or manage tokens. The dashboard finding page shows the current review but has no write UI.
 
 ```bash
 export WARDEN_PAT=wds_pat_example
@@ -64,7 +64,7 @@ curl --fail --silent \
   'https://warden-service.example.com/api/v1/costs?groupBy=repository'
 ```
 
-Useful read routes include `/api/v1/findings`, `/api/v1/runs`, `/api/v1/repositories`, `/api/v1/skills`, `/api/v1/costs`, `/api/v1/outcomes/summary`, and `/api/v1/export`. Filters use the same query parameters as the Explore dashboard.
+Useful read routes include `/api/v1/findings`, `/api/v1/runs`, `/api/v1/repositories`, `/api/v1/skills`, `/api/v1/costs`, `/api/v1/outcomes/summary`, and `/api/v1/export`. Filters use the same query parameters as the Explore dashboard. Finding items include the latest observation `outcome` and, when present, a current inspect `review` (`verdict`, `comment`, `updatedAt`). The review does not replace `outcome`. Filter labelled findings with `review=false_positive`, `review=true_positive`, or `review=mitigated`.
 
 ## Connect Warden
 
@@ -142,7 +142,7 @@ warden service replay .warden/logs/0191-example.jsonl
 warden service replay warden-findings.json --service-data findings
 ```
 
-Replay uses the artifact's original run ID and the current profile validation and redaction rules. Sending the same artifact again is idempotent. Warden reads the file without changing or deleting it. Replay never runs automatically.
+Replay uses the artifact's original run ID and the current profile validation and redaction rules. Sending the same artifact again is idempotent. Warden reads the file without changing or deleting it. Replay never runs automatically. If `.warden/reviews/<runId>.json` exists, replay publishes the run first, then pushes those inspect labels. Inspect labels are a later event on an already-published run: publish the run before reviews can apply. An ingest token writes the reviews; a missing run returns 404 and does not create one.
 
 ## Data Profiles
 

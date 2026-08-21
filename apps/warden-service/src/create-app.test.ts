@@ -85,7 +85,7 @@ describe('Vercel service app', () => {
     expect(script).not.toContain("api('/api/v1/repositories')");
     expect(script).not.toContain("api('/api/v1/skills')");
     expect(script).toContain("document.createElement('table')");
-    expect(script).toContain("['Severity', 'Finding', 'Repository / skill', 'Location', 'Status', 'First observed', 'Last observed']");
+    expect(script).toContain("['Severity', 'Review', 'Finding', 'Repository / skill', 'Location', 'Status', 'First observed', 'Last observed']");
     expect(script).not.toContain('finding-card');
     expect(script).not.toContain('badge');
     expect(`${html}\n${script}`).not.toContain('WARDEN_SERVICE_TOKEN');
@@ -104,6 +104,14 @@ describe('Vercel service app', () => {
     expect(script).toContain("element('h2', 'Code Context')");
     expect(script).toContain("findingPageSection('Finding Details')");
     expect(script).toContain("'No source snippet was retained for this finding.'");
+    expect(script).toContain("findingDetail('Latest outcome'");
+    expect(script).toContain('verdict-capsule');
+    expect(script).toContain('`verdict ${finding.review.verdict}`');
+    expect(script).toContain('finding-review-cell');
+    expect(script).toContain("element('strong', 'Review comment')");
+    expect(script).toContain("findingDetail('Review updated'");
+    expect(script).not.toContain("findingDetail('Review verdict'");
+    expect(script).not.toContain("findingDetail('Review comment'");
     expect(script).toContain("findingDetail('First observed'");
     expect(script).toContain("findingDetail('Last observed'");
     expect(script).not.toContain('protected-session');
@@ -113,9 +121,10 @@ describe('Vercel service app', () => {
   it('reacts to finding filters and keeps them in the URL', async () => {
     const script = await readFile(new URL('../public/assets/app.js', import.meta.url), 'utf8');
 
-    for (const filter of ['repositoryId', 'skill', 'range', 'query', 'severity', 'findingOutcome']) {
+    for (const filter of ['repositoryId', 'skill', 'range', 'query', 'severity', 'findingOutcome', 'review']) {
       expect(script).toContain(`'${filter}'`);
     }
+    expect(script).toContain("findings.set('review', params.get('review'))");
     expect(script).toContain("addEventListener('change'");
     expect(script).toContain("addEventListener('input'");
     expect(script).toContain('setTimeout(() => applyFilters(form), 250)');

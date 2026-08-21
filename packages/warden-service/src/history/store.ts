@@ -37,6 +37,7 @@ import type { WardenReadDatabase } from '../db/query.js';
 import {
   findingLocations,
   findingObservations,
+  findingReviews,
   findings,
   repositories,
   runs,
@@ -70,6 +71,7 @@ export interface FindingListFilters {
   skill?: string;
   severity?: 'high' | 'medium' | 'low';
   outcome?: FindingFeedItem['outcome'];
+  review?: NonNullable<FindingFeedItem['review']>['verdict'];
   query?: string;
   cursor?: HistoryCursor;
   limit?: number;
@@ -253,6 +255,9 @@ interface FindingFeedRow extends Record<string, unknown> {
   start_line: number | null;
   end_line: number | null;
   observation_outcome: FindingFeedItem['outcome'];
+  review_verdict: NonNullable<FindingFeedItem['review']>['verdict'] | null;
+  review_comment: string | null;
+  review_updated_at: Date | string | null;
   first_observed_at: Date | string | null;
   observed_at: Date | string | null;
   completed_at: Date | string;
@@ -289,6 +294,13 @@ function mapFinding(row: FindingFeedRow): FindingFeedItem {
       },
     } : {}),
     outcome: row.observation_outcome,
+    ...(row.review_verdict && row.review_updated_at ? {
+      review: {
+        verdict: row.review_verdict,
+        comment: row.review_comment ?? '',
+        updatedAt: iso(row.review_updated_at),
+      },
+    } : {}),
     firstObservedAt: row.first_observed_at ? iso(row.first_observed_at) : null,
     lastObservedAt: row.observed_at ? iso(row.observed_at) : null,
     completedAt: iso(row.completed_at),
@@ -366,6 +378,7 @@ export async function listFindings(
   if (filters.skill) conditions.push(eq(skillExecutions.skill, filters.skill));
   if (filters.severity) conditions.push(eq(findings.severity, filters.severity));
   if (filters.outcome) conditions.push(eq(observation.outcome, filters.outcome));
+  if (filters.review) conditions.push(eq(findingReviews.verdict, filters.review));
   if (filters.query) {
     conditions.push(sql`POSITION(${filters.query.toLowerCase()} IN LOWER(
       ${findings.title} || ' ' || ${findings.description} || ' ' || COALESCE(${location.path}, '')
@@ -396,6 +409,9 @@ export async function listFindings(
     start_line: location.start_line,
     end_line: location.end_line,
     observation_outcome: observation.outcome,
+    review_verdict: findingReviews.verdict,
+    review_comment: findingReviews.comment,
+    review_updated_at: findingReviews.updatedAt,
     first_observed_at: firstObservation.first_observed_at,
     observed_at: observation.last_observed_at,
     completed_at: runs.completedAt,
@@ -404,6 +420,10 @@ export async function listFindings(
     .innerJoin(findings, and(eq(findings.runId, runs.id), eq(findings.tenantId, runs.tenantId)))
     .innerJoin(repositories, and(eq(repositories.id, runs.repositoryId), eq(repositories.tenantId, runs.tenantId)))
     .innerJoin(skillExecutions, and(eq(skillExecutions.id, findings.skillExecutionId), eq(skillExecutions.tenantId, findings.tenantId)))
+    .leftJoin(findingReviews, and(
+      eq(findingReviews.findingId, findings.id),
+      eq(findingReviews.tenantId, findings.tenantId),
+    ))
     .leftJoinLateral(location, sql`true`)
     .leftJoinLateral(observation, sql`true`)
     .leftJoinLateral(firstObservation, sql`true`)
@@ -453,6 +473,9 @@ export async function getFindingDetail(
     start_line: location.start_line,
     end_line: location.end_line,
     observation_outcome: observation.outcome,
+    review_verdict: findingReviews.verdict,
+    review_comment: findingReviews.comment,
+    review_updated_at: findingReviews.updatedAt,
     first_observed_at: firstObservation.first_observed_at,
     observed_at: observation.last_observed_at,
     completed_at: runs.completedAt,
@@ -461,6 +484,10 @@ export async function getFindingDetail(
     .innerJoin(runs, and(eq(runs.id, findings.runId), eq(runs.tenantId, findings.tenantId)))
     .innerJoin(repositories, and(eq(repositories.id, runs.repositoryId), eq(repositories.tenantId, runs.tenantId)))
     .innerJoin(skillExecutions, and(eq(skillExecutions.id, findings.skillExecutionId), eq(skillExecutions.tenantId, findings.tenantId)))
+    .leftJoin(findingReviews, and(
+      eq(findingReviews.findingId, findings.id),
+      eq(findingReviews.tenantId, findings.tenantId),
+    ))
     .leftJoinLateral(location, sql`true`)
     .leftJoinLateral(observation, sql`true`)
     .leftJoinLateral(firstObservation, sql`true`)
