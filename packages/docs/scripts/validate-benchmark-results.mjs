@@ -5,10 +5,16 @@ import {fileURLToPath} from "node:url";
 const docsRoot = fileURLToPath(new URL("..", import.meta.url));
 const resultsDir = join(docsRoot, "src/data/benchmarking/results");
 const corpusPath = join(docsRoot, "src/data/benchmarking/sentry-vulnerability-corpus.json");
+const productionPath = join(
+  docsRoot,
+  "src/data/benchmarking/profiles/production.json",
+);
 
 const corpus = JSON.parse(readFileSync(corpusPath, "utf8"));
+const production = JSON.parse(readFileSync(productionPath, "utf8"));
 const corpusIds = new Set(corpus.findings.map((finding) => finding.id));
 const errors = [];
+const stableResults = [];
 
 const sum = (items, field) =>
   items.reduce((total, item) => total + (Number(item[field]) || 0), 0);
@@ -21,6 +27,7 @@ const isStableComparison = (result) =>
   result.targetMode === "all-corpus-files-by-sha" &&
   !result.supersededBy &&
   result.summary?.chunksFailed === 0 &&
+  (result.summary?.skippedFileCount ?? 0) === 0 &&
   result.summary?.chunksAnalyzed === result.summary?.chunksTotal &&
   Boolean(result.timing?.analysisChunkMs);
 
@@ -133,6 +140,8 @@ for (const filename of readdirSync(resultsDir).filter((file) => file.endsWith(".
   }
 
   if (isStableComparison(result)) {
+    stableResults.push(result);
+
     if (!result.scoring) {
       errors.push(`${label}: stable comparison rows must be scored`);
     }
@@ -147,6 +156,33 @@ for (const filename of readdirSync(resultsDir).filter((file) => file.endsWith(".
       );
     }
   }
+}
+
+for (const lane of ["agent", "auxiliary"]) {
+  for (const field of ["runtime", "model", "effort"]) {
+    if (typeof production[lane]?.[field] !== "string" || production[lane][field] === "") {
+      errors.push(`production.json: ${lane}.${field} must be a non-empty string`);
+    }
+  }
+}
+
+const productionPrimaryResults = stableResults.filter(
+  (result) =>
+    result.runtime === production.agent?.runtime &&
+    result.model === production.agent?.model &&
+    result.reasoningLevel === production.agent?.effort,
+);
+if (productionPrimaryResults.length === 0) {
+  errors.push("production.json: no stable result matches the production primary model");
+}
+
+const productionModelResults = productionPrimaryResults.filter(
+  (result) =>
+    result.runOptions?.auxiliaryModel === production.auxiliary?.model &&
+    result.runOptions?.auxiliaryEffort === production.auxiliary?.effort,
+);
+if (productionModelResults.length === 0) {
+  errors.push("production.json: no stable result matches both production model lanes");
 }
 
 if (errors.length > 0) {

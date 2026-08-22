@@ -1,4 +1,6 @@
 ---
+import productionProfile from "../data/benchmarking/profiles/production.json";
+
 type BenchmarkScoring = {
   knownFindingCount: number;
   knownFound: number;
@@ -22,6 +24,10 @@ type BenchmarkResult = {
   model: string;
   reasoningLevel?: string;
   runId: string;
+  runOptions?: {
+    auxiliaryEffort?: string;
+    auxiliaryModel?: string;
+  };
   runtime: string;
   scoring?: BenchmarkScoring;
   skill: string;
@@ -53,6 +59,7 @@ const MODEL_LABELS: Record<string, string> = {
   "anthropic/claude-sonnet-4-6": "Claude Sonnet 4.6",
   "anthropic/claude-sonnet-5": "Claude Sonnet 5",
   "moonshotai/kimi-k3": "Kimi K3",
+  "openrouter/moonshotai/kimi-k2.6": "Kimi K2.6",
   "openrouter/moonshotai/kimi-k3": "Kimi K3",
   "claude-opus-4-6": "Claude Opus 4.6",
   "claude-opus-4-7": "Claude Opus 4.7",
@@ -121,10 +128,33 @@ const hidesReasoningLabel = (result: BenchmarkResult) =>
 const runLabel = (result: BenchmarkResult) =>
   `${modelLabel(result.model)} (${runtimeLabel(result.runtime)})`;
 
+const matchesProductionPrimary = (result: BenchmarkResult) =>
+  result.runtime === productionProfile.agent.runtime &&
+  result.model === productionProfile.agent.model &&
+  result.reasoningLevel === productionProfile.agent.effort;
+
+const matchesProductionModels = (result: BenchmarkResult) =>
+  matchesProductionPrimary(result) &&
+  result.runOptions?.auxiliaryModel === productionProfile.auxiliary.model &&
+  result.runOptions?.auxiliaryEffort === productionProfile.auxiliary.effort;
+
+const productionLabel = (result: BenchmarkResult) => {
+  if (matchesProductionModels(result)) {
+    return "Production models";
+  }
+  if (matchesProductionPrimary(result)) {
+    return "Production primary";
+  }
+  return undefined;
+};
+
 const runMeta = (result: BenchmarkResult) =>
-  hidesReasoningLabel(result)
-    ? ""
-    : [reasoningLabel(result.reasoningLevel)].filter(Boolean).join(" · ");
+  [
+    hidesReasoningLabel(result) ? undefined : reasoningLabel(result.reasoningLevel),
+    productionLabel(result),
+  ]
+    .filter(Boolean)
+    .join(" · ");
 
 const sortLabel = (result: BenchmarkResult) =>
   [runLabel(result), runMeta(result)].filter(Boolean).join(" ");
