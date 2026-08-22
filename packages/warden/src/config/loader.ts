@@ -185,8 +185,62 @@ function mergeServiceConfig(base?: ServiceConfig, overlay?: ServiceConfig): Serv
   return merged;
 }
 
+function effectiveAgentDefaults(defaults?: Defaults): AgentRuntimeConfig | undefined {
+  const model = emptyToUndefined(defaults?.agent?.model) ?? emptyToUndefined(defaults?.model);
+  const maxTurns = defaults?.agent?.maxTurns ?? defaults?.maxTurns;
+  const effort = defaults?.agent?.effort;
+  const effective: AgentRuntimeConfig = {};
+
+  if (model !== undefined) effective.model = model;
+  if (maxTurns !== undefined) effective.maxTurns = maxTurns;
+  if (effort !== undefined) effective.effort = effort;
+
+  return Object.keys(effective).length > 0 ? effective : undefined;
+}
+
+function effectiveAuxiliaryDefaults(defaults?: Defaults): AuxiliaryRuntimeConfig | undefined {
+  const model = emptyToUndefined(defaults?.auxiliary?.model);
+  const effort = defaults?.auxiliary?.effort;
+  const maxRetries = defaults?.auxiliary?.maxRetries ?? defaults?.auxiliaryMaxRetries;
+  const effective: AuxiliaryRuntimeConfig = {};
+
+  if (model !== undefined) effective.model = model;
+  if (effort !== undefined) effective.effort = effort;
+  if (maxRetries !== undefined) effective.maxRetries = maxRetries;
+
+  return Object.keys(effective).length > 0 ? effective : undefined;
+}
+
+function effectiveSynthesisDefaults(defaults?: Defaults): Defaults['synthesis'] {
+  const model = emptyToUndefined(defaults?.synthesis?.model);
+  return model === undefined ? undefined : { model };
+}
+
 function inheritRepoLayerDefaults(base?: Defaults, repo?: Defaults): Defaults | undefined {
   const inherited: Defaults = { ...(repo ?? {}) };
+
+  // Normalize legacy and nested fields before merging so either repo syntax
+  // overrides the corresponding base execution default.
+  const agent = mergeNestedConfig(effectiveAgentDefaults(base), effectiveAgentDefaults(repo));
+  if (agent) {
+    inherited.agent = agent;
+  }
+
+  const auxiliary = mergeNestedConfig(
+    effectiveAuxiliaryDefaults(base),
+    effectiveAuxiliaryDefaults(repo)
+  );
+  if (auxiliary) {
+    inherited.auxiliary = auxiliary;
+  }
+
+  const synthesis = mergeNestedConfig(
+    effectiveSynthesisDefaults(base),
+    effectiveSynthesisDefaults(repo)
+  );
+  if (synthesis) {
+    inherited.synthesis = synthesis;
+  }
 
   if (base?.runtime !== undefined && inherited.runtime === undefined) {
     inherited.runtime = base.runtime;
