@@ -984,14 +984,21 @@ describe('resolveLayeredSkillConfigs', () => {
     expect(resolved[1]?.runtime).toBe('pi');
   });
 
-  it('lets repo-defined skills inherit base verification defaults when omitted', () => {
+  it('inherits base execution defaults without inheriting base policy defaults', () => {
     const baseConfig: WardenConfig = {
       version: 1,
       defaults: {
         failOn: 'high',
-        model: 'base-model',
+        model: 'openrouter/moonshotai/kimi-k3',
+        agent: { maxTurns: 30, effort: 'max' },
+        auxiliary: {
+          model: 'openrouter/openai/gpt-5.6-luna',
+          effort: 'high',
+          maxRetries: 5,
+        },
+        synthesis: { model: 'openrouter/anthropic/claude-sonnet-4.6' },
         ignorePaths: ['base/**'],
-        runtime: 'claude',
+        runtime: 'pi',
         verification: { enabled: false },
         chunking: { maxContextFiles: 25 },
       },
@@ -1018,11 +1025,67 @@ describe('resolveLayeredSkillConfigs', () => {
     expect(resolved).toHaveLength(2);
     expect(resolved[0]?.verifyFindings).toBe(false);
     expect(resolved[1]?.verifyFindings).toBe(false);
-    expect(resolved[1]?.runtime).toBe('claude');
+    expect(resolved[1]?.runtime).toBe('pi');
     expect(resolved[1]?.failOn).toBeUndefined();
-    expect(resolved[1]?.model).toBeUndefined();
+    expect(resolved[1]?.model).toBe('openrouter/moonshotai/kimi-k3');
+    expect(resolved[1]?.maxTurns).toBe(30);
+    expect(resolved[1]?.effort).toBe('max');
+    expect(resolved[1]?.auxiliaryModel).toBe('openrouter/openai/gpt-5.6-luna');
+    expect(resolved[1]?.auxiliaryEffort).toBe('high');
+    expect(resolved[1]?.auxiliaryMaxRetries).toBe(5);
+    expect(resolved[1]?.synthesisModel).toBe('openrouter/anthropic/claude-sonnet-4.6');
     expect(resolved[1]?.filters.ignorePaths).toBeUndefined();
     expect(resolved[1]?.maxContextFiles).toBeUndefined();
+  });
+
+  it('lets repo execution defaults override inherited base defaults', () => {
+    const baseConfig: WardenConfig = {
+      version: 1,
+      defaults: {
+        agent: {
+          model: 'openrouter/moonshotai/kimi-k3',
+          maxTurns: 30,
+          effort: 'max',
+        },
+        auxiliary: {
+          model: 'openrouter/openai/gpt-5.6-luna',
+          effort: 'high',
+          maxRetries: 5,
+        },
+        synthesis: { model: 'openrouter/anthropic/claude-sonnet-4.6' },
+      },
+      skills: [{ name: 'org-skill' }],
+    };
+
+    const repoConfig: WardenConfig = {
+      version: 1,
+      defaults: {
+        model: 'openrouter/x-ai/grok-4.5',
+        maxTurns: 12,
+        agent: { effort: 'low' },
+        auxiliary: { model: 'openrouter/google/gemini-3.1-pro-preview' },
+        auxiliaryMaxRetries: 2,
+        synthesis: { model: 'openrouter/openai/gpt-5.5' },
+      },
+      skills: [{ name: 'repo-skill' }],
+    };
+
+    const resolved = resolveLayeredSkillConfigs({
+      config: mergeWardenConfigs(baseConfig, repoConfig),
+      baseConfig,
+      repoConfig,
+    });
+
+    expect(resolved[1]).toMatchObject({
+      name: 'repo-skill',
+      model: 'openrouter/x-ai/grok-4.5',
+      maxTurns: 12,
+      effort: 'low',
+      auxiliaryModel: 'openrouter/google/gemini-3.1-pro-preview',
+      auxiliaryEffort: 'high',
+      auxiliaryMaxRetries: 2,
+      synthesisModel: 'openrouter/openai/gpt-5.5',
+    });
   });
 
   it('lets a repo-layer skill override inherited base verification defaults', () => {
