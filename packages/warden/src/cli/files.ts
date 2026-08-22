@@ -21,6 +21,11 @@ export interface SyntheticFileChangeOptions {
   scan?: ScanConfig;
 }
 
+export interface ExpandAndCreateFileChangesOptions extends SyntheticFileChangeOptions {
+  /** Base path used for FileChange filenames and scan policy (default: cwd). */
+  basePath?: string;
+}
+
 function hasGlobCharacters(pattern: string): boolean {
   return pattern.includes('*') || pattern.includes('?');
 }
@@ -295,9 +300,13 @@ export function createSyntheticFileChanges(
 export async function expandAndCreateFileChanges(
   patterns: string[],
   cwd: string = process.cwd(),
-  options: SyntheticFileChangeOptions = {}
+  options: ExpandAndCreateFileChangesOptions = {}
 ): Promise<FileChange[]> {
   const resolvedCwd = resolve(cwd);
   const files = await expandFileGlobs(patterns, resolvedCwd);
-  return createSyntheticFileChanges(files, resolvedCwd, options);
+  const basePath = resolve(options.basePath ?? resolvedCwd);
+  return createSyntheticFileChanges(files, basePath, {
+    ignore: options.ignore,
+    scan: options.scan,
+  });
 }

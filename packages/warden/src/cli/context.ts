@@ -1,4 +1,5 @@
-import { basename } from 'node:path';
+import { realpathSync } from 'node:fs';
+import { basename, resolve } from 'node:path';
 import type { EventContext, FileChange } from '../types/index.js';
 import type { IgnoreConfig, ScanConfig } from '../config/schema.js';
 import { pluralize } from './output/index.js';
@@ -121,12 +122,25 @@ export interface FileContextOptions {
  * This allows analysis without requiring git or a warden.toml config.
  */
 export async function buildFileEventContext(options: FileContextOptions): Promise<EventContext> {
-  const cwd = options.cwd ?? process.cwd();
-  const dirName = basename(cwd);
+  const requestedCwd = resolve(options.cwd ?? process.cwd());
+  let cwd = requestedCwd;
+  try {
+    cwd = realpathSync(requestedCwd);
+  } catch {
+    // File expansion reports missing or inaccessible invocation directories.
+  }
+  let repoPath = cwd;
+  try {
+    repoPath = getRepoRoot(cwd);
+  } catch {
+    // Explicit file analysis also works outside a Git checkout.
+  }
+  const dirName = basename(repoPath);
 
   const files = await expandAndCreateFileChanges(options.patterns, cwd, {
     ignore: options.ignore,
     scan: options.scan,
+    basePath: repoPath,
   });
 
   return {
@@ -151,6 +165,6 @@ export async function buildFileEventContext(options: FileContextOptions): Promis
     },
     diffContextSource: { type: 'working-tree' },
     explicitFileTargets: true,
-    repoPath: cwd,
+    repoPath,
   };
 }
