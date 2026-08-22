@@ -229,6 +229,44 @@ describe('piRuntime.runSkill', () => {
     }
   });
 
+  it('merges WARDEN_<PROVIDER>_HEADERS into the resolved model', async () => {
+    process.env['WARDEN_OPENAI_HEADERS'] = JSON.stringify({
+      'x-existing': 'overridden',
+      'x-litellm-tags': 'repo:acme/api,component:review',
+    });
+    piMocks.modelRuntime.getModel.mockReturnValue({
+      ...piMocks.model,
+      headers: { 'x-existing': 'original' },
+    });
+    try {
+      await piRuntime.runSkill(baseSkillRequest());
+
+      expect(createAgentSession).toHaveBeenCalledWith(
+        expect.objectContaining({
+          model: expect.objectContaining({
+            headers: {
+              'x-existing': 'overridden',
+              'x-litellm-tags': 'repo:acme/api,component:review',
+            },
+          }),
+        })
+      );
+    } finally {
+      delete process.env['WARDEN_OPENAI_HEADERS'];
+    }
+  });
+
+  it('rejects invalid WARDEN_<PROVIDER>_HEADERS', async () => {
+    process.env['WARDEN_OPENAI_HEADERS'] = '{"x-litellm-tags":42}';
+    try {
+      await expect(piRuntime.runSkill(baseSkillRequest())).rejects.toThrow(
+        'WARDEN_OPENAI_HEADERS must be a JSON object with string values'
+      );
+    } finally {
+      delete process.env['WARDEN_OPENAI_HEADERS'];
+    }
+  });
+
   it('passes read-only Pi tools and normalizes the result', async () => {
     const result = await piRuntime.runSkill(baseSkillRequest());
 
