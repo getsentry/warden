@@ -28,22 +28,32 @@ export BENCH_MODEL_SLUG="gpt-5-5"
 export BENCH_RUNTIME="pi"
 export BENCH_RUNTIME_SLUG="pi"
 export BENCH_EFFORT="high"
+export BENCH_AUXILIARY_MODEL="openrouter/openai/gpt-5.6-luna"
+export BENCH_AUXILIARY_EFFORT="high"
 export BENCH_RUN_SLUG="pi-gpt-5-5-high"
 export BENCH_ROOT="/tmp/warden-sentry-benchmark-${BENCH_RUN_SLUG}"
 export BENCH_PARALLEL="4"
 mkdir -p "$BENCH_ROOT"
 ```
 
-Set the provider API key required by the model. For GPT 5.5 through Pi, set
-`WARDEN_OPENAI_API_KEY`. For Anthropic models, set `WARDEN_ANTHROPIC_API_KEY`.
-For OpenRouter models through Pi, set `WARDEN_OPENROUTER_API_KEY` and use the
-full OpenRouter selector, such as `openrouter/deepseek/deepseek-v4-pro`.
+Set the provider API keys required by both model lanes. For GPT 5.5 through Pi,
+set `WARDEN_OPENAI_API_KEY`. For Anthropic models, set
+`WARDEN_ANTHROPIC_API_KEY`. For OpenRouter models through Pi, set
+`WARDEN_OPENROUTER_API_KEY` and use the full OpenRouter selector, such as
+`openrouter/deepseek/deepseek-v4-pro`.
 For Kimi K3 through OpenRouter, set `WARDEN_OPENROUTER_API_KEY`, use
 `openrouter/moonshotai/kimi-k3`, and pass `--effort max` for the launch-default
 benchmark configuration. Kimi K3 also supports `low` and `high` effort. The
 direct Moonshot selector is `moonshotai/kimi-k3` with `WARDEN_MOONSHOT_API_KEY`.
 For the Claude SDK runtime, use Claude Code model IDs such as
 `claude-sonnet-4-6` instead of Pi provider/model selectors.
+
+Set the auxiliary model and effort explicitly for new runs. Verification,
+extraction repair, and merge calls affect both findings and cost. Leaving this
+lane on a runtime default makes the result impossible to reproduce after that
+default changes. The example uses Warden's current production auxiliary lane
+for Pi. Choose a selector supported by the selected runtime when comparing a
+different runtime.
 
 For a Kimi K3 benchmark run, replace the setup block's model variables with:
 
@@ -135,6 +145,10 @@ version = 1
 [defaults]
 reportOn = "low"
 maxTurns = 100
+
+[defaults.auxiliary]
+model = "${BENCH_AUXILIARY_MODEL}"
+effort = "${BENCH_AUXILIARY_EFFORT}"
 
 [defaults.scan]
 maxFiles = 200
@@ -332,6 +346,12 @@ source of truth for cost, duration, token counts, and future rescoring.
 
 Store results in `packages/docs/src/data/benchmarking/results/`.
 
+Production labels come from
+`packages/docs/src/data/benchmarking/profiles/production.json`. When the
+organization baseline changes, update that profile with the effective model
+lanes, Warden version, and source commit. Add a controlled corpus row for the
+new model lanes instead of relabeling an older run.
+
 Record:
 
 - stable `runId`
@@ -342,6 +362,8 @@ Record:
 - model
 - runtime
 - effort level, or `provider-default`
+- auxiliary model and effort in `runOptions.auxiliaryModel` and
+  `runOptions.auxiliaryEffort`
 - configured `maxTurns`, plus any shard reruns done after a turn-limit failure
 - whether Warden's post-analysis finding verifier was enabled
 - whether `--traces` was enabled, plus any run-level trace IDs preserved in
