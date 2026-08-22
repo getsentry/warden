@@ -102,6 +102,7 @@ describe('Vercel service app', () => {
     expect(script).toContain("findingPageSection('Why Warden Flagged This')");
     expect(script).toContain("element('h2', 'Code Context')");
     expect(script).toContain("findingPageSection('Finding Details')");
+    expect(script).toContain("findingDetail('Primary model', finding.primaryModel ?? 'Not reported')");
     expect(script).toContain("'No source snippet was retained for this finding.'");
     expect(script).toContain("'Not posted: PR changed'");
     expect(script).toContain(
