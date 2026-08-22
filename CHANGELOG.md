@@ -1,4 +1,17 @@
 # Changelog
+## 0.47.0
+
+### New Features ✨
+
+- (pi) Configure provider base URLs by @PaulM5406 in [#512](https://github.com/getsentry/warden/pull/512)
+- (sdk) Surface verifierRejections across reports, CLI output, and findings-file export by @CalebKAston in [#474](https://github.com/getsentry/warden/pull/474)
+- (service) Show primary model for findings by @sentry-junior in [#515](https://github.com/getsentry/warden/pull/515)
+
+### Bug Fixes 🐛
+
+- (config) Inherit org execution defaults for repo skills by @gricha in [#514](https://github.com/getsentry/warden/pull/514)
+- (warden) Avoid nested Pi provider retries by @gricha in [#511](https://github.com/getsentry/warden/pull/511)
+
 ## 0.46.2
 
 ### New Features ✨
