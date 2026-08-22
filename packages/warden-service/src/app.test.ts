@@ -331,7 +331,8 @@ describe('createWardenService', () => {
             verification: 'The query interpolates untrusted input.',
           } : {}),
           provider: 'github', owner: 'acme', name: 'widgets', full_name: 'acme/widgets',
-          skill: 'security', severity: 'high', confidence: 'high',
+          skill: 'security', primary_model: 'openrouter/moonshotai/kimi-k3',
+          severity: 'high', confidence: 'high',
           title: 'Unsafe query', description: 'Use parameters.',
           path: 'src/query.ts', start_line: 12, end_line: 12,
           observation_outcome: 'skipped',
@@ -386,7 +387,13 @@ describe('createWardenService', () => {
     const findings = await app.request('/api/v1/findings?skill=security&query=unsafe');
     expect(findings.status).toBe(200);
     await expect(findings.json()).resolves.toMatchObject({
-      items: [{ displayId: '7MV-5V7', title: 'Unsafe query', skill: 'security', repository: { fullName: 'acme/widgets' } }],
+      items: [{
+        displayId: '7MV-5V7',
+        title: 'Unsafe query',
+        skill: 'security',
+        primaryModel: 'openrouter/moonshotai/kimi-k3',
+        repository: { fullName: 'acme/widgets' },
+      }],
     });
 
     const detail = await app.request('/api/v1/findings/00000000-0000-4000-8000-000000000010');
@@ -399,6 +406,7 @@ describe('createWardenService', () => {
         outcomeReason: 'pull_request_changed',
         firstObservedAt: '2026-08-12T10:00:00.000Z',
         lastObservedAt: '2026-08-12T10:01:00.000Z',
+        primaryModel: 'openrouter/moonshotai/kimi-k3',
       },
       verification: 'The query interpolates untrusted input.',
     });

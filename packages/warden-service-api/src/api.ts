@@ -66,6 +66,7 @@ export const FindingFeedItemSchema = z.object({
   clientRunId: IdSchema,
   repository: RepositoryIdentitySchema,
   skill: z.string().trim().min(1).max(512),
+  primaryModel: z.string().trim().min(1).max(255).optional(),
   severity: z.enum(['high', 'medium', 'low']),
   confidence: z.enum(['high', 'medium', 'low']).optional(),
   title: z.string().trim().min(1).max(512),
