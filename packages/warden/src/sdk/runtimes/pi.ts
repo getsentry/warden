@@ -344,6 +344,20 @@ function providerBaseUrlOverride(provider: string): string | undefined {
   return value && value.length > 0 ? value : undefined;
 }
 
+function providerHeadersOverride(provider: string): Record<string, string> | undefined {
+  const envName = `WARDEN_${provider.toUpperCase()}_HEADERS`;
+  const value = process.env[envName];
+  if (!value) {
+    return undefined;
+  }
+
+  try {
+    return z.record(z.string(), z.string()).parse(JSON.parse(value));
+  } catch {
+    throw new Error(`${envName} must be a JSON object with string values`);
+  }
+}
+
 function resolvePiModel(
   model: string | undefined,
   modelRuntime: ModelRuntime,
@@ -361,7 +375,16 @@ function resolvePiModel(
   }
 
   const baseUrl = providerBaseUrlOverride(provider);
-  return baseUrl ? { ...resolved, baseUrl } : resolved;
+  const headers = providerHeadersOverride(provider);
+  if (!baseUrl && !headers) {
+    return resolved;
+  }
+
+  return {
+    ...resolved,
+    ...(baseUrl ? { baseUrl } : {}),
+    ...(headers ? { headers: { ...resolved.headers, ...headers } } : {}),
+  };
 }
 
 function resolvePiSkillTools(
