@@ -405,6 +405,53 @@ describe('analyzeFile', () => {
     consoleSpy.mockRestore();
   });
 
+  it('preserves the response model when the circuit opens on an SDK-reported provider error', async () => {
+    const controller = new AbortController();
+    const circuitBreaker = new ProviderFailureCircuitBreaker({
+      maxConsecutiveProviderFailures: 1,
+      abortController: controller,
+    });
+    const runSkillMock = vi.fn().mockResolvedValue({
+      result: {
+        status: 'provider_error',
+        text: '',
+        errors: ['upstream provider error'],
+        usage: makeUsage(),
+        responseModel: 'claude-sonnet-4-5-20260929',
+      },
+    });
+    vi.mocked(getRuntime).mockReturnValue({
+      name: 'claude',
+      runSkill: runSkillMock,
+      runAuxiliary: vi.fn(),
+      runSynthesis: vi.fn(),
+    } as unknown as Runtime);
+
+    const result = await analyzeFile(
+      {
+        name: 'security-review',
+        description: 'Security review.',
+        prompt: 'Return findings as JSON.',
+      },
+      makePreparedFile(1),
+      '/tmp/repo',
+      {
+        abortController: controller,
+        circuitBreaker,
+        retry: {
+          maxRetries: 0,
+          initialDelayMs: 1,
+          backoffMultiplier: 1,
+          maxDelayMs: 1,
+        },
+      },
+    );
+
+    expect(circuitBreaker.reason?.code).toBe('provider_unavailable');
+    expect(result.failedHunks).toBe(1);
+    expect(result.responseModels).toEqual(['claude-sonnet-4-5-20260929']);
+  });
+
   it('opens the shared circuit after consecutive provider failures', async () => {
     const controller = new AbortController();
     const circuitBreaker = new ProviderFailureCircuitBreaker({
@@ -787,6 +834,116 @@ describe('runSkill', () => {
 
     expect(report.summary).toBe('No code changes to analyze');
     expect(report.runtime).toBe('pi');
+  });
+
+  it('reports the model that actually answered when no model override is configured', async () => {
+    const runSkillMock = vi.fn().mockResolvedValue({
+      result: {
+        status: 'success',
+        text: JSON.stringify({ findings: [] }),
+        errors: [],
+        usage: makeUsage(),
+        responseModel: 'claude-sonnet-4-5-20260929',
+      },
+    });
+    vi.mocked(getRuntime).mockReturnValue({
+      name: 'claude',
+      runSkill: runSkillMock,
+      runAuxiliary: vi.fn(),
+      runSynthesis: vi.fn(),
+    } as unknown as Runtime);
+
+    const report = await runSkill(
+      {
+        name: 'security-review',
+        description: 'Security review.',
+        prompt: 'Return findings as JSON.',
+      },
+      makeContextWithOneHunk(),
+      {},
+    );
+
+    expect(report.model).toBe('claude-sonnet-4-5-20260929');
+  });
+
+  it('falls back to the configured model when hunks report different response models', async () => {
+    const runSkillMock = vi.fn()
+      .mockResolvedValueOnce({
+        result: {
+          status: 'success',
+          text: JSON.stringify({ findings: [] }),
+          errors: [],
+          usage: makeUsage(),
+          responseModel: 'claude-sonnet-4-5-20260929',
+        },
+      })
+      .mockResolvedValueOnce({
+        result: {
+          status: 'success',
+          text: JSON.stringify({ findings: [] }),
+          errors: [],
+          usage: makeUsage(),
+          responseModel: 'claude-opus-4-8-20260601',
+        },
+      });
+    vi.mocked(getRuntime).mockReturnValue({
+      name: 'claude',
+      runSkill: runSkillMock,
+      runAuxiliary: vi.fn(),
+      runSynthesis: vi.fn(),
+    } as unknown as Runtime);
+
+    const report = await runSkill(
+      {
+        name: 'security-review',
+        description: 'Security review.',
+        prompt: 'Return findings as JSON.',
+      },
+      makeContextWithTwoHunks(),
+      { model: 'configured-alias' },
+    );
+
+    expect(report.model).toBe('configured-alias');
+  });
+
+  it('attributes each skill its own response model when multiple skills run concurrently', async () => {
+    const modelBySkill: Record<string, string> = {
+      'skill-a': 'model-a',
+      'skill-b': 'model-b',
+      'skill-c': 'model-c',
+    };
+    const runSkillMock = vi.fn(async ({ skillName }: { skillName: string }) => ({
+      result: {
+        status: 'success',
+        text: JSON.stringify({ findings: [] }),
+        errors: [],
+        usage: makeUsage(),
+        responseModel: modelBySkill[skillName],
+      },
+    }));
+    vi.mocked(getRuntime).mockReturnValue({
+      name: 'claude',
+      runSkill: runSkillMock,
+      runAuxiliary: vi.fn(),
+      runSynthesis: vi.fn(),
+    } as unknown as Runtime);
+
+    const [reportA, reportB, reportC] = await Promise.all(
+      Object.keys(modelBySkill).map((skillName) =>
+        runSkill(
+          { name: skillName, description: `${skillName} description.`, prompt: 'Return findings as JSON.' },
+          makeContextWithOneHunk(),
+          {},
+        )
+      )
+    );
+
+    expect(reportA!.skill).toBe('skill-a');
+    expect(reportA!.model).toBe('model-a');
+    expect(reportB!.skill).toBe('skill-b');
+    expect(reportB!.model).toBe('model-b');
+    expect(reportC!.skill).toBe('skill-c');
+    expect(reportC!.model).toBe('model-c');
   });
 
   it('preserves candidate findings when verification is interrupted', async () => {

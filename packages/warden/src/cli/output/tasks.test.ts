@@ -1425,6 +1425,88 @@ describe('runSkillTask model lanes', () => {
     );
     expect(result.report?.runtime).toBe('pi');
   });
+
+  it('reports the model that actually answered when no model override is configured', async () => {
+    const fakeHunk = {
+      hunk: { newStart: 1, newCount: 10 },
+    } as unknown as HunkWithContext;
+    const finding = makeFinding();
+
+    vi.spyOn(sdkRunner, 'prepareFiles').mockReturnValue({
+      files: [{ filename: 'a.ts', hunks: [fakeHunk] }],
+      skippedFiles: [],
+    });
+    vi.spyOn(sdkRunner, 'analyzeFile').mockResolvedValue({
+      filename: 'a.ts',
+      findings: [finding],
+      usage: { inputTokens: 1, outputTokens: 1, costUSD: 0.001 },
+      failedHunks: 0,
+      failedExtractions: 0,
+      hunkFailures: [],
+      responseModels: ['claude-sonnet-4-5-20260929'],
+    } satisfies FileAnalysisResult);
+    vi.spyOn(sdkRunner, 'postProcessFindings').mockResolvedValue({
+      findings: [finding],
+      auxiliaryUsage: [],
+    });
+
+    const result = await runSkillTask({
+      name: 'lane-skill',
+      resolveSkill: async () =>
+        ({ name: 'lane-skill', definition: '', files: [] } as unknown as SkillDefinition),
+      context: {
+        eventType: 'pull_request',
+        repository: { owner: 'o', name: 'n', fullName: 'o/n', defaultBranch: 'main' },
+        repoPath: '/tmp',
+        pullRequest: { number: 1, title: 't', body: '', headSha: 'abc', baseSha: 'def', files: [] },
+      } as unknown as SkillTaskOptions['context'],
+      runnerOptions: {
+        runtime: 'pi',
+      },
+    }, 1, noopCallbacks());
+
+    expect(result.report?.model).toBe('claude-sonnet-4-5-20260929');
+  });
+
+  it('reports the observed model on the error path when post-processing throws after hunks succeed', async () => {
+    const fakeHunk = {
+      hunk: { newStart: 1, newCount: 10 },
+    } as unknown as HunkWithContext;
+    const finding = makeFinding();
+
+    vi.spyOn(sdkRunner, 'prepareFiles').mockReturnValue({
+      files: [{ filename: 'a.ts', hunks: [fakeHunk] }],
+      skippedFiles: [],
+    });
+    vi.spyOn(sdkRunner, 'analyzeFile').mockResolvedValue({
+      filename: 'a.ts',
+      findings: [finding],
+      usage: { inputTokens: 1, outputTokens: 1, costUSD: 0.001 },
+      failedHunks: 0,
+      failedExtractions: 0,
+      hunkFailures: [],
+      responseModels: ['claude-sonnet-4-5-20260929'],
+    } satisfies FileAnalysisResult);
+    vi.spyOn(sdkRunner, 'postProcessFindings').mockRejectedValue(new Error('verification blew up'));
+
+    const result = await runSkillTask({
+      name: 'lane-skill',
+      resolveSkill: async () =>
+        ({ name: 'lane-skill', definition: '', files: [] } as unknown as SkillDefinition),
+      context: {
+        eventType: 'pull_request',
+        repository: { owner: 'o', name: 'n', fullName: 'o/n', defaultBranch: 'main' },
+        repoPath: '/tmp',
+        pullRequest: { number: 1, title: 't', body: '', headSha: 'abc', baseSha: 'def', files: [] },
+      } as unknown as SkillTaskOptions['context'],
+      runnerOptions: {
+        runtime: 'pi',
+      },
+    }, 1, noopCallbacks());
+
+    expect(result.report?.error).toBeDefined();
+    expect(result.report?.model).toBe('claude-sonnet-4-5-20260929');
+  });
 });
 
 describe('runSkillTask error capture', () => {
