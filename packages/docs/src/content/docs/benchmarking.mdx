@@ -76,7 +76,7 @@ limit and explicit historical target lists; production uses the runtime's
 
 The controlled production-model row found 37 of 86 known entries and emitted
 48 findings at a total cost of $29.25, or $0.79 per known entry. It ranks
-second among the 20 stable rows for known-corpus recall and sixth for cost per
+second among the 21 stable rows for known-corpus recall and sixth for cost per
 known entry.
 
 Compared with the July Grok row, it found four more known entries and cost
@@ -99,12 +99,39 @@ standardized score follows final Warden output, so it gives no credit for those
 two dropped matches. The 37/86 result measures the full system, including this
 merge loss, rather than only the primary model's scan output.
 
+### Grok 4.6 High
+
+Grok 4.6 high uses Warden 0.47.0 on Pi with
+`openrouter/x-ai/grok-4.6` at high effort and GPT 5.6 Luna high for
+auxiliary calls. It found 19 of 86 known entries and emitted 34 findings. The
+run cost $78.74, or $4.14 per known entry. It ranks fifteenth among the 21
+stable rows for recall and nineteenth for cost per known entry.
+
+The closest Grok 4.5 model-stack row found 37 known entries, emitted 48
+findings, and cost $29.25. The two runs share 13 known entries. Grok 4.6 found
+six that Grok 4.5 missed, while Grok 4.5 found 24 that Grok 4.6 missed. In this
+sample, Grok 4.6 found 18 fewer known issues at 2.7 times the provider cost.
+Its primary scan lane accounts for $76.97 of the $78.74 total, so auxiliary
+Luna calls are not the cost driver.
+
+Grok 4.6 also trails both K3 comparison points. K3 max found 32 known entries
+for $19.37, while K3 high found 27 for $28.14. This run does not support moving
+the benchmark or production model lane to Grok 4.6.
+
+This is not an isolated model-only comparison. The Grok 4.6 run uses Warden
+0.47.0, while the closest Grok 4.5 model-stack row uses Warden 0.46.2. These are
+single runs, so the result does not establish a deterministic model ranking.
+The host also slept during the fifth shard. Timing is marked contaminated and
+is not used for ranking. All 156 chunks completed with traces and no repairs,
+so final findings, semantic recall, token usage, and provider cost remain
+comparable.
+
 ### Kimi K3 Effort Levels and K2.6
 
 The historical K3 max run remains the strongest Kimi result on this corpus. It
 found 32 of 86 known entries. K2.6 found 31, K3 high found 27, and K3 low found
-16. Across the 20 stable rows now published, those results rank fifth, sixth,
-eighth, and eighteenth by known-corpus recall.
+16. Across the 21 stable rows now published, those results rank fifth, sixth,
+eighth, and nineteenth by known-corpus recall.
 
 K3 max also has the best Kimi cost efficiency at $19.37, or $0.61 per known entry.
 K3 low cost $10.28, or $0.64 per known entry, but found half as many known
