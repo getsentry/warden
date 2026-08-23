@@ -17,7 +17,13 @@ import { startTraceRecorder, withTraceRecorder } from '../../sentry-trace.js';
 import type { TraceSpan } from '../../types/index.js';
 
 const piMocks = vi.hoisted(() => {
-  const model = {
+  const model: {
+    id: string;
+    provider: string;
+    model: string;
+    baseUrl?: string;
+    headers?: Record<string, string>;
+  } = {
     id: 'gpt-test',
     provider: 'openai',
     model: 'gpt-test',
