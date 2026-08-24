@@ -5,9 +5,9 @@ import type { HunkWithContext } from '../diff/index.js';
 import type { EventContext, Finding, UsageStats } from '../types/index.js';
 import { analyzeFile, buildSourceSnippet, filterOutOfRangeFindings, runSkill } from './analyze.js';
 import type { PreparedFile } from './types.js';
-import { getRuntime, type Runtime } from './runtimes/index.js';
+import { getRuntime, type Runtime, type SkillRunRequest } from './runtimes/index.js';
 import { ProviderFailureCircuitBreaker } from './circuit-breaker.js';
-import { SkillRunnerError } from './errors.js';
+import { SkillRunnerError, WardenAuthenticationError } from './errors.js';
 import { Sentry } from '../sentry.js';
 import { startTracedSpan } from '../sentry-trace.js';
 import { AsyncWorkQueue } from '../utils/index.js';
@@ -850,6 +850,51 @@ describe('analyzeFile', () => {
 describe('runSkill', () => {
   afterEach(() => {
     vi.restoreAllMocks();
+  });
+
+  it('cancels in-flight and queued hunks after an authentication failure', async () => {
+    let invocation = 0;
+    let markSecondStarted: () => void;
+    const secondStarted = new Promise<void>((resolve) => {
+      markSecondStarted = resolve;
+    });
+    const controllers = new Set<AbortController>();
+    const runSkillMock = vi.fn(async (request: SkillRunRequest) => {
+      const controller = request.options.abortController;
+      expect(controller).toBeInstanceOf(AbortController);
+      controllers.add(controller!);
+
+      const currentInvocation = invocation++;
+      if (currentInvocation === 0) {
+        await secondStarted;
+        throw new WardenAuthenticationError('bad credentials', { runtime: 'pi' });
+      }
+
+      markSecondStarted!();
+      await new Promise<never>((_resolve, reject) => {
+        controller!.signal.addEventListener('abort', () => reject(makeAbortError()), { once: true });
+      });
+    });
+    vi.mocked(getRuntime).mockReturnValue({
+      name: 'pi',
+      runSkill: runSkillMock,
+      runAuxiliary: vi.fn(),
+      runSynthesis: vi.fn(),
+    } as unknown as Runtime);
+
+    await expect(runSkill(
+      {
+        name: 'security-review',
+        description: 'Security review.',
+        prompt: 'Return findings as JSON.',
+      },
+      makeContextWithThreeHunks(),
+      { runtime: 'pi', concurrency: 2, verifyFindings: false },
+    )).rejects.toBeInstanceOf(WardenAuthenticationError);
+
+    expect(runSkillMock).toHaveBeenCalledTimes(2);
+    expect(controllers.size).toBe(1);
+    expect([...controllers][0]!.signal.aborted).toBe(true);
   });
 
   it('reports all-extraction failures without authentication guidance', async () => {

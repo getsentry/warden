@@ -844,7 +844,10 @@ export async function analyzeFile(
       },
     },
     async (span) => {
-      const { abortController } = options;
+      const abortController = options.abortController ?? new AbortController();
+      const hunkOptions: SkillRunnerOptions = options.abortController
+        ? options
+        : { ...options, abortController };
       const fileFindings: Finding[] = [];
       const fileUsage: UsageStats[] = [];
       const fileAuxiliaryUsage: AuxiliaryUsageEntry[] = [];
@@ -883,11 +886,14 @@ export async function analyzeFile(
             skill,
             hunk,
             repoPath,
-            options,
+            hunkOptions,
             hunkCallbacks,
             prContext,
             span,
-          );
+          ).catch((error: unknown) => {
+            abortController.abort();
+            throw error;
+          });
           const hunkDurationMs = Date.now() - hunkStartTime;
 
           attachElapsedTime(result.findings, callbacks?.skillStartTime);
@@ -1013,6 +1019,7 @@ export async function runSkill(
   // This clone's identity scopes circuit-breaker provider diagnostics to this skill run.
   const scopedOptions: SkillRunnerOptions = {
     ...options,
+    abortController: options.abortController ?? new AbortController(),
   };
   return Sentry.startSpan(
     {
