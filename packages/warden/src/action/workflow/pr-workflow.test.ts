@@ -129,7 +129,7 @@ import {
 } from './base.js';
 import { runPRWorkflow } from './pr-workflow.js';
 import { clearSkillsCache } from '../../skills/loader.js';
-import { Semaphore } from '../../utils/index.js';
+import { AsyncWorkQueue } from '../../utils/index.js';
 import { buildFindingsOutput } from '../../reporting/output.js';
 
 // Type the mocks
@@ -1621,14 +1621,12 @@ describe('runPRWorkflow', () => {
       await runPRWorkflow(mockOctokit, createDefaultInputs(), 'pull_request', EVENT_PAYLOAD_PATH, FIXTURES_DIR);
 
       expect(mockRunSkillTask).toHaveBeenCalledTimes(1);
-      const [taskOptions, fileConcurrency, _callbacks, semaphore] = mockRunSkillTask.mock.calls[0]!;
+      const [taskOptions, _callbacks, analysisQueue] = mockRunSkillTask.mock.calls[0]!;
       expect(taskOptions).toEqual(expect.objectContaining({
         name: 'test-skill',
         displayName: 'test-skill',
       }));
-      // When a semaphore is provided, fileConcurrency is unlimited (semaphore is the gate)
-      expect(fileConcurrency).toBe(Number.MAX_SAFE_INTEGER);
-      expect(semaphore).toBeInstanceOf(Semaphore);
+      expect(analysisQueue).toBeInstanceOf(AsyncWorkQueue);
     });
 
     it('writes a live snapshot after the trigger completes, carrying skillExecutionId and skippedTriggers', async () => {
@@ -1693,6 +1691,7 @@ describe('runPRWorkflow', () => {
       let activeRuns = 0;
       let maxActiveRuns = 0;
       let invocationCount = 0;
+      const analysisQueues: (AsyncWorkQueue | undefined)[] = [];
       let resolveFirstRun!: () => void;
       let resolveFirstRunStarted!: () => void;
       const firstRun = new Promise<void>((resolve) => {
@@ -1702,7 +1701,8 @@ describe('runPRWorkflow', () => {
         resolveFirstRunStarted = resolve;
       });
 
-      mockRunSkillTask.mockImplementation(async (taskOptions) => {
+      mockRunSkillTask.mockImplementation(async (taskOptions, _callbacks, analysisQueue) => {
+        analysisQueues.push(analysisQueue);
         invocationCount++;
         activeRuns++;
         maxActiveRuns = Math.max(maxActiveRuns, activeRuns);
@@ -1742,6 +1742,10 @@ describe('runPRWorkflow', () => {
       expect(mockRunSkillTask).toHaveBeenCalledTimes(2);
       expect(callsBeforeFirstRunFinished).toBe(1);
       expect(maxActiveRuns).toBe(1);
+      expect(analysisQueues).toHaveLength(2);
+      expect(analysisQueues[0]).toBeInstanceOf(AsyncWorkQueue);
+      expect(analysisQueues[1]).toBe(analysisQueues[0]);
+      expect(analysisQueues[0]?.concurrency).toBe(1);
     });
 
     it('accounts for a trigger the circuit breaker aborted before dispatch, and fails the run since nothing succeeded', async () => {
@@ -2225,7 +2229,7 @@ describe('runPRWorkflow', () => {
       await runPRWorkflow(mockOctokit, createDefaultInputs(), 'pull_request', EVENT_PAYLOAD_PATH, FIXTURES_DIR);
 
       // runSkillTask receives options with context containing the custom files
-      const [taskOptions, fileConcurrency, _callbacks, semaphore] = mockRunSkillTask.mock.calls[0]!;
+      const [taskOptions] = mockRunSkillTask.mock.calls[0]!;
       expect(taskOptions.context.pullRequest?.files).toEqual(
         expect.arrayContaining([
           expect.objectContaining({
@@ -2234,8 +2238,6 @@ describe('runPRWorkflow', () => {
           }),
         ])
       );
-      expect(fileConcurrency).toBe(Number.MAX_SAFE_INTEGER);
-      expect(semaphore).toBeInstanceOf(Semaphore);
     });
   });
 

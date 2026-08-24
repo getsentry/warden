@@ -1424,7 +1424,7 @@ export async function runSkills(
     return 1;
   }
   let tasks: SkillTaskOptions[];
-  const concurrency = options.parallel ?? DEFAULT_CONCURRENCY;
+  const concurrency = options.parallel ?? config?.runner?.concurrency ?? DEFAULT_CONCURRENCY;
   try {
     tasks = await createSkillTasks({
       specs,

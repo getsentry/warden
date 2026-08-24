@@ -20,8 +20,8 @@ export interface FindingProcessingEvent {
   replacement?: Finding;
 }
 
-/** Default concurrency for file-level parallel processing (standalone SDK usage only) */
-export const DEFAULT_FILE_CONCURRENCY = 5;
+/** Default concurrency for hunk analysis (standalone SDK usage only). */
+export const DEFAULT_ANALYSIS_CONCURRENCY = 5;
 
 /** Threshold in characters above which to warn about large prompts (~25k tokens) */
 export const LARGE_PROMPT_THRESHOLD_CHARS = 100000;
@@ -104,11 +104,11 @@ export interface SkillRunnerOptions {
   maxTurns?: number;
   /** Lines of context to include around each hunk */
   contextLines?: number;
-  /** Process files in parallel (default: true) */
+  /** Process hunks in parallel (default: true) */
   parallel?: boolean;
-  /** Max concurrent file analyses when parallel=true (default: 5) */
+  /** Max concurrent hunk analyses when parallel=true (default: 5) */
   concurrency?: number;
-  /** Delay in milliseconds between batch starts when parallel=true (default: 0) */
+  /** Delay before queued analyses start after the first concurrent wave (default: 0) */
   batchDelayMs?: number;
   /** Model to use for analysis (e.g., 'openai/gpt-5.5'). Uses SDK default if not specified. */
   model?: string;

@@ -26,7 +26,7 @@ import {
   type FileState,
 } from './tasks.js';
 import { formatDuration, formatCost, truncate, countBySeverity, formatSeverityDot, pluralize, totalAuxiliaryCost } from './formatters.js';
-import { Semaphore } from '../../utils/index.js';
+import { AsyncWorkQueue } from '../../utils/index.js';
 import { Verbosity } from './verbosity.js';
 import { ICON_CHECK, ICON_SKIPPED, ICON_PENDING, ICON_ERROR, SPINNER_FRAMES } from './icons.js';
 import figures from 'figures';
@@ -276,8 +276,8 @@ export async function runSkillTasksWithInk(
     : undefined;
 
   if (tasks.length === 0 || verbosity === Verbosity.Quiet) {
-    // No tasks or quiet mode - run without UI using global semaphore.
-    const semaphore = new Semaphore(concurrency);
+    // No tasks or quiet mode - run without UI using the global analysis queue.
+    const analysisQueue = new AsyncWorkQueue(concurrency);
     const circuitAbortController = new AbortController();
     const circuitBreaker = new ProviderFailureCircuitBreaker({ abortController: circuitAbortController });
     const composedTasks = composeTasksWithFailFast(
@@ -308,7 +308,7 @@ export async function runSkillTasksWithInk(
           }
         : {}),
     };
-    return runComposedSkillTasks(composedTasks, callbacks, semaphore);
+    return runComposedSkillTasks(composedTasks, callbacks, analysisQueue);
   }
 
   // Track skill states
@@ -474,8 +474,7 @@ export async function runSkillTasksWithInk(
       : undefined,
   };
 
-  // Global semaphore gates file-level work across all skills.
-  const semaphore = new Semaphore(concurrency);
+  const analysisQueue = new AsyncWorkQueue(concurrency);
 
   // Compose per-task abort controllers: fire on SIGINT, fail-fast, or provider circuit breaker.
   const circuitAbortController = new AbortController();
@@ -487,8 +486,8 @@ export async function runSkillTasksWithInk(
     circuitAbortController,
   );
 
-  // Launch all skills in parallel; the semaphore is the sole concurrency gate.
-  const results = await runComposedSkillTasks(composedTasks, callbacks, semaphore);
+  // Launch all skills in parallel; the queue is the sole concurrency gate.
+  const results = await runComposedSkillTasks(composedTasks, callbacks, analysisQueue);
 
   // Flush any pending setImmediate from updateUI so last-tick warnings are
   // rendered before we tear down. setImmediate is FIFO, so our callback runs

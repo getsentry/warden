@@ -120,6 +120,7 @@ async function runScheduleWorkflowInner(
   logGroupEnd();
 
   let scheduleTriggers: ResolvedTrigger[];
+  let runnerConcurrency: number | undefined;
   let skillRootsByName: LayeredSkillRootsByName | undefined;
   let service = resolveActionServiceOptions(inputs);
   try {
@@ -133,6 +134,10 @@ async function runScheduleWorkflowInner(
       || layered.repoConfig?.defaults?.offline === true
       || layered.config.defaults?.offline === true,
     );
+    runnerConcurrency =
+      layered.baseConfig?.runner?.concurrency ??
+      layered.repoConfig?.runner?.concurrency ??
+      layered.config.runner?.concurrency;
     skillRootsByName = buildSkillRootsByName(repoPath, layered, inputs.baseSkillRoot);
     service = resolveActionServiceOptions(inputs, layered.config.service);
     scheduleTriggers = resolveLayeredSkillConfigs(layered, undefined, skillRootsByName)
@@ -301,6 +306,7 @@ async function runScheduleWorkflowInner(
         auxiliaryEffort: resolved.auxiliaryEffort,
         synthesisModel: resolved.synthesisModel,
         maxTurns: resolved.maxTurns,
+        concurrency: runnerConcurrency ?? inputs.parallel,
         batchDelayMs: resolved.batchDelayMs,
         maxContextFiles: resolved.maxContextFiles,
         ignore: resolved.ignore,

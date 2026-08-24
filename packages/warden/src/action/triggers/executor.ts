@@ -18,10 +18,10 @@ import { runSkillTask, createDefaultCallbacks } from '../../cli/output/tasks.js'
 import type { SkillTaskOptions } from '../../cli/output/tasks.js';
 import { renderSkillReport } from '../../output/renderer.js';
 import { logGroup, logGroupEnd } from '../workflow/base.js';
-import { DEFAULT_FILE_CONCURRENCY, type AnalysisChunkingConfig } from '../../sdk/types.js';
+import type { AnalysisChunkingConfig } from '../../sdk/types.js';
 import type { FindingProcessingEvent } from '../../sdk/types.js';
 import { SkillRunnerError } from '../../sdk/errors.js';
-import type { Semaphore } from '../../utils/index.js';
+import type { AsyncWorkQueue } from '../../utils/index.js';
 import { Verbosity } from '../../cli/output/verbosity.js';
 import type { ProviderFailureCircuitBreaker } from '../../sdk/circuit-breaker.js';
 import { assertValidPiModelSelectors } from '../../sdk/runtimes/model-selectors.js';
@@ -100,8 +100,8 @@ export interface TriggerExecutorDeps {
   globalRequestChanges?: boolean;
   /** Global fail-check from action inputs (trigger-specific takes precedence) */
   globalFailCheck?: boolean;
-  /** Global semaphore for limiting concurrent file analyses across triggers */
-  semaphore?: Semaphore;
+  /** Global queue for limiting concurrent hunk analyses across triggers. */
+  analysisQueue?: AsyncWorkQueue;
   /** Shared controller for stopping the whole action run */
   abortController?: AbortController;
   /** Shared circuit breaker for auth/provider failures */
@@ -237,8 +237,7 @@ export async function executeTrigger(
             defaultCallbacks.onFindingProcessing?.(skillName, event);
           },
         };
-        const fileConcurrency = deps.semaphore ? Number.MAX_SAFE_INTEGER : DEFAULT_FILE_CONCURRENCY;
-        const result = await runSkillTask(taskOptions, fileConcurrency, callbacks, deps.semaphore);
+        const result = await runSkillTask(taskOptions, callbacks, deps.analysisQueue);
         const report = result.report;
 
         if (!report) {

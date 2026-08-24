@@ -72,7 +72,7 @@ A matched trigger becomes a skill task. Each task contains:
 - model, runtime, max turns, chunking, and verification options
 - output thresholds for failure and reporting
 
-Warden launches matched skills in parallel. A shared semaphore gates file-level
+Warden launches matched skills in parallel. A shared queue dispatches hunk
 analysis so multiple skills can be active while total model concurrency stays
 bounded.
 
@@ -88,8 +88,9 @@ Before a model sees code, Warden prepares the diff:
 4. Expand each hunk with surrounding file context.
 5. Group hunks by file.
 
-The unit of main analysis is a hunk with context. Files run in parallel when
-allowed by the runner, while hunks inside a file run in order.
+The unit of main analysis is a hunk with context. Hunks are independent queue
+items, so workers may analyze multiple hunks from the same file concurrently.
+Reports preserve source order even when hunks finish out of order.
 
 See [Chunking](/config/chunking/) for file pattern modes and coalescing
 settings.

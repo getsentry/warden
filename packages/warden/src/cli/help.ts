@@ -164,7 +164,7 @@ const HELP_OPTIONS: Record<HelpOptionId, HelpOptionSpec> = {
   },
   parallel: {
     label: '--parallel <n>',
-    description: 'Max concurrent file analyses across running skills',
+    description: 'Max concurrent hunk analyses across running skills',
   },
   failFast: {
     label: '-x, --fail-fast',

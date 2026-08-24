@@ -1,5 +1,8 @@
 version = 1
 
+[runner]
+concurrency = 2
+
 [defaults]
 auxiliaryMaxRetries = 3
 
