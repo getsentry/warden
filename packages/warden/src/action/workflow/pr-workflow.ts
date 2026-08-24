@@ -31,7 +31,7 @@ import type { ExistingComment } from '../../output/dedup.js';
 import { buildAnalyzedScope, findStaleComments, resolveStaleComments } from '../../output/stale.js';
 import { filterFindings } from '../../types/index.js';
 import type { EventContext, SkillReport, Finding } from '../../types/index.js';
-import { runPool, Semaphore } from '../../utils/index.js';
+import { AsyncWorkQueue, runPool } from '../../utils/index.js';
 import { evaluateFixAttempts, postThreadReply } from '../fix-evaluation/index.js';
 import type { EvaluateFixAttemptsResult, FixEvaluation } from '../fix-evaluation/index.js';
 import { aggregateUsage } from '../../sdk/usage.js';
@@ -618,12 +618,12 @@ async function executeAllTriggers(
   const concurrency = runnerConcurrency ?? inputs.parallel;
   const runtimeEnv = await prepareRuntimeEnvironment(matchedTriggers, inputs);
 
-  const semaphore = new Semaphore(concurrency);
+  const analysisQueue = new AsyncWorkQueue(concurrency);
   const abortController = new AbortController();
   const circuitBreaker = new ProviderFailureCircuitBreaker({ abortController });
   const completedSoFar: TriggerResult[] = [];
 
-  // Limit trigger dispatch too; the semaphore only gates work after a trigger starts.
+  // Limit trigger dispatch too; the analysis queue only gates work after a trigger starts.
   const results = await runPool(
     matchedTriggers,
     concurrency,
@@ -637,7 +637,7 @@ async function executeAllTriggers(
         globalMaxFindings: inputs.maxFindings,
         globalRequestChanges: inputs.requestChanges,
         globalFailCheck: inputs.failCheck,
-        semaphore,
+        analysisQueue,
         abortController,
         circuitBreaker,
         checks: options.checks,

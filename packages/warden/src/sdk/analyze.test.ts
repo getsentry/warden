@@ -10,6 +10,7 @@ import { ProviderFailureCircuitBreaker } from './circuit-breaker.js';
 import { SkillRunnerError } from './errors.js';
 import { Sentry } from '../sentry.js';
 import { startTracedSpan } from '../sentry-trace.js';
+import { AsyncWorkQueue } from '../utils/index.js';
 
 vi.mock('./runtimes/index.js', () => ({
   getRuntime: vi.fn(),
@@ -319,6 +320,77 @@ describe('analyzeFile', () => {
     vi.restoreAllMocks();
   });
 
+  it('queues hunks across files while preserving per-file result order', async () => {
+    const releases: (() => void)[] = [];
+    const gates = Array.from({ length: 4 }, () => new Promise<void>((resolve) => {
+      releases.push(resolve);
+    }));
+    let nextHunk = 0;
+    let active = 0;
+    let maxActive = 0;
+    const runSkill = vi.fn(async () => {
+      const hunkIndex = nextHunk++;
+      active++;
+      maxActive = Math.max(maxActive, active);
+      await gates[hunkIndex];
+      active--;
+      const findings = hunkIndex < 3 ? [makeFinding(hunkIndex + 1)] : [];
+      return {
+        result: {
+          status: 'success' as const,
+          text: JSON.stringify({ findings }),
+          errors: [],
+          usage: makeUsage(),
+        },
+      };
+    });
+    vi.mocked(getRuntime).mockReturnValue({
+      name: 'pi',
+      runSkill,
+      runAuxiliary: vi.fn(),
+      runSynthesis: vi.fn(),
+    } as unknown as Runtime);
+    const completionOrder: number[] = [];
+    const queue = new AsyncWorkQueue(2);
+    const skill = {
+      name: 'security-review',
+      description: 'Security review.',
+      prompt: 'Return findings as JSON.',
+    };
+
+    const firstFile = analyzeFile(
+      skill,
+      makePreparedFile(3),
+      '/tmp/repo',
+      { runtime: 'pi' },
+      { onHunkComplete: (hunkNum) => completionOrder.push(hunkNum) },
+      undefined,
+      queue,
+    );
+    const secondFile = analyzeFile(
+      skill,
+      makePreparedFile(),
+      '/tmp/repo',
+      { runtime: 'pi' },
+      undefined,
+      undefined,
+      queue,
+    );
+
+    await vi.waitFor(() => expect(runSkill).toHaveBeenCalledTimes(2));
+    releases[1]!();
+    await vi.waitFor(() => expect(runSkill).toHaveBeenCalledTimes(3));
+    releases[2]!();
+    await vi.waitFor(() => expect(runSkill).toHaveBeenCalledTimes(4));
+    releases[0]!();
+    releases[3]!();
+
+    const [result] = await Promise.all([firstFile, secondFile]);
+    expect(completionOrder).toEqual([2, 3, 1]);
+    expect(result.findings.map((finding) => finding.location?.startLine)).toEqual([1, 2, 3]);
+    expect(maxActive).toBe(2);
+  });
+
   it('retries extraction once after a transient auxiliary failure', async () => {
     const runAuxiliary = vi.fn()
       .mockResolvedValueOnce({ success: false, error: 'malformed tool call' })
@@ -438,6 +510,7 @@ describe('analyzeFile', () => {
       {
         abortController: controller,
         circuitBreaker,
+        concurrency: 1,
         retry: {
           maxRetries: 0,
           initialDelayMs: 1,
@@ -482,6 +555,7 @@ describe('analyzeFile', () => {
       {
         abortController: controller,
         circuitBreaker,
+        concurrency: 1,
         retry: {
           maxRetries: 0,
           initialDelayMs: 1,
@@ -834,6 +908,74 @@ describe('runSkill', () => {
 
     expect(report.summary).toBe('No code changes to analyze');
     expect(report.runtime).toBe('pi');
+  });
+
+  it('shares hunk concurrency across files and reports the active file lifecycle', async () => {
+    const releases: (() => void)[] = [];
+    let active = 0;
+    let maxActive = 0;
+    const runSkillMock = vi.fn(async () => {
+      active++;
+      maxActive = Math.max(maxActive, active);
+      await new Promise<void>((resolve) => {
+        releases.push(() => {
+          active--;
+          resolve();
+        });
+      });
+      return {
+        result: {
+          status: 'success' as const,
+          text: JSON.stringify({ findings: [] }),
+          errors: [],
+          usage: makeUsage(),
+        },
+      };
+    });
+    vi.mocked(getRuntime).mockReturnValue({
+      name: 'pi',
+      runSkill: runSkillMock,
+      runAuxiliary: vi.fn(),
+      runSynthesis: vi.fn(),
+    } as unknown as Runtime);
+    const context = makeContextWithOneHunk();
+    const firstFile = context.pullRequest!.files[0]!;
+    context.pullRequest!.files = [
+      firstFile,
+      { ...firstFile, filename: 'src/other.ts' },
+    ];
+    const startedFiles: string[] = [];
+    const completedFiles: string[] = [];
+
+    const report = runSkill(
+      {
+        name: 'security-review',
+        description: 'Security review.',
+        prompt: 'Return findings as JSON.',
+      },
+      context,
+      {
+        runtime: 'pi',
+        concurrency: 1,
+        verifyFindings: false,
+        callbacks: {
+          onFileStart: (filename) => startedFiles.push(filename),
+          onFileComplete: (filename) => completedFiles.push(filename),
+        },
+      },
+    );
+
+    await vi.waitFor(() => expect(runSkillMock).toHaveBeenCalledTimes(1));
+    expect(startedFiles).toEqual(['src/example.ts']);
+    expect(completedFiles).toEqual([]);
+    releases.shift()!();
+    await vi.waitFor(() => expect(runSkillMock).toHaveBeenCalledTimes(2));
+    releases.shift()!();
+    await report;
+
+    expect(maxActive).toBe(1);
+    expect(startedFiles).toEqual(['src/example.ts', 'src/other.ts']);
+    expect(completedFiles).toEqual(['src/example.ts', 'src/other.ts']);
   });
 
   it('reports the model that actually answered when no model override is configured', async () => {

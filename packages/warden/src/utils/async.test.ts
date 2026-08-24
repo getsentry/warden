@@ -1,5 +1,9 @@
-import { describe, it, expect, vi } from 'vitest';
-import { runPool, processInBatches, Semaphore } from './async.js';
+import { afterEach, describe, it, expect, vi } from 'vitest';
+import { AsyncWorkQueue, runPool, processInBatches } from './async.js';
+
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 describe('runPool', () => {
   it('processes all items and returns results in input order', async () => {
@@ -136,82 +140,87 @@ describe('processInBatches', () => {
   });
 });
 
-describe('Semaphore', () => {
-  it('allows immediate acquisition when permits are available', async () => {
-    const sem = new Semaphore(2);
-    await sem.acquire();
-    await sem.acquire();
-    // Both acquired without blocking
-    sem.release();
-    sem.release();
-  });
-
-  it('blocks when no permits are available and unblocks on release', async () => {
-    const sem = new Semaphore(1);
-    await sem.acquire();
-
-    let acquired = false;
-    const pending = sem.acquire().then(() => { acquired = true; });
-
-    // Give the microtask queue a tick
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(acquired).toBe(false);
-
-    sem.release();
-    await pending;
-    expect(acquired).toBe(true);
-
-    sem.release();
-  });
-
-  it('wakes waiters in FIFO order', async () => {
-    const sem = new Semaphore(1);
-    await sem.acquire();
-
-    const order: number[] = [];
-
-    const p1 = sem.acquire().then(() => { order.push(1); });
-    const p2 = sem.acquire().then(() => { order.push(2); });
-    const p3 = sem.acquire().then(() => { order.push(3); });
-
-    sem.release(); // wakes waiter 1
-    await p1;
-    sem.release(); // wakes waiter 2
-    await p2;
-    sem.release(); // wakes waiter 3
-    await p3;
-
-    expect(order).toEqual([1, 2, 3]);
-
-    sem.release();
-  });
-
-  it('limits concurrent work to the permit count', async () => {
-    const sem = new Semaphore(3);
+describe('AsyncWorkQueue', () => {
+  it('runs dynamically submitted work up to the concurrency limit', async () => {
+    const queue = new AsyncWorkQueue(3);
     let active = 0;
     let maxActive = 0;
 
-    const work = async () => {
-      await sem.acquire();
+    const work = async (value: number) => {
       active++;
       maxActive = Math.max(maxActive, active);
       await new Promise((resolve) => setTimeout(resolve, 10));
       active--;
-      sem.release();
+      return value;
     };
 
-    await Promise.all(Array.from({ length: 10 }, () => work()));
+    const results = await Promise.all(
+      Array.from({ length: 10 }, (_, index) => queue.run(() => work(index))),
+    );
 
     expect(maxActive).toBe(3);
+    expect(results).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
   });
 
-  it('handles release without waiters (restores permits)', async () => {
-    const sem = new Semaphore(1);
-    await sem.acquire();
-    sem.release();
+  it('starts queued work in FIFO order', async () => {
+    const queue = new AsyncWorkQueue(1);
+    const starts: number[] = [];
 
-    // Should be able to acquire again immediately
-    await sem.acquire();
-    sem.release();
+    await Promise.all([1, 2, 3].map((value) => queue.run(async () => {
+      starts.push(value);
+    })));
+
+    expect(starts).toEqual([1, 2, 3]);
+  });
+
+  it('continues dispatching after work rejects', async () => {
+    const queue = new AsyncWorkQueue(1);
+    const failed = queue.run(async () => {
+      throw new Error('failed');
+    });
+    const completed = queue.run(async () => 'completed');
+
+    await expect(failed).rejects.toThrow('failed');
+    await expect(completed).resolves.toBe('completed');
+  });
+
+  it('delays work after the first concurrent wave', async () => {
+    vi.useFakeTimers();
+    const queue = new AsyncWorkQueue(1);
+    const starts: number[] = [];
+
+    await queue.run(async () => {
+      starts.push(1);
+    });
+    const delayed = queue.run(async () => {
+      starts.push(2);
+    }, { delayMs: 100 });
+
+    await vi.advanceTimersByTimeAsync(99);
+    expect(starts).toEqual([1]);
+    await vi.advanceTimersByTimeAsync(1);
+    await delayed;
+    expect(starts).toEqual([1, 2]);
+  });
+
+  it('stops waiting for a delayed start when aborted', async () => {
+    vi.useFakeTimers();
+    const controller = new AbortController();
+    const queue = new AsyncWorkQueue(1);
+
+    await queue.run(async () => undefined);
+    const work = vi.fn(async () => undefined);
+    const delayed = queue.run(work, {
+      delayMs: 10_000,
+      signal: controller.signal,
+    });
+
+    controller.abort();
+    await delayed;
+    expect(work).toHaveBeenCalledOnce();
+  });
+
+  it('rejects invalid concurrency', () => {
+    expect(() => new AsyncWorkQueue(0)).toThrow('positive integer');
   });
 });

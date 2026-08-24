@@ -27,6 +27,7 @@ import {
   type FindingProcessingEvent,
 } from '../../sdk/runner.js';
 import { ProviderFailureCircuitBreaker } from '../../sdk/circuit-breaker.js';
+import { DEFAULT_ANALYSIS_CONCURRENCY } from '../../sdk/types.js';
 import { buildFileReports } from '../../sdk/report-files.js';
 import chalk from 'chalk';
 import figures from 'figures';
@@ -35,7 +36,7 @@ import type { OutputMode } from './tty.js';
 import { ICON_CHECK, ICON_SKIPPED } from './icons.js';
 import { timestamp } from './tty.js';
 import { formatDuration, formatCost, formatLocation, formatSeverityPlain, formatFindingCountsPlain, countBySeverity, pluralize } from './formatters.js';
-import { runPool, Semaphore } from '../../utils/index.js';
+import { AsyncWorkQueue, runPool } from '../../utils/index.js';
 
 /**
  * Result from processing a single file within a skill task.
@@ -273,9 +274,8 @@ export interface SkillProgressCallbacks {
  */
 export async function runSkillTask(
   options: SkillTaskOptions,
-  fileConcurrency: number,
   callbacks: SkillProgressCallbacks,
-  semaphore?: Semaphore
+  sharedAnalysisQueue?: AsyncWorkQueue,
 ): Promise<SkillTaskResult> {
   const {
     name,
@@ -289,6 +289,10 @@ export async function runSkillTask(
   } = options;
   // This clone's identity scopes circuit-breaker provider diagnostics to this skill run.
   const runnerOptions: SkillRunnerOptions = { ...configuredRunnerOptions };
+  const taskConcurrency = runnerOptions.parallel === false
+    ? 1
+    : runnerOptions.concurrency ?? DEFAULT_ANALYSIS_CONCURRENCY;
+  const analysisQueue = sharedAnalysisQueue ?? new AsyncWorkQueue(taskConcurrency);
 
   return Sentry.startSpan(
     { op: 'skill.run', name: `run ${displayName}` },
@@ -387,29 +391,30 @@ export async function runSkillTask(
             }
           : undefined;
 
-        // Process files with concurrency
+        // Files aggregate hunk results; the shared queue owns concurrency.
         const processFile = async (prepared: PreparedFile, index: number): Promise<FileProcessResult> => {
           const filename = prepared.filename;
-          const fileStartTime = Date.now();
-
-          // Update file state to running (local + callback)
           const localState = fileStates[index];
-          if (localState) localState.status = 'running';
-          callbacks.onFileUpdate(name, filename, { status: 'running' });
+          let fileStartTime: number | undefined;
 
           const fileCallbacks: FileAnalysisCallbacks = {
             skillStartTime: startTime,
             onHunkStart: (hunkNum, totalHunks, lineRange) => {
-              callbacks.onFileUpdate(name, filename, {
-                currentHunk: hunkNum,
-                totalHunks,
-              });
+              if (fileStartTime === undefined) {
+                fileStartTime = Date.now();
+                if (localState) localState.status = 'running';
+                callbacks.onFileUpdate(name, filename, {
+                  status: 'running',
+                  totalHunks,
+                });
+              }
               callbacks.onHunkStart?.(name, filename, hunkNum, totalHunks, lineRange);
             },
             onHunkComplete: (_hunkNum, findings, usage) => {
               // Accumulate findings and usage for this file
               const current = fileStates[index];
               if (current) {
+                current.currentHunk++;
                 current.findings.push(...findings);
                 if (current.usage) {
                   current.usage.inputTokens += usage.inputTokens;
@@ -433,7 +438,10 @@ export async function runSkillTask(
                 } else {
                   current.usage = { ...usage };
                 }
-                callbacks.onFileUpdate(name, filename, { usage: current.usage });
+                callbacks.onFileUpdate(name, filename, {
+                  currentHunk: current.currentHunk,
+                  usage: current.usage,
+                });
               }
             },
             onLargePrompt: callbacks.onLargePrompt
@@ -479,11 +487,12 @@ export async function runSkillTask(
             context.repoPath,
             runnerOptions,
             fileCallbacks,
-            prContext
+            prContext,
+            analysisQueue,
           );
 
           // Detect if this file was aborted before any real work happened
-          const fileDurationMs = Date.now() - fileStartTime;
+          const fileDurationMs = fileStartTime === undefined ? 0 : Date.now() - fileStartTime;
           const aborted = runnerOptions.abortController?.signal.aborted ?? false;
           const noWork = !result.usage || (result.usage.inputTokens === 0 && result.usage.outputTokens === 0);
           const fileStatus = (aborted && noWork) ? 'skipped' : 'done';
@@ -509,38 +518,9 @@ export async function runSkillTask(
           };
         };
 
-        // Return an empty result for files skipped due to abort
-        const processSkippedFile = (index: number): FileProcessResult => {
-          const localState = fileStates[index];
-          if (localState) localState.status = 'skipped';
-          const filename = preparedFiles[index]?.filename ?? 'unknown';
-          callbacks.onFileUpdate(name, filename, { status: 'skipped' });
-          return { findings: [], durationMs: 0, failedHunks: 0, failedExtractions: 0, hunkFailures: [] };
-        };
-
-        // Process files with sliding-window concurrency pool
-        const batchDelayMs = runnerOptions.batchDelayMs ?? 0;
-        const shouldAbort = () => runnerOptions.abortController?.signal.aborted ?? false;
-        // The effective concurrency for batch delay: when a semaphore gates work,
-        // use its permit count (the actual concurrency limit) rather than fileConcurrency.
-        const effectiveConcurrency = semaphore ? semaphore.initialPermits : fileConcurrency;
-        const allResults = await runPool(preparedFiles, fileConcurrency,
-          async (file, index) => {
-            if (semaphore) await semaphore.acquire();
-            try {
-              // Check abort after acquiring the semaphore -- the file may have
-              // been queued behind others and a SIGINT could have arrived while waiting.
-              if (shouldAbort()) return processSkippedFile(index);
-              // Rate-limit: delay items beyond the first concurrent wave
-              if (index >= effectiveConcurrency && batchDelayMs > 0) {
-                await new Promise((resolve) => setTimeout(resolve, batchDelayMs));
-              }
-              return await processFile(file, index);
-            } finally {
-              if (semaphore) semaphore.release();
-            }
-          },
-          { shouldAbort }
+        // Files only group results and progress. The shared queue schedules every hunk.
+        const allResults = await Promise.all(
+          preparedFiles.map((file, index) => processFile(file, index)),
         );
 
         // Mark never-dispatched files as skipped
@@ -1022,15 +1002,15 @@ export function composeTasksWithFailFast(
 }
 
 /**
- * Launch all skill tasks in parallel using a shared semaphore for concurrency.
+ * Launch all skill tasks in parallel using a shared hunk queue.
  */
 export async function runComposedSkillTasks(
   tasks: SkillTaskOptions[],
   callbacks: SkillProgressCallbacks,
-  semaphore: Semaphore
+  analysisQueue: AsyncWorkQueue,
 ): Promise<SkillTaskResult[]> {
   const results = await runPool(tasks, tasks.length,
-    (task) => runSkillTask(task, Number.MAX_SAFE_INTEGER, callbacks, semaphore),
+    (task) => runSkillTask(task, callbacks, analysisQueue),
     { shouldAbort: () => tasks[0]?.runnerOptions?.abortController?.signal.aborted ?? false }
   );
 
@@ -1048,10 +1028,7 @@ export async function runSkillTasks(
 ): Promise<SkillTaskResult[]> {
   const { mode, verbosity, concurrency, failFastController, onSkillComplete, onChunkComplete } = options;
 
-  // Global semaphore gates file-level work across all skills.
-  // All skills launch immediately so the UI shows them as "running",
-  // but only `concurrency` files will be analysed at any time.
-  const semaphore = new Semaphore(concurrency);
+  const analysisQueue = new AsyncWorkQueue(concurrency);
 
   const effectiveCallbacks = callbacks ?? createDefaultCallbacks(tasks, mode, verbosity);
 
@@ -1110,6 +1087,6 @@ export async function runSkillTasks(
     }, { once: true });
   }
 
-  // Launch all skills in parallel; the semaphore is the sole concurrency gate.
-  return runComposedSkillTasks(composedTasks, wrappedCallbacks, semaphore);
+  // Launch all skills in parallel; the queue is the sole concurrency gate.
+  return runComposedSkillTasks(composedTasks, wrappedCallbacks, analysisQueue);
 }

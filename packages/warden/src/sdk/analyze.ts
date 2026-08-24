@@ -18,7 +18,7 @@ import { getRuntime, getRuntimeProviderOptions } from './runtimes/index.js';
 import type { SkillRunResult } from './runtimes/index.js';
 import {
   LARGE_PROMPT_THRESHOLD_CHARS,
-  DEFAULT_FILE_CONCURRENCY,
+  DEFAULT_ANALYSIS_CONCURRENCY,
   type AuxiliaryUsageEntry,
   type HunkAnalysisResult,
   type HunkAnalysisCallbacks,
@@ -31,7 +31,7 @@ import {
 import { prepareFiles } from './prepare.js';
 import type { EventContext, SkillReport, UsageStats, HunkFailure, HunkTrace, VerifierRejections } from '../types/index.js';
 import type { SourceSnippet, SourceSnippetLine } from '../types/index.js';
-import { runPool } from '../utils/index.js';
+import { AsyncWorkQueue } from '../utils/index.js';
 import { getSpanContext, startTraceRecorder, withTraceRecorder, type TraceRecorder } from '../sentry-trace.js';
 
 /** Result from parsing hunk output */
@@ -324,7 +324,8 @@ async function analyzeHunk(
   repoPath: string,
   options: SkillRunnerOptions,
   callbacks?: HunkAnalysisCallbacks,
-  prContext?: PRPromptContext
+  prContext?: PRPromptContext,
+  parentSpan?: Span,
 ): Promise<HunkAnalysisResult> {
   if (options.captureTraces) {
     ensureLocalTracing();
@@ -336,6 +337,7 @@ async function analyzeHunk(
     {
       op: 'skill.analyze_hunk',
       name: `analyze hunk ${hunkCtx.filename}:${lineRange}`,
+      ...(parentSpan ? { parentSpan } : {}),
       attributes: {
         'gen_ai.agent.name': skill.name,
         'code.file.path': hunkCtx.filename,
@@ -828,7 +830,8 @@ export async function analyzeFile(
   repoPath: string,
   options: SkillRunnerOptions = {},
   callbacks?: FileAnalysisCallbacks,
-  prContext?: PRPromptContext
+  prContext?: PRPromptContext,
+  analysisQueue?: AsyncWorkQueue,
 ): Promise<FileAnalysisResult> {
   return Sentry.startSpan(
     {
@@ -851,27 +854,72 @@ export async function analyzeFile(
       let failedHunks = 0;
       let failedExtractions = 0;
 
-      for (const [hunkIndex, hunk] of file.hunks.entries()) {
-        if (abortController?.signal.aborted) break;
+      const concurrency = options.parallel === false
+        ? 1
+        : options.concurrency ?? DEFAULT_ANALYSIS_CONCURRENCY;
+      const queue = analysisQueue ?? new AsyncWorkQueue(concurrency);
+      const batchDelayMs = options.parallel === false ? 0 : options.batchDelayMs;
+      const completedHunks = await Promise.all(file.hunks.map((hunk, hunkIndex) =>
+        queue.run(async () => {
+          if (abortController?.signal.aborted) return undefined;
 
-        const lineRange = formatHunkLineRange(hunk);
-        callbacks?.onHunkStart?.(hunkIndex + 1, file.hunks.length, lineRange);
+          const lineRange = formatHunkLineRange(hunk);
+          callbacks?.onHunkStart?.(hunkIndex + 1, file.hunks.length, lineRange);
 
-        const hunkCallbacks: HunkAnalysisCallbacks | undefined = callbacks
-          ? {
-              lineRange,
-              onLargePrompt: callbacks.onLargePrompt,
-              onPromptSize: callbacks.onPromptSize,
-              onRetry: callbacks.onRetry,
-              onExtractionFailure: callbacks.onExtractionFailure,
-              onExtractionResult: callbacks.onExtractionResult,
-              onHunkFailed: callbacks.onHunkFailed,
-            }
-          : undefined;
+          const hunkCallbacks: HunkAnalysisCallbacks | undefined = callbacks
+            ? {
+                lineRange,
+                onLargePrompt: callbacks.onLargePrompt,
+                onPromptSize: callbacks.onPromptSize,
+                onRetry: callbacks.onRetry,
+                onExtractionFailure: callbacks.onExtractionFailure,
+                onExtractionResult: callbacks.onExtractionResult,
+                onHunkFailed: callbacks.onHunkFailed,
+              }
+            : undefined;
 
-        const hunkStartTime = Date.now();
-        const result = await analyzeHunk(skill, hunk, repoPath, options, hunkCallbacks, prContext);
-        const hunkDurationMs = Date.now() - hunkStartTime;
+          const hunkStartTime = Date.now();
+          const result = await analyzeHunk(
+            skill,
+            hunk,
+            repoPath,
+            options,
+            hunkCallbacks,
+            prContext,
+            span,
+          );
+          const hunkDurationMs = Date.now() - hunkStartTime;
+
+          attachElapsedTime(result.findings, callbacks?.skillStartTime);
+          callbacks?.onHunkComplete?.(hunkIndex + 1, result.findings, result.usage);
+          const chunkResult: ChunkAnalysisResult = {
+            filename: file.filename,
+            model: options.model,
+            index: hunkIndex + 1,
+            total: file.hunks.length,
+            lineRange,
+            findings: result.findings,
+            usage: result.usage,
+            durationMs: hunkDurationMs,
+            failed: result.failed && result.failureCode !== 'aborted',
+            extractionFailed: result.extractionFailed,
+            failureCode: result.failureCode,
+            failureMessage: result.failureMessage,
+            extractionError: result.extractionError,
+            extractionPreview: result.extractionPreview,
+            auxiliaryUsage: result.auxiliaryUsage,
+            trace: result.trace,
+          };
+          callbacks?.onChunkComplete?.(chunkResult);
+
+          return { lineRange, result };
+        }, { delayMs: batchDelayMs, signal: abortController?.signal }),
+      ));
+
+      // Promise.all preserves hunk order even when analyses finish out of order.
+      for (const completed of completedHunks) {
+        if (!completed) continue;
+        const { lineRange, result } = completed;
 
         // `failed` and `extractionFailed` are conceptually mutually exclusive:
         // if analysis failed (no output produced), there's nothing to extract.
@@ -900,33 +948,12 @@ export async function analyzeFile(
           });
         }
 
-        attachElapsedTime(result.findings, callbacks?.skillStartTime);
-        callbacks?.onHunkComplete?.(hunkIndex + 1, result.findings, result.usage);
         if (result.trace) {
           hunkTraces.push(result.trace);
         }
         if (result.responseModel) {
           fileResponseModels.push(result.responseModel);
         }
-        const chunkResult: ChunkAnalysisResult = {
-          filename: file.filename,
-          model: options.model,
-          index: hunkIndex + 1,
-          total: file.hunks.length,
-          lineRange,
-          findings: result.findings,
-          usage: result.usage,
-          durationMs: hunkDurationMs,
-          failed: result.failed && result.failureCode !== 'aborted',
-          extractionFailed: result.extractionFailed,
-          failureCode: result.failureCode,
-          failureMessage: result.failureMessage,
-          extractionError: result.extractionError,
-          extractionPreview: result.extractionPreview,
-          auxiliaryUsage: result.auxiliaryUsage,
-          trace: result.trace,
-        };
-        callbacks?.onChunkComplete?.(chunkResult);
 
         fileFindings.push(...result.findings);
         fileUsage.push(result.usage);
@@ -1072,21 +1099,21 @@ async function runSkillAnalysis(
     maxContextFiles: options.maxContextFiles,
   };
 
-  /**
-   * Process all hunks for a single file sequentially.
-   * Wraps analyzeFile with progress callbacks.
-   */
+  /** Wrap analyzeFile with progress callbacks. */
   async function processFile(
     fileHunkEntry: PreparedFile,
     fileIndex: number
-  ): Promise<FileAnalysisResult> {
+  ): Promise<{ filename: string; result: FileAnalysisResult; durationMs: number }> {
     const { filename } = fileHunkEntry;
-
-    callbacks?.onFileStart?.(filename, fileIndex, totalFiles);
+    let fileStartTime: number | undefined;
 
     const fileCallbacks: FileAnalysisCallbacks = {
       skillStartTime: callbacks?.skillStartTime,
       onHunkStart: (hunkNum, totalHunks, lineRange) => {
+        if (fileStartTime === undefined) {
+          fileStartTime = Date.now();
+          callbacks?.onFileStart?.(filename, fileIndex, totalFiles);
+        }
         callbacks?.onHunkStart?.(filename, hunkNum, totalHunks, lineRange);
       },
       onHunkComplete: (hunkNum, findings, usage) => {
@@ -1124,39 +1151,39 @@ async function runSkillAnalysis(
         : undefined,
     };
 
-    const result = await analyzeFile(skill, fileHunkEntry, context.repoPath, options, fileCallbacks, prContext);
+    const result = await analyzeFile(
+      skill,
+      fileHunkEntry,
+      context.repoPath,
+      options,
+      fileCallbacks,
+      prContext,
+      analysisQueue,
+    );
 
-    callbacks?.onFileComplete?.(filename, fileIndex, totalFiles);
+    if (fileStartTime !== undefined) {
+      callbacks?.onFileComplete?.(filename, fileIndex, totalFiles);
+    }
 
-    return result;
+    return {
+      filename,
+      result,
+      durationMs: fileStartTime === undefined ? 0 : Date.now() - fileStartTime,
+    };
   }
 
-  /** Process a file with timing, returning a self-contained result. */
-  async function processFileWithTiming(fileHunkEntry: PreparedFile, fileIndex: number) {
-    const fileStart = Date.now();
-    const result = await processFile(fileHunkEntry, fileIndex);
-    const durationMs = Date.now() - fileStart;
-    return { filename: fileHunkEntry.filename, result, durationMs };
-  }
+  const concurrency = parallel
+    ? options.concurrency ?? DEFAULT_ANALYSIS_CONCURRENCY
+    : 1;
+  const analysisQueue = new AsyncWorkQueue(concurrency);
 
   // Collect results in input order (Promise.all preserves order)
   const fileResults: { filename: string; result: FileAnalysisResult; durationMs: number }[] = [];
 
   // Process files - parallel or sequential based on options
   if (parallel) {
-    // Process files with sliding-window concurrency pool
-    const fileConcurrency = options.concurrency ?? DEFAULT_FILE_CONCURRENCY;
-    const batchDelayMs = options.batchDelayMs ?? 0;
-
-    fileResults.push(...await runPool(fileHunks, fileConcurrency,
-      async (fileHunkEntry, index) => {
-        // Rate-limit: delay items beyond the first concurrent wave
-        if (index >= fileConcurrency && batchDelayMs > 0) {
-          await new Promise((resolve) => setTimeout(resolve, batchDelayMs));
-        }
-        return processFileWithTiming(fileHunkEntry, index);
-      },
-      { shouldAbort: () => abortController?.signal.aborted ?? false }
+    fileResults.push(...await Promise.all(
+      fileHunks.map((fileHunkEntry, index) => processFile(fileHunkEntry, index)),
     ));
   } else {
     // Process files sequentially
@@ -1164,7 +1191,7 @@ async function runSkillAnalysis(
       // Check for abort before starting new file
       if (abortController?.signal.aborted) break;
 
-      fileResults.push(await processFileWithTiming(fileHunkEntry, fileIndex));
+      fileResults.push(await processFile(fileHunkEntry, fileIndex));
     }
   }
 
