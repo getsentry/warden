@@ -1,5 +1,6 @@
 {
   "runId": "sentry-security-review-pi-openrouter-grok-4-5-high-luna-aux-high-traced-corpus-2026-08-21-001",
+  "supersededBy": "sentry-security-review-pi-openrouter-grok-4-5-high-luna-aux-high-traced-corpus-2026-08-23-001",
   "corpusId": "sentry-vulnerability-corpus",
   "repository": "getsentry/sentry",
   "wardenVersion": "0.46.2",
