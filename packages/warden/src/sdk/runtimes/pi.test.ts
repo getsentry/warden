@@ -73,6 +73,11 @@ vi.mock('@earendil-works/pi-ai', () => ({
   },
 }));
 
+vi.mock('./pi-file-tools.js', () => ({
+  createCheckoutFileTools: vi.fn((_cwd: string, toolNames: readonly string[]) =>
+    toolNames.map((name) => ({ name }))),
+}));
+
 vi.mock('@earendil-works/pi-coding-agent', () => ({
   DefaultResourceLoader: vi.fn(function (options: unknown) {
     piMocks.resourceLoaderOptions.push(options);
@@ -313,7 +318,12 @@ describe('piRuntime.runSkill', () => {
       modelRuntime: piMocks.modelRuntime,
       model: piMocks.model,
       tools: ['read', 'grep', 'find', 'ls'],
-      customTools: undefined,
+      customTools: [
+        expect.objectContaining({ name: 'read' }),
+        expect.objectContaining({ name: 'grep' }),
+        expect.objectContaining({ name: 'find' }),
+        expect.objectContaining({ name: 'ls' }),
+      ],
       resourceLoader: piMocks.resourceLoader,
       sessionManager: piMocks.sessionManager,
       settingsManager: piMocks.settingsManager,

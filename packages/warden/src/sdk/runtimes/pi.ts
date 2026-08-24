@@ -52,6 +52,7 @@ import {
 import { aggregateUsage, emptyUsage } from '../usage.js';
 import { InvalidPiModelSelectorError, isPiModelSelector } from './model-selectors.js';
 import { isWardenOffline } from '../offline.js';
+import { createCheckoutFileTools } from './pi-file-tools.js';
 import type {
   AuxiliaryRunRequest,
   AuxiliaryRunResult,
@@ -594,6 +595,15 @@ async function runPiPrompt(options: PiPromptOptions): Promise<PiPromptResult> {
   const startedAt = Date.now();
   const activeToolSpans = new Map<string, PiToolSpan>();
   const conversationMessages: GenAiMessage[] = [{ role: 'user', content: options.userPrompt }];
+  // Pi uses cwd for path resolution but does not treat it as a filesystem boundary.
+  // Same-name custom tools override its built-ins, so file access stays in the checkout.
+  const customTools = options.customTools ?? [];
+  const customToolNames = new Set(customTools.map((tool) => tool.name));
+  const checkoutFileTools = createCheckoutFileTools(
+    options.cwd,
+    options.toolNames.filter((toolName) => !customToolNames.has(toolName)),
+  );
+  const sessionCustomTools = [...customTools, ...checkoutFileTools];
 
   const buildToolAttributes = (args: {
     toolName: string;
@@ -725,7 +735,7 @@ async function runPiPrompt(options: PiPromptOptions): Promise<PiPromptResult> {
       thinkingLevel: options.effort,
       tools: options.toolNames,
       noTools: options.toolNames.length === 0 ? 'all' : undefined,
-      customTools: options.customTools,
+      customTools: sessionCustomTools.length > 0 ? sessionCustomTools : undefined,
       resourceLoader,
       sessionManager: SessionManager.inMemory(options.cwd),
       settingsManager,
