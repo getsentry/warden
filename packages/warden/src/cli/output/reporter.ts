@@ -207,11 +207,13 @@ export class Reporter {
     let totalFailedHunks = 0;
     let totalFailedExtractions = 0;
     let totalSkippedFiles = 0;
+    let totalVerifierRejections = 0;
     for (const report of reports) {
       allFindings.push(...report.findings);
       totalFailedHunks += report.failedHunks ?? 0;
       totalFailedExtractions += report.failedExtractions ?? 0;
       totalSkippedFiles += report.skippedFiles?.length ?? 0;
+      totalVerifierRejections += report.verifierRejections?.count ?? 0;
     }
     const counts = countBySeverity(allFindings);
     const totalUsage = this.aggregateUsage(reports);
@@ -232,6 +234,9 @@ export class Reporter {
       }
       if (totalFailedExtractions > 0) {
         this.log(chalk.yellow(`${figures.warning}  ${totalFailedExtractions} finding ${pluralize(totalFailedExtractions, 'extraction')} failed`));
+      }
+      if (totalVerifierRejections > 0) {
+        this.log(chalk.yellow(`${figures.warning}  ${totalVerifierRejections} ${pluralize(totalVerifierRejections, 'finding')} rejected by verification`));
       }
       if ((totalFailedHunks > 0 || totalFailedExtractions > 0) && this.verbosity < Verbosity.Verbose) {
         this.log(chalk.dim('  Use -v for failure details'));
@@ -255,6 +260,9 @@ export class Reporter {
       }
       if (totalFailedExtractions > 0) {
         this.logPlain(`WARN: ${totalFailedExtractions} finding ${pluralize(totalFailedExtractions, 'extraction')} failed`);
+      }
+      if (totalVerifierRejections > 0) {
+        this.logPlain(`WARN: ${totalVerifierRejections} ${pluralize(totalVerifierRejections, 'finding')} rejected by verification`);
       }
       if ((totalFailedHunks > 0 || totalFailedExtractions > 0) && this.verbosity < Verbosity.Verbose) {
         this.logPlain('Use -v for failure details');

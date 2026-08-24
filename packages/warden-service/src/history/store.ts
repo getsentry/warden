@@ -246,6 +246,7 @@ interface FindingFeedRow extends Record<string, unknown> {
   name: string;
   full_name: string;
   skill: string;
+  primary_model: string | null;
   severity: FindingFeedItem['severity'];
   confidence: FindingFeedItem['confidence'] | null;
   title: string;
@@ -279,6 +280,7 @@ function mapFinding(row: FindingFeedRow): FindingFeedItem {
       fullName: row.full_name,
     },
     skill: row.skill,
+    ...(row.primary_model ? { primaryModel: row.primary_model } : {}),
     severity: row.severity,
     ...(row.confidence ? { confidence: row.confidence } : {}),
     title: row.title,
@@ -390,6 +392,7 @@ export async function listFindings(
     name: repositories.name,
     full_name: repositories.fullName,
     skill: skillExecutions.skill,
+    primary_model: skillExecutions.model,
     severity: findings.severity,
     confidence: findings.confidence,
     title: findings.title,
@@ -448,6 +451,7 @@ export async function getFindingDetail(
     name: repositories.name,
     full_name: repositories.fullName,
     skill: skillExecutions.skill,
+    primary_model: skillExecutions.model,
     severity: findings.severity,
     confidence: findings.confidence,
     title: findings.title,

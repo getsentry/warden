@@ -49,16 +49,142 @@ signals.
 - Scoring is semantic. Same-file findings about different bugs do not count,
   duplicates do not double-count, and one finding can cover multiple corpus
   entries when it catches the same root bug.
+- A finding that does not match the corpus is not automatically a false
+  positive. It can describe another valid issue, a duplicate represented at a
+  different corpus commit, or an unsupported claim that review rejects.
 
 ## Analysis
+
+### Production Model Configuration
+
+As of August 21, 2026, the getsentry organization baseline runs Warden 0.46.2
+on Pi. It uses `openrouter/x-ai/grok-4.5` at high effort for the primary review
+and `openrouter/openai/gpt-5.6-luna` at high effort for auxiliary extraction,
+verification, and merge calls. The source is the checked-in
+[`getsentry/.github` configuration](https://github.com/getsentry/.github/blob/7cdd503f30fe20e024894507380753ed7131d099/warden.toml).
+
+The matrix labels the July Grok row as **Production primary** because its
+runtime, primary model, and effort match production. That run predates the
+explicit Luna auxiliary configuration, so it is not an exact measurement of
+the current model stack. New rows record both model lanes and receive the
+**Production models** label only when both match. That label covers the model
+lanes, not every workflow setting. Corpus runs keep the standardized 100-turn
+limit and explicit historical target lists; production uses the runtime's
+50-turn default and normal pull request selection.
+
+### Production Model Stack Result
+
+The latest controlled production-model-lane row found 41 of 86 known entries
+and emitted 55 findings. It cost $34.88, or $0.85 per known entry. It ranks
+first among the 21 stable rows for known-corpus recall and ninth for cost per
+known entry.
+
+This row uses Warden 0.47.0, while the organization baseline above records
+Warden 0.46.2. The matrix's **Production models** label means that the primary
+and auxiliary model lanes match production. It does not mean every runtime and
+workflow setting is identical.
+
+The August 21 model-stack row remains in the result archive, but the matrix
+supersedes it with this controlled rerun. The older row found 37 known entries
+for $29.25. The July Grok row remains a separate Warden 0.39.0 result without a
+recorded auxiliary lane; it found 33 for $38.65. These historical rows show the
+same broad direction, but single runs do not isolate the effect of Warden,
+model sampling, or the auxiliary pipeline.
+
+K3 max remains cheaper at $19.37 but found nine fewer known entries. K3 high
+cost $28.14 and found 14 fewer. Grok 4.5 is the stronger recall result in this
+sample, while K3 max remains more cost-efficient.
+
+### Grok 4.6 High
+
+The controlled rerun puts Grok 4.5 and Grok 4.6 on the same Warden 0.47.0
+pipeline. Both use Pi, high effort, GPT 5.6 Luna high for auxiliary calls, the
+same six corpus commits, parallelism 4, and a 100-turn limit.
+
+Grok 4.5 found 41 of 86 known entries, emitted 55 final findings, and cost
+$34.88. Grok 4.6 found 25, emitted 38, and cost $78.47. They share 22 known
+entries. Grok 4.5 found 19 that Grok 4.6 missed, while Grok 4.6 found three that
+Grok 4.5 missed. Grok 4.6 found 16 fewer known issues at 2.25 times the clean
+provider cost. Cost per known entry was $0.85 for Grok 4.5 and $3.14 for Grok
+4.6.
+
+Grok 4.5 ranks first among the 21 stable rows for recall and ninth for cost per
+known entry. Grok 4.6 ranks tenth and eighteenth. The clean shard aggregates
+were 3 hours 31 minutes and 8 hours 23 minutes. The overview does not rank
+timing because provider and host conditions are not controlled tightly enough.
+
+The final 16-finding gap is a Warden system result, not a pure model-quality
+gap. Before Warden schema validation, verification, and merging, Grok 4.5's 80
+primary candidates covered 44 unique corpus entries. Grok 4.6's 65 candidates
+covered 38. The raw primary-output gap was six.
+
+Pipeline handling widened that gap. Grok 4.5 emitted two candidates with a
+`verification` array where Warden expects a string. Grok 4.6 emitted 12. Those
+candidates did not enter final Warden output, and seven corpus entries absent
+from Grok 4.6's final score were present in the rejected candidates. Auxiliary
+merging also combined unrelated issues, including client-secret JWT replay
+with Mailgun replay and Seer RPC authorization with unrelated project
+endpoints. Final scoring excludes unsupported merged locations.
+
+The first Grok 4.6 attempts for two shards each contained one chunk that ended
+with reasoning but no final text. Provider traces reported success with a
+`stop` finish reason; Warden recorded `extraction_no_findings_json`. The clean
+comparison excludes those complete shard attempts. Published clean spend is
+$78.47. Actual Grok 4.6 spend including the failed attempts was $117.19.
+
+The earlier rows scored 37 for Grok 4.5 and 19 for Grok 4.6, so the direction
+replicated under the controlled rerun. The primary outputs still favor Grok
+4.5, but Warden's schema and auxiliary pipeline explain part of the final gap.
+These remain single runs, not a deterministic model ranking. The result does
+not support moving the benchmark or production model lane to Grok 4.6.
+
+### Kimi K3 Effort Levels and K2.6
+
+The historical K3 max run remains the strongest Kimi result on this corpus. It
+found 32 of 86 known entries. K2.6 found 31, K3 high found 27, and K3 low found
+16. Across the 21 stable rows now published, those results rank fifth, sixth,
+eighth, and nineteenth by known-corpus recall.
+
+K3 max also has the best Kimi cost efficiency at $19.37, or $0.61 per known entry.
+K3 low cost $10.28, or $0.64 per known entry, but found half as many known
+issues. K3 high cost $28.14, or $1.04 per known entry. K2.6 cost $67.18, or
+$2.17 per known entry. By cost per known entry, K3 max ranks third overall,
+K3 low fourth, K3 high eleventh, and K2.6 seventeenth.
+
+K2.6 spent much more time carrying context through long investigations. Its
+selected traces contain 2,440 agent turns and the row records 105.7 million
+input tokens. K3 max used 701 turns and 9.7 million input tokens. The extra
+work did not improve recall. For a single Kimi review, max is the best default
+in these samples. Low is useful as a cheaper screen. High and K2.6 do not move
+the recall-cost frontier.
+
+The matched sets are not nested. K2.6 and K3 max share only 13 known entries
+and cover 50 in union. K3 low and max share 11 and cover 37 in union. Similar
+headline scores do not mean that two runs find the same bugs, and a higher
+effort run is not a strict superset of a lower effort run. These remain
+single-run samples, not deterministic model guarantees.
+
+The corpus matches are the strongest evidence that findings are real: scoring
+requires the same root bug at the same historical commit. The non-matches were
+also reviewed individually. Some describe credible separate issues, including
+timing-unsafe flag-secret comparisons, a Slack autofix membership gap, and a
+conditional Bitbucket forwarded-IP bypass. Others are conditional or
+unsupported, such as treating a token encrypted for Seer as exposed plaintext.
+They remain `not-known`, receive no recall credit, and still need owner triage
+or exploit reproduction before being treated as confirmed vulnerabilities.
+
+K3 low completed all 156 chunks without repair. K2.6 and K3 high use exact
+replacements only for failed chunks; clean original chunks were not resampled.
+Their published costs include the full main runs and every targeted repair.
+Raw JSONL traces remain withheld pending sensitive-data review.
 
 ### GPT 5.6 Luna High
 
 GPT 5.6 Luna high uses Pi directly as `openai/gpt-5.6-luna`. It found 36 of
 86 known entries and emitted 57 findings. This puts it behind GPT 5.5 high and
-ahead of Grok 4.5 high on known-corpus recall. Thirty-three emitted findings
-matched 36 unique corpus entries. The other 24 findings described different
-bugs and did not count.
+the production model stack, and ahead of the historical Grok 4.5 high row on
+known-corpus recall. Thirty-three emitted findings matched 36 unique corpus
+entries. The other 24 findings described different bugs and did not count.
 
 The run cost $56.98, or $1.58 per known corpus finding. All 156 final chunks
 completed with traces. One MS Teams chunk lost its terminal OpenAI stream
@@ -68,11 +194,11 @@ the recorded cost includes both the main shard and the full repair run.
 ### Grok 4.5 High
 
 Grok 4.5 high uses Pi through OpenRouter as `openrouter/x-ai/grok-4.5`.
-It found 33 of 86 known entries and emitted 41 findings, placing it second on
-known-corpus recall behind GPT 5.5 high. Thirty-two emitted findings matched 33
-unique corpus entries because one Atlassian JWT finding covered two entries.
-The other nine findings did not count because they described different bugs in
-the same files.
+It found 33 of 86 known entries and emitted 41 findings. It trails GPT 5.5
+high, the production model stack, and GPT 5.6 Luna high on known-corpus recall.
+Thirty-two emitted findings matched 33 unique corpus entries because one
+Atlassian JWT finding covered two entries. The other nine findings did not
+count because they described different bugs in the same files.
 
 The matched findings cover a broad range of security boundaries. Grok found
 cross-project and cross-organization authorization gaps, OAuth and JWT

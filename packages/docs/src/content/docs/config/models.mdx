@@ -73,6 +73,35 @@ Warden mirrors these to the native `{PROVIDER}_API_KEY` expected by each SDK at 
 If you already have a native provider key set (e.g. `OPENAI_API_KEY`), Warden will use it
 directly and the `WARDEN_`-prefixed form is not required.
 
+### Provider base URLs
+
+Set `WARDEN_{PROVIDER}_BASE_URL` to route a Pi provider through a gateway such
+as LiteLLM or a corporate proxy. Warden applies the value to the selected Pi
+model without changing its provider or model ID.
+
+For example, a LiteLLM-managed router can keep the normal Warden model selector
+and use a LiteLLM virtual key:
+
+```yaml title="GitHub Actions"
+env:
+  WARDEN_ANTHROPIC_API_KEY: ${{ secrets.LITELLM_API_KEY }}
+  WARDEN_ANTHROPIC_BASE_URL: https://litellm.example.com
+  WARDEN_ANTHROPIC_HEADERS: '{"x-litellm-tags":"repo:acme/api,component:review"}'
+  WARDEN_OPENAI_API_KEY: ${{ secrets.LITELLM_API_KEY }}
+  WARDEN_OPENAI_BASE_URL: https://litellm.example.com/v1
+  WARDEN_OPENAI_HEADERS: '{"x-litellm-tags":"repo:acme/api,component:review"}'
+```
+
+Use the LiteLLM root URL for Anthropic models because Pi appends
+`/v1/messages`. Use the `/v1` URL for OpenAI models because Pi appends its
+OpenAI API path. Do not set both a native provider key and a LiteLLM virtual key
+for the same provider.
+
+Set `WARDEN_{PROVIDER}_HEADERS` to a JSON object when the gateway requires
+additional request headers. Warden merges them with the selected Pi model's
+headers, with configured values taking precedence. Every header value must be a
+string.
+
 ## Claude Runtime Models
 
 When `runtime = "claude"`, use the model IDs accepted by Claude Code:

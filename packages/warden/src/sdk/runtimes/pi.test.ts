@@ -17,7 +17,13 @@ import { startTraceRecorder, withTraceRecorder } from '../../sentry-trace.js';
 import type { TraceSpan } from '../../types/index.js';
 
 const piMocks = vi.hoisted(() => {
-  const model = {
+  const model: {
+    id: string;
+    provider: string;
+    model: string;
+    baseUrl?: string;
+    headers?: Record<string, string>;
+  } = {
     id: 'gpt-test',
     provider: 'openai',
     model: 'gpt-test',
@@ -65,6 +71,11 @@ vi.mock('@earendil-works/pi-ai', () => ({
   Type: {
     Unsafe: vi.fn((schema: unknown) => schema),
   },
+}));
+
+vi.mock('./pi-file-tools.js', () => ({
+  createCheckoutFileTools: vi.fn((_cwd: string, toolNames: readonly string[]) =>
+    toolNames.map((name) => ({ name }))),
 }));
 
 vi.mock('@earendil-works/pi-coding-agent', () => ({
@@ -172,6 +183,101 @@ describe('piRuntime.runSkill', () => {
     piMocks.modelRuntime.getModels.mockReturnValue([piMocks.model]);
   });
 
+  it('leaves the model untouched when no base URL override is set', async () => {
+    await piRuntime.runSkill(baseSkillRequest());
+
+    expect(createAgentSession).toHaveBeenCalledWith(
+      expect.objectContaining({ model: piMocks.model })
+    );
+  });
+
+  it('applies WARDEN_<PROVIDER>_BASE_URL to the resolved model', async () => {
+    process.env['WARDEN_OPENAI_BASE_URL'] = 'https://gateway.internal/v1';
+    try {
+      await piRuntime.runSkill(baseSkillRequest());
+
+      expect(createAgentSession).toHaveBeenCalledWith(
+        expect.objectContaining({
+          model: expect.objectContaining({ baseUrl: 'https://gateway.internal/v1' }),
+        })
+      );
+    } finally {
+      delete process.env['WARDEN_OPENAI_BASE_URL'];
+    }
+  });
+
+  it('uses the provider-specific base URL override', async () => {
+    process.env['WARDEN_ANTHROPIC_BASE_URL'] = 'https://gateway.internal';
+    try {
+      await piRuntime.runSkill({
+        ...baseSkillRequest(),
+        options: {
+          ...baseSkillRequest().options,
+          model: 'anthropic/claude-test',
+        },
+      });
+
+      expect(createAgentSession).toHaveBeenCalledWith(
+        expect.objectContaining({
+          model: expect.objectContaining({ baseUrl: 'https://gateway.internal' }),
+        })
+      );
+    } finally {
+      delete process.env['WARDEN_ANTHROPIC_BASE_URL'];
+    }
+  });
+
+  it('ignores an empty WARDEN_<PROVIDER>_BASE_URL', async () => {
+    process.env['WARDEN_OPENAI_BASE_URL'] = '';
+    try {
+      await piRuntime.runSkill(baseSkillRequest());
+
+      expect(createAgentSession).toHaveBeenCalledWith(
+        expect.objectContaining({ model: piMocks.model })
+      );
+    } finally {
+      delete process.env['WARDEN_OPENAI_BASE_URL'];
+    }
+  });
+
+  it('merges WARDEN_<PROVIDER>_HEADERS into the resolved model', async () => {
+    process.env['WARDEN_OPENAI_HEADERS'] = JSON.stringify({
+      'x-existing': 'overridden',
+      'x-litellm-tags': 'repo:acme/api,component:review',
+    });
+    piMocks.modelRuntime.getModel.mockReturnValue({
+      ...piMocks.model,
+      headers: { 'x-existing': 'original' },
+    });
+    try {
+      await piRuntime.runSkill(baseSkillRequest());
+
+      expect(createAgentSession).toHaveBeenCalledWith(
+        expect.objectContaining({
+          model: expect.objectContaining({
+            headers: {
+              'x-existing': 'overridden',
+              'x-litellm-tags': 'repo:acme/api,component:review',
+            },
+          }),
+        })
+      );
+    } finally {
+      delete process.env['WARDEN_OPENAI_HEADERS'];
+    }
+  });
+
+  it('rejects invalid WARDEN_<PROVIDER>_HEADERS', async () => {
+    process.env['WARDEN_OPENAI_HEADERS'] = '{"x-litellm-tags":42}';
+    try {
+      await expect(piRuntime.runSkill(baseSkillRequest())).rejects.toThrow(
+        'WARDEN_OPENAI_HEADERS must be a JSON object with string values'
+      );
+    } finally {
+      delete process.env['WARDEN_OPENAI_HEADERS'];
+    }
+  });
+
   it('passes read-only Pi tools and normalizes the result', async () => {
     const result = await piRuntime.runSkill(baseSkillRequest());
 
@@ -203,7 +309,7 @@ describe('piRuntime.runSkill', () => {
       compaction: { enabled: false },
       retry: expect.objectContaining({
         enabled: true,
-        provider: expect.objectContaining({ maxRetries: 2 }),
+        provider: expect.objectContaining({ maxRetries: 0 }),
       }),
     }));
     expect(createAgentSession).toHaveBeenCalledWith(expect.objectContaining({
@@ -212,7 +318,12 @@ describe('piRuntime.runSkill', () => {
       modelRuntime: piMocks.modelRuntime,
       model: piMocks.model,
       tools: ['read', 'grep', 'find', 'ls'],
-      customTools: undefined,
+      customTools: [
+        expect.objectContaining({ name: 'read' }),
+        expect.objectContaining({ name: 'grep' }),
+        expect.objectContaining({ name: 'find' }),
+        expect.objectContaining({ name: 'ls' }),
+      ],
       resourceLoader: piMocks.resourceLoader,
       sessionManager: piMocks.sessionManager,
       settingsManager: piMocks.settingsManager,

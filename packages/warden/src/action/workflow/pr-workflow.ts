@@ -31,7 +31,7 @@ import type { ExistingComment } from '../../output/dedup.js';
 import { buildAnalyzedScope, findStaleComments, resolveStaleComments } from '../../output/stale.js';
 import { filterFindings } from '../../types/index.js';
 import type { EventContext, SkillReport, Finding } from '../../types/index.js';
-import { runPool, Semaphore } from '../../utils/index.js';
+import { AsyncWorkQueue, runPool } from '../../utils/index.js';
 import { evaluateFixAttempts, postThreadReply } from '../fix-evaluation/index.js';
 import type { EvaluateFixAttemptsResult, FixEvaluation } from '../fix-evaluation/index.js';
 import { aggregateUsage } from '../../sdk/usage.js';
@@ -98,6 +98,7 @@ import {
   FindingsOutputSchema,
   buildFindingsOutput,
   buildBaseOutputOptions,
+  buildConfiguredSkillsList,
   type SkippedTriggerReasonSchema,
   type FindingsOutput,
   type ReplayTriggerResult,
@@ -114,6 +115,7 @@ interface InitResult {
   service?: ResolvedServiceOptions;
   runnerConcurrency?: number;
   auxiliaryOptions: AuxiliaryWorkflowOptions;
+  resolvedTriggers: ResolvedTrigger[];
   matchedTriggers: ResolvedTrigger[];
   skippedTriggers: ResolvedTrigger[];
   memoryRecall?: ActionMemoryRecall;
@@ -478,6 +480,7 @@ async function initializeWorkflow(
       service,
       runnerConcurrency,
       auxiliaryOptions,
+      resolvedTriggers,
       matchedTriggers,
       skippedTriggers,
       memoryRecall,
@@ -496,6 +499,7 @@ async function initializeWorkflow(
         service: resolveActionServiceOptions(inputs),
         runnerConcurrency,
         auxiliaryOptions,
+        resolvedTriggers: [],
         matchedTriggers: [],
         skippedTriggers: [],
         skipCoreCheck: {
@@ -630,12 +634,12 @@ async function executeAllTriggers(
   const concurrency = runnerConcurrency ?? inputs.parallel;
   const runtimeEnv = await prepareRuntimeEnvironment(matchedTriggers, inputs);
 
-  const semaphore = new Semaphore(concurrency);
+  const analysisQueue = new AsyncWorkQueue(concurrency);
   const abortController = new AbortController();
   const circuitBreaker = new ProviderFailureCircuitBreaker({ abortController });
   const completedSoFar: TriggerResult[] = [];
 
-  // Limit trigger dispatch too; the semaphore only gates work after a trigger starts.
+  // Limit trigger dispatch too; the analysis queue only gates work after a trigger starts.
   const results = await runPool(
     matchedTriggers,
     concurrency,
@@ -649,7 +653,7 @@ async function executeAllTriggers(
         globalMaxFindings: inputs.maxFindings,
         globalRequestChanges: inputs.requestChanges,
         globalFailCheck: inputs.failCheck,
-        semaphore,
+        analysisQueue,
         abortController,
         circuitBreaker,
         checks: options.checks,
@@ -1177,7 +1181,9 @@ async function finalizeWorkflow(
   inputs: ActionInputs,
   service: ResolvedServiceOptions | undefined,
   memoryRecall: ActionMemoryRecall | undefined,
-  postChecks: boolean
+  postChecks: boolean,
+  matchedTriggers: ResolvedTrigger[],
+  resolvedTriggers: ResolvedTrigger[]
 ): Promise<void> {
   await dismissPreviousReviewIfResolved(
     octokit,
@@ -1202,6 +1208,7 @@ async function finalizeWorkflow(
     skillExecutions: toSkillExecutions(results),
     recalledMemories: memoryRecall?.memories.map(({ id, version }) => ({ id, version })),
     memoryRecallId: memoryRecall?.clientRecallId,
+    configuredSkills: buildConfiguredSkillsList({ allTriggers: resolvedTriggers, matchedTriggers }),
   };
   try {
     const findingsPath = writeFindingsOutput(reports, context, findingObservations, findingsOptions);
@@ -1824,6 +1831,8 @@ async function finalizeReportWorkflow(
     recalledMemories?: readonly { id: string; version: number }[];
     memoryRecallId?: string;
     postChecks: boolean;
+    matchedTriggers: ResolvedTrigger[];
+    resolvedTriggers: ResolvedTrigger[];
   }
 ): Promise<void> {
   await dismissPreviousReviewIfResolved(
@@ -1848,6 +1857,10 @@ async function finalizeReportWorkflow(
     skillExecutions: toSkillExecutions(results),
     recalledMemories: options.recalledMemories,
     memoryRecallId: options.memoryRecallId,
+    configuredSkills: buildConfiguredSkillsList({
+      allTriggers: options.resolvedTriggers,
+      matchedTriggers: options.matchedTriggers,
+    }),
   };
   try {
     const findingsPath = writeFindingsOutput(reports, context, findingObservations, findingsOptions);
@@ -1978,6 +1991,7 @@ async function runAnalyzeMode(
   const {
     context,
     runnerConcurrency,
+    resolvedTriggers,
     matchedTriggers,
     skippedTriggers,
     skipCoreCheck,
@@ -1992,6 +2006,7 @@ async function runAnalyzeMode(
       const findingsPath = writeFindingsOutput([], context, [], {
         triggerResults: [],
         ...buildBaseOutputOptions(inputs, toSkippedTriggers(skippedTriggers, context)),
+        configuredSkills: buildConfiguredSkillsList({ allTriggers: resolvedTriggers, matchedTriggers }),
       });
       logAction(`Findings written to ${findingsPath}`);
     } catch (error) {
@@ -2017,6 +2032,7 @@ async function runAnalyzeMode(
             ...toErroredSkippedTriggers(completedSoFar),
           ]),
           skillExecutions: toSkillExecutions(completedSoFar),
+          configuredSkills: buildConfiguredSkillsList({ allTriggers: resolvedTriggers, matchedTriggers }),
         });
       },
     }),
@@ -2037,6 +2053,7 @@ async function runAnalyzeMode(
       skillExecutions: toSkillExecutions(results),
       recalledMemories: memoryRecall?.memories.map(({ id, version }) => ({ id, version })),
       memoryRecallId: memoryRecall?.clientRecallId,
+      configuredSkills: buildConfiguredSkillsList({ allTriggers: resolvedTriggers, matchedTriggers }),
     });
     logAction(`Findings written to ${findingsPath}`);
   } catch (error) {
@@ -2062,6 +2079,7 @@ async function runReportMode(
     context,
     service,
     auxiliaryOptions,
+    resolvedTriggers,
     matchedTriggers,
     skippedTriggers,
     skipCoreCheck,
@@ -2091,6 +2109,7 @@ async function runReportMode(
         triggerResults: [],
         ...buildBaseOutputOptions(inputs, toSkippedTriggers(skippedTriggers, context)),
         ...replayMemoryOptions,
+        configuredSkills: buildConfiguredSkillsList({ allTriggers: resolvedTriggers, matchedTriggers }),
       } satisfies BuildFindingsOutputOptions;
       try {
         const findingsPath = writeFindingsOutput([], context, [], findingsOptions);
@@ -2131,6 +2150,7 @@ async function runReportMode(
         triggerResults: [],
         ...buildBaseOutputOptions(inputs, toSkippedTriggers(skippedTriggers, context)),
         ...replayMemoryOptions,
+        configuredSkills: buildConfiguredSkillsList({ allTriggers: resolvedTriggers, matchedTriggers }),
       } satisfies BuildFindingsOutputOptions;
       try {
         const findingsPath = writeFindingsOutput([], context, cleanupFindingObservations, findingsOptions);
@@ -2210,7 +2230,16 @@ async function runReportMode(
       canResolveStale,
       gate,
       triggerErrors,
-      { failOnWriteError: true, skippedTriggers, inputs, service, ...replayMemoryOptions, postChecks },
+      {
+        failOnWriteError: true,
+        skippedTriggers,
+        inputs,
+        service,
+        ...replayMemoryOptions,
+        postChecks,
+        matchedTriggers,
+        resolvedTriggers,
+      },
     );
   } catch (error) {
     if (error instanceof ActionFailedError) {
@@ -2257,6 +2286,7 @@ export async function runPRWorkflow(
         service,
         runnerConcurrency,
         auxiliaryOptions,
+        resolvedTriggers,
         matchedTriggers,
         skippedTriggers,
         skipCoreCheck,
@@ -2308,7 +2338,10 @@ export async function runPRWorkflow(
         setOutput('findings-count', 0);
         setOutput('high-count', 0);
         setOutput('summary', skipCoreCheck.title);
-        const findingsOptions = buildBaseOutputOptions(inputs, toSkippedTriggers(skippedTriggers, context));
+        const findingsOptions = {
+          ...buildBaseOutputOptions(inputs, toSkippedTriggers(skippedTriggers, context)),
+          configuredSkills: buildConfiguredSkillsList({ allTriggers: resolvedTriggers, matchedTriggers }),
+        };
         try {
           writeFindingsOutput([], context, [], findingsOptions);
         } catch (error) {
@@ -2330,7 +2363,10 @@ export async function runPRWorkflow(
           setOutput('findings-count', 0);
           setOutput('high-count', 0);
           setOutput('summary', 'No triggers matched');
-          const findingsOptions = buildBaseOutputOptions(inputs, toSkippedTriggers(skippedTriggers, context));
+          const findingsOptions = {
+            ...buildBaseOutputOptions(inputs, toSkippedTriggers(skippedTriggers, context)),
+            configuredSkills: buildConfiguredSkillsList({ allTriggers: resolvedTriggers, matchedTriggers }),
+          };
           try {
             writeFindingsOutput([], context, cleanupFindingObservations, findingsOptions);
           } catch (error) {
@@ -2367,6 +2403,7 @@ export async function runPRWorkflow(
                   ...toErroredSkippedTriggers(completedSoFar),
                 ]),
                 skillExecutions: toSkillExecutions(completedSoFar),
+                configuredSkills: buildConfiguredSkillsList({ allTriggers: resolvedTriggers, matchedTriggers }),
               });
             },
           }),
@@ -2391,6 +2428,7 @@ export async function runPRWorkflow(
               reason: 'error' as const,
             })),
           ]),
+          configuredSkills: buildConfiguredSkillsList({ allTriggers: resolvedTriggers, matchedTriggers }),
         };
         try {
           writeFindingsOutput([], context, [], findingsOptions);
@@ -2461,6 +2499,8 @@ export async function runPRWorkflow(
         service,
         memoryRecall,
         postChecks,
+        matchedTriggers,
+        resolvedTriggers,
       );
 
       handleTriggerErrors(triggerErrors, matchedTriggers.length);

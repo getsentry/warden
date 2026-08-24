@@ -232,7 +232,6 @@ describe('executeTrigger', () => {
           auxiliaryMaxRetries: 9,
         }),
       }),
-      expect.any(Number),
       expect.anything(),
       undefined
     );
@@ -252,7 +251,6 @@ describe('executeTrigger', () => {
       expect.objectContaining({
         runnerOptions: expect.objectContaining({ historicalEvidence }),
       }),
-      expect.any(Number),
       expect.anything(),
       undefined
     );
@@ -611,7 +609,7 @@ describe('executeTrigger', () => {
       reason: 'not real',
     };
 
-    vi.mocked(runSkillTask).mockImplementation(async (_taskOptions, _fileConcurrency, callbacks) => {
+    vi.mocked(runSkillTask).mockImplementation(async (_taskOptions, callbacks) => {
       callbacks.onFindingProcessing?.('test-trigger', event);
       return { name: 'test-trigger', report: mockReport };
     });

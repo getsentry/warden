@@ -94,6 +94,9 @@
         },
         "trace": {
           "$ref": "#/$defs/HunkTrace"
+        },
+        "verifierRejections": {
+          "$ref": "#/$defs/__schema6"
         }
       },
       "required": [
@@ -629,6 +632,27 @@
       ],
       "additionalProperties": false
     },
+    "__schema6": {
+      "type": "object",
+      "properties": {
+        "count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "reasons": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "count",
+        "reasons"
+      ],
+      "additionalProperties": false
+    },
     "SkillRecord": {
       "type": "object",
       "properties": {
@@ -688,6 +712,9 @@
         },
         "error": {
           "$ref": "#/$defs/SkillError"
+        },
+        "verifierRejections": {
+          "$ref": "#/$defs/__schema6"
         },
         "auxiliaryUsage": {
           "$ref": "#/$defs/AuxiliaryUsage"
@@ -878,6 +905,11 @@
           "maximum": 9007199254740991
         },
         "totalFailedExtractions": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "totalVerifierRejections": {
           "type": "integer",
           "minimum": 0,
           "maximum": 9007199254740991

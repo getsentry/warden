@@ -8,7 +8,7 @@ import { SkillRunnerError, WardenAuthenticationError, isRetryableError, isAuthen
 import { genAiProviderName } from './otel.js';
 import type { CircuitBreakerReason } from './circuit-breaker.js';
 import { DEFAULT_RETRY_CONFIG, calculateRetryDelay, sleep } from './retry.js';
-import { aggregateUsage, emptyUsage, estimateTokens, aggregateAuxiliaryUsage, aggregateAuxiliaryUsageAttribution } from './usage.js';
+import { aggregateUsage, emptyUsage, estimateTokens, aggregateAuxiliaryUsage, aggregateAuxiliaryUsageAttribution, resolveResponseModel } from './usage.js';
 import { buildHunkSystemPrompt, buildHunkUserPrompt, type PRPromptContext } from './prompt.js';
 import { extractFindingsJson, extractFindingsWithLLM, validateFindings } from './extract.js';
 import type { ExtractFindingsResult } from './extract.js';
@@ -18,7 +18,7 @@ import { getRuntime, getRuntimeProviderOptions } from './runtimes/index.js';
 import type { SkillRunResult } from './runtimes/index.js';
 import {
   LARGE_PROMPT_THRESHOLD_CHARS,
-  DEFAULT_FILE_CONCURRENCY,
+  DEFAULT_ANALYSIS_CONCURRENCY,
   type AuxiliaryUsageEntry,
   type HunkAnalysisResult,
   type HunkAnalysisCallbacks,
@@ -29,9 +29,9 @@ import {
   type ChunkAnalysisResult,
 } from './types.js';
 import { prepareFiles } from './prepare.js';
-import type { EventContext, SkillReport, UsageStats, HunkFailure, HunkTrace } from '../types/index.js';
+import type { EventContext, SkillReport, UsageStats, HunkFailure, HunkTrace, VerifierRejections } from '../types/index.js';
 import type { SourceSnippet, SourceSnippetLine } from '../types/index.js';
-import { runPool } from '../utils/index.js';
+import { AsyncWorkQueue } from '../utils/index.js';
 import { getSpanContext, startTraceRecorder, withTraceRecorder, type TraceRecorder } from '../sentry-trace.js';
 
 /** Result from parsing hunk output */
@@ -74,6 +74,7 @@ function hunkFailureFromCircuit(
   usage: UsageStats[],
   attempts: number,
   trace?: HunkTrace,
+  responseModel?: string,
 ): HunkAnalysisResult {
   return {
     findings: [],
@@ -84,6 +85,7 @@ function hunkFailureFromCircuit(
     failureMessage: reason.message,
     attempts,
     trace,
+    responseModel,
   };
 }
 
@@ -322,7 +324,8 @@ async function analyzeHunk(
   repoPath: string,
   options: SkillRunnerOptions,
   callbacks?: HunkAnalysisCallbacks,
-  prContext?: PRPromptContext
+  prContext?: PRPromptContext,
+  parentSpan?: Span,
 ): Promise<HunkAnalysisResult> {
   if (options.captureTraces) {
     ensureLocalTracing();
@@ -334,6 +337,7 @@ async function analyzeHunk(
     {
       op: 'skill.analyze_hunk',
       name: `analyze hunk ${hunkCtx.filename}:${lineRange}`,
+      ...(parentSpan ? { parentSpan } : {}),
       attributes: {
         'gen_ai.agent.name': skill.name,
         'code.file.path': hunkCtx.filename,
@@ -517,6 +521,7 @@ async function analyzeHunk(
                   result: resultMessage,
                   traceRecorder,
                 }),
+                resultMessage.responseModel,
               );
             }
             return {
@@ -527,6 +532,7 @@ async function analyzeHunk(
               failureCode,
               failureMessage,
               attempts: attempt + 1,
+              responseModel: resultMessage.responseModel,
               trace: buildHunkTrace({
                 enabled: options.captureTraces,
                 span,
@@ -601,6 +607,7 @@ async function analyzeHunk(
                   runtime: runtimeName,
                 }]
               : undefined,
+            responseModel: resultMessage.responseModel,
             trace: buildHunkTrace({
               enabled: options.captureTraces,
               span,
@@ -823,7 +830,8 @@ export async function analyzeFile(
   repoPath: string,
   options: SkillRunnerOptions = {},
   callbacks?: FileAnalysisCallbacks,
-  prContext?: PRPromptContext
+  prContext?: PRPromptContext,
+  analysisQueue?: AsyncWorkQueue,
 ): Promise<FileAnalysisResult> {
   return Sentry.startSpan(
     {
@@ -836,36 +844,88 @@ export async function analyzeFile(
       },
     },
     async (span) => {
-      const { abortController } = options;
+      const abortController = options.abortController ?? new AbortController();
+      const hunkOptions: SkillRunnerOptions = options.abortController
+        ? options
+        : { ...options, abortController };
       const fileFindings: Finding[] = [];
       const fileUsage: UsageStats[] = [];
       const fileAuxiliaryUsage: AuxiliaryUsageEntry[] = [];
       const hunkFailures: HunkFailure[] = [];
       const hunkTraces: HunkTrace[] = [];
+      const fileResponseModels: string[] = [];
       let failedHunks = 0;
       let failedExtractions = 0;
 
-      for (const [hunkIndex, hunk] of file.hunks.entries()) {
-        if (abortController?.signal.aborted) break;
+      const concurrency = options.parallel === false
+        ? 1
+        : options.concurrency ?? DEFAULT_ANALYSIS_CONCURRENCY;
+      const queue = analysisQueue ?? new AsyncWorkQueue(concurrency);
+      const batchDelayMs = options.parallel === false ? 0 : options.batchDelayMs;
+      const completedHunks = await Promise.all(file.hunks.map((hunk, hunkIndex) =>
+        queue.run(async () => {
+          if (abortController?.signal.aborted) return undefined;
 
-        const lineRange = formatHunkLineRange(hunk);
-        callbacks?.onHunkStart?.(hunkIndex + 1, file.hunks.length, lineRange);
+          const lineRange = formatHunkLineRange(hunk);
+          callbacks?.onHunkStart?.(hunkIndex + 1, file.hunks.length, lineRange);
 
-        const hunkCallbacks: HunkAnalysisCallbacks | undefined = callbacks
-          ? {
-              lineRange,
-              onLargePrompt: callbacks.onLargePrompt,
-              onPromptSize: callbacks.onPromptSize,
-              onRetry: callbacks.onRetry,
-              onExtractionFailure: callbacks.onExtractionFailure,
-              onExtractionResult: callbacks.onExtractionResult,
-              onHunkFailed: callbacks.onHunkFailed,
-            }
-          : undefined;
+          const hunkCallbacks: HunkAnalysisCallbacks | undefined = callbacks
+            ? {
+                lineRange,
+                onLargePrompt: callbacks.onLargePrompt,
+                onPromptSize: callbacks.onPromptSize,
+                onRetry: callbacks.onRetry,
+                onExtractionFailure: callbacks.onExtractionFailure,
+                onExtractionResult: callbacks.onExtractionResult,
+                onHunkFailed: callbacks.onHunkFailed,
+              }
+            : undefined;
 
-        const hunkStartTime = Date.now();
-        const result = await analyzeHunk(skill, hunk, repoPath, options, hunkCallbacks, prContext);
-        const hunkDurationMs = Date.now() - hunkStartTime;
+          const hunkStartTime = Date.now();
+          const result = await analyzeHunk(
+            skill,
+            hunk,
+            repoPath,
+            hunkOptions,
+            hunkCallbacks,
+            prContext,
+            span,
+          ).catch((error: unknown) => {
+            abortController.abort();
+            throw error;
+          });
+          const hunkDurationMs = Date.now() - hunkStartTime;
+
+          attachElapsedTime(result.findings, callbacks?.skillStartTime);
+          callbacks?.onHunkComplete?.(hunkIndex + 1, result.findings, result.usage);
+          const chunkResult: ChunkAnalysisResult = {
+            filename: file.filename,
+            model: options.model,
+            index: hunkIndex + 1,
+            total: file.hunks.length,
+            lineRange,
+            findings: result.findings,
+            usage: result.usage,
+            durationMs: hunkDurationMs,
+            failed: result.failed && result.failureCode !== 'aborted',
+            extractionFailed: result.extractionFailed,
+            failureCode: result.failureCode,
+            failureMessage: result.failureMessage,
+            extractionError: result.extractionError,
+            extractionPreview: result.extractionPreview,
+            auxiliaryUsage: result.auxiliaryUsage,
+            trace: result.trace,
+          };
+          callbacks?.onChunkComplete?.(chunkResult);
+
+          return { lineRange, result };
+        }, { delayMs: batchDelayMs, signal: abortController?.signal }),
+      ));
+
+      // Promise.all preserves hunk order even when analyses finish out of order.
+      for (const completed of completedHunks) {
+        if (!completed) continue;
+        const { lineRange, result } = completed;
 
         // `failed` and `extractionFailed` are conceptually mutually exclusive:
         // if analysis failed (no output produced), there's nothing to extract.
@@ -894,30 +954,12 @@ export async function analyzeFile(
           });
         }
 
-        attachElapsedTime(result.findings, callbacks?.skillStartTime);
-        callbacks?.onHunkComplete?.(hunkIndex + 1, result.findings, result.usage);
         if (result.trace) {
           hunkTraces.push(result.trace);
         }
-        const chunkResult: ChunkAnalysisResult = {
-          filename: file.filename,
-          model: options.model,
-          index: hunkIndex + 1,
-          total: file.hunks.length,
-          lineRange,
-          findings: result.findings,
-          usage: result.usage,
-          durationMs: hunkDurationMs,
-          failed: result.failed && result.failureCode !== 'aborted',
-          extractionFailed: result.extractionFailed,
-          failureCode: result.failureCode,
-          failureMessage: result.failureMessage,
-          extractionError: result.extractionError,
-          extractionPreview: result.extractionPreview,
-          auxiliaryUsage: result.auxiliaryUsage,
-          trace: result.trace,
-        };
-        callbacks?.onChunkComplete?.(chunkResult);
+        if (result.responseModel) {
+          fileResponseModels.push(result.responseModel);
+        }
 
         fileFindings.push(...result.findings);
         fileUsage.push(result.usage);
@@ -939,6 +981,7 @@ export async function analyzeFile(
         hunkFailures,
         auxiliaryUsage: fileAuxiliaryUsage.length > 0 ? fileAuxiliaryUsage : undefined,
         traces: hunkTraces.length > 0 ? hunkTraces : undefined,
+        responseModels: fileResponseModels.length > 0 ? fileResponseModels : undefined,
       };
     },
   );
@@ -976,6 +1019,7 @@ export async function runSkill(
   // This clone's identity scopes circuit-breaker provider diagnostics to this skill run.
   const scopedOptions: SkillRunnerOptions = {
     ...options,
+    abortController: options.abortController ?? new AbortController(),
   };
   return Sentry.startSpan(
     {
@@ -1044,6 +1088,7 @@ async function runSkillAnalysis(
   const allUsage: UsageStats[] = [];
   const allAuxiliaryUsage: AuxiliaryUsageEntry[] = [];
   const allTraces: HunkTrace[] = [];
+  const allResponseModels: string[] = [];
 
   // Track failed hunks across all files
   let totalFailedHunks = 0;
@@ -1061,21 +1106,21 @@ async function runSkillAnalysis(
     maxContextFiles: options.maxContextFiles,
   };
 
-  /**
-   * Process all hunks for a single file sequentially.
-   * Wraps analyzeFile with progress callbacks.
-   */
+  /** Wrap analyzeFile with progress callbacks. */
   async function processFile(
     fileHunkEntry: PreparedFile,
     fileIndex: number
-  ): Promise<FileAnalysisResult> {
+  ): Promise<{ filename: string; result: FileAnalysisResult; durationMs: number }> {
     const { filename } = fileHunkEntry;
-
-    callbacks?.onFileStart?.(filename, fileIndex, totalFiles);
+    let fileStartTime: number | undefined;
 
     const fileCallbacks: FileAnalysisCallbacks = {
       skillStartTime: callbacks?.skillStartTime,
       onHunkStart: (hunkNum, totalHunks, lineRange) => {
+        if (fileStartTime === undefined) {
+          fileStartTime = Date.now();
+          callbacks?.onFileStart?.(filename, fileIndex, totalFiles);
+        }
         callbacks?.onHunkStart?.(filename, hunkNum, totalHunks, lineRange);
       },
       onHunkComplete: (hunkNum, findings, usage) => {
@@ -1113,39 +1158,39 @@ async function runSkillAnalysis(
         : undefined,
     };
 
-    const result = await analyzeFile(skill, fileHunkEntry, context.repoPath, options, fileCallbacks, prContext);
+    const result = await analyzeFile(
+      skill,
+      fileHunkEntry,
+      context.repoPath,
+      options,
+      fileCallbacks,
+      prContext,
+      analysisQueue,
+    );
 
-    callbacks?.onFileComplete?.(filename, fileIndex, totalFiles);
+    if (fileStartTime !== undefined) {
+      callbacks?.onFileComplete?.(filename, fileIndex, totalFiles);
+    }
 
-    return result;
+    return {
+      filename,
+      result,
+      durationMs: fileStartTime === undefined ? 0 : Date.now() - fileStartTime,
+    };
   }
 
-  /** Process a file with timing, returning a self-contained result. */
-  async function processFileWithTiming(fileHunkEntry: PreparedFile, fileIndex: number) {
-    const fileStart = Date.now();
-    const result = await processFile(fileHunkEntry, fileIndex);
-    const durationMs = Date.now() - fileStart;
-    return { filename: fileHunkEntry.filename, result, durationMs };
-  }
+  const concurrency = parallel
+    ? options.concurrency ?? DEFAULT_ANALYSIS_CONCURRENCY
+    : 1;
+  const analysisQueue = new AsyncWorkQueue(concurrency);
 
   // Collect results in input order (Promise.all preserves order)
   const fileResults: { filename: string; result: FileAnalysisResult; durationMs: number }[] = [];
 
   // Process files - parallel or sequential based on options
   if (parallel) {
-    // Process files with sliding-window concurrency pool
-    const fileConcurrency = options.concurrency ?? DEFAULT_FILE_CONCURRENCY;
-    const batchDelayMs = options.batchDelayMs ?? 0;
-
-    fileResults.push(...await runPool(fileHunks, fileConcurrency,
-      async (fileHunkEntry, index) => {
-        // Rate-limit: delay items beyond the first concurrent wave
-        if (index >= fileConcurrency && batchDelayMs > 0) {
-          await new Promise((resolve) => setTimeout(resolve, batchDelayMs));
-        }
-        return processFileWithTiming(fileHunkEntry, index);
-      },
-      { shouldAbort: () => abortController?.signal.aborted ?? false }
+    fileResults.push(...await Promise.all(
+      fileHunks.map((fileHunkEntry, index) => processFile(fileHunkEntry, index)),
     ));
   } else {
     // Process files sequentially
@@ -1153,7 +1198,7 @@ async function runSkillAnalysis(
       // Check for abort before starting new file
       if (abortController?.signal.aborted) break;
 
-      fileResults.push(await processFileWithTiming(fileHunkEntry, fileIndex));
+      fileResults.push(await processFile(fileHunkEntry, fileIndex));
     }
   }
 
@@ -1172,6 +1217,9 @@ async function runSkillAnalysis(
     }
     if (fr.result.traces) {
       allTraces.push(...fr.result.traces);
+    }
+    if (fr.result.responseModels) {
+      allResponseModels.push(...fr.result.responseModels);
     }
   }
 
@@ -1233,6 +1281,7 @@ async function runSkillAnalysis(
   }
 
   let finalFindings = allFindings;
+  let verifierRejections: VerifierRejections | undefined;
   if (options.postProcessFindings !== false) {
     const processed = await postProcessFindings(allFindings, {
       skill,
@@ -1252,6 +1301,7 @@ async function runSkillAnalysis(
     });
     finalFindings = processed.findings;
     allAuxiliaryUsage.push(...processed.auxiliaryUsage);
+    verifierRejections = processed.verifierRejections;
   }
 
   // Generate summary
@@ -1266,7 +1316,7 @@ async function runSkillAnalysis(
     findings: finalFindings,
     usage: totalUsage,
     durationMs: Date.now() - startTime,
-    model: options.model,
+    model: resolveResponseModel(allResponseModels, options.model),
     files: buildFileReports(
       fileResults.map((fr) => ({
         filename: fr.filename,
@@ -1299,6 +1349,9 @@ async function runSkillAnalysis(
   const auxAttribution = aggregateAuxiliaryUsageAttribution(allAuxiliaryUsage);
   if (auxAttribution) {
     report.auxiliaryUsageAttribution = auxAttribution;
+  }
+  if (verifierRejections) {
+    report.verifierRejections = verifierRejections;
   }
   return report;
 }

@@ -52,6 +52,7 @@ import {
 import { aggregateUsage, emptyUsage } from '../usage.js';
 import { InvalidPiModelSelectorError, isPiModelSelector } from './model-selectors.js';
 import { isWardenOffline } from '../offline.js';
+import { createCheckoutFileTools } from './pi-file-tools.js';
 import type {
   AuxiliaryRunRequest,
   AuxiliaryRunResult,
@@ -70,6 +71,7 @@ const READ_ONLY_TOOLS: ToolName[] = ['Read', 'Grep', 'Glob'];
 const MUTATING_TOOLS: ToolName[] = ['Write', 'Edit', 'Bash'];
 const UNSUPPORTED_TOOLS: ToolName[] = ['WebFetch', 'WebSearch'];
 const DEFAULT_PI_PROVIDER_MAX_RETRIES = 2;
+const PI_SKILL_PROVIDER_MAX_RETRIES = 0;
 const PI_MODEL_REFRESH_TIMEOUT_MS = 15_000;
 /**
  * Share one network catalog refresh per provider across concurrent Pi prompts.
@@ -330,6 +332,33 @@ async function createModelRuntime(
   return modelRuntime;
 }
 
+/**
+ * Optional base-URL override for a provider, from `WARDEN_<PROVIDER>_BASE_URL`.
+ *
+ * Mirrors the existing `WARDEN_<PROVIDER>_API_KEY` convention, so pointing a provider at
+ * an OpenAI-compatible gateway (LiteLLM, a corporate proxy, a self-hosted endpoint) is the
+ * same shape of configuration as giving it a key. Unset means the provider's own default,
+ * exactly as today.
+ */
+function providerBaseUrlOverride(provider: string): string | undefined {
+  const value = process.env[`WARDEN_${provider.toUpperCase()}_BASE_URL`];
+  return value && value.length > 0 ? value : undefined;
+}
+
+function providerHeadersOverride(provider: string): Record<string, string> | undefined {
+  const envName = `WARDEN_${provider.toUpperCase()}_HEADERS`;
+  const value = process.env[envName];
+  if (!value) {
+    return undefined;
+  }
+
+  try {
+    return z.record(z.string(), z.string()).parse(JSON.parse(value));
+  } catch {
+    throw new Error(`${envName} must be a JSON object with string values`);
+  }
+}
+
 function resolvePiModel(
   model: string | undefined,
   modelRuntime: ModelRuntime,
@@ -345,7 +374,18 @@ function resolvePiModel(
       `Pi model not found: ${model}. Use provider/model, for example openai/gpt-5.5.`
     );
   }
-  return resolved;
+
+  const baseUrl = providerBaseUrlOverride(provider);
+  const headers = providerHeadersOverride(provider);
+  if (!baseUrl && !headers) {
+    return resolved;
+  }
+
+  return {
+    ...resolved,
+    ...(baseUrl ? { baseUrl } : {}),
+    ...(headers ? { headers: { ...resolved.headers, ...headers } } : {}),
+  };
 }
 
 function resolvePiSkillTools(
@@ -468,7 +508,8 @@ function buildSettingsManager(timeout: number | undefined, maxRetries: number | 
   return SettingsManager.inMemory({
     compaction: { enabled: false },
     retry: {
-      enabled: providerMaxRetries > 0,
+      // Provider retries are independent from Pi's agent-level transient retry loop.
+      enabled: true,
       provider: {
         ...(timeout !== undefined ? { timeoutMs: timeout } : {}),
         maxRetries: providerMaxRetries,
@@ -554,6 +595,15 @@ async function runPiPrompt(options: PiPromptOptions): Promise<PiPromptResult> {
   const startedAt = Date.now();
   const activeToolSpans = new Map<string, PiToolSpan>();
   const conversationMessages: GenAiMessage[] = [{ role: 'user', content: options.userPrompt }];
+  // Pi uses cwd for path resolution but does not treat it as a filesystem boundary.
+  // Same-name custom tools override its built-ins, so file access stays in the checkout.
+  const customTools = options.customTools ?? [];
+  const customToolNames = new Set(customTools.map((tool) => tool.name));
+  const checkoutFileTools = createCheckoutFileTools(
+    options.cwd,
+    options.toolNames.filter((toolName) => !customToolNames.has(toolName)),
+  );
+  const sessionCustomTools = [...customTools, ...checkoutFileTools];
 
   const buildToolAttributes = (args: {
     toolName: string;
@@ -685,7 +735,7 @@ async function runPiPrompt(options: PiPromptOptions): Promise<PiPromptResult> {
       thinkingLevel: options.effort,
       tools: options.toolNames,
       noTools: options.toolNames.length === 0 ? 'all' : undefined,
-      customTools: options.customTools,
+      customTools: sessionCustomTools.length > 0 ? sessionCustomTools : undefined,
       resourceLoader,
       sessionManager: SessionManager.inMemory(options.cwd),
       settingsManager,
@@ -975,6 +1025,7 @@ export const piRuntime: Runtime = {
             toolNames: skillTools.toolNames,
             maxTurns,
             effort,
+            maxRetries: PI_SKILL_PROVIDER_MAX_RETRIES,
             abortController,
             parentSpan: span,
             traceRecorder: request.traceRecorder,

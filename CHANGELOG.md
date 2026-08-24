@@ -1,4 +1,39 @@
 # Changelog
+## 0.48.0
+
+### New Features ✨
+
+- (pi) Configure provider headers by @PaulM5406 in [#516](https://github.com/getsentry/warden/pull/516)
+
+### Bug Fixes 🐛
+
+- (pi) Confine file tools to checkout by @gricha in [#513](https://github.com/getsentry/warden/pull/513)
+- (reporting) Resolve SkillReport.model from the actual API response by @CalebKAston in [#472](https://github.com/getsentry/warden/pull/472)
+
+### Documentation 📚
+
+#### Benchmarks
+
+- Publish controlled Grok 4.5 and 4.6 rerun by @gricha in [#518](https://github.com/getsentry/warden/pull/518)
+- Add production and Kimi results by @gricha in [#517](https://github.com/getsentry/warden/pull/517)
+
+### Internal Changes 🔧
+
+- (runner) Parallelize hunk analysis by @gricha in [#519](https://github.com/getsentry/warden/pull/519)
+
+## 0.47.0
+
+### New Features ✨
+
+- (pi) Configure provider base URLs by @PaulM5406 in [#512](https://github.com/getsentry/warden/pull/512)
+- (sdk) Surface verifierRejections across reports, CLI output, and findings-file export by @CalebKAston in [#474](https://github.com/getsentry/warden/pull/474)
+- (service) Show primary model for findings by @sentry-junior in [#515](https://github.com/getsentry/warden/pull/515)
+
+### Bug Fixes 🐛
+
+- (config) Inherit org execution defaults for repo skills by @gricha in [#514](https://github.com/getsentry/warden/pull/514)
+- (warden) Avoid nested Pi provider retries by @gricha in [#511](https://github.com/getsentry/warden/pull/511)
+
 ## 0.46.2
 
 ### New Features ✨

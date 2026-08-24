@@ -113,6 +113,12 @@ function uniqueSorted(values: (string | undefined)[]): string[] | undefined {
   return unique.length > 0 ? unique : undefined;
 }
 
+/** Collapses a run's observed response models to a single value when they agree, or falls back. */
+export function resolveResponseModel(models: string[], fallback?: string): string | undefined {
+  const unique = [...new Set(models)];
+  return unique.length === 1 ? unique[0] : fallback;
+}
+
 function attributionFromEntries(entries: AuxiliaryUsageEntry[]): UsageAttribution | undefined {
   const models = uniqueSorted(entries.map((entry) => entry.model));
   const runtimes = uniqueSorted(entries.map((entry) => entry.runtime));

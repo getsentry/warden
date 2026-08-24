@@ -138,6 +138,7 @@ describe('history store', () => {
         name: 'widgets',
         full_name: 'acme/widgets',
         skill: 'security-review',
+        primary_model: 'example-model',
         severity: 'high',
         confidence: 'high',
         title: 'Missing authorization check',
@@ -163,6 +164,7 @@ describe('history store', () => {
 
     expect(page.items[0]).toMatchObject({
       displayId: '7MV-5V7',
+      primaryModel: 'example-model',
       title: 'Missing authorization check',
       repository: { fullName: 'acme/widgets' },
       location: { path: 'src/api.ts', startLine: 42 },
@@ -197,6 +199,7 @@ describe('history store', () => {
       'widgets',
       'acme/widgets',
       'security-review',
+      'example-model',
       'high',
       'high',
       'Missing authorization check',
@@ -217,10 +220,10 @@ describe('history store', () => {
         const timestamps = sql.includes('as "first_observed_at"')
           && sql.includes('as "last_observed_at"')
           ? {
-              first_observed_at: rowValues[19],
-              last_observed_at: rowValues[20],
+              first_observed_at: rowValues[20],
+              last_observed_at: rowValues[21],
             }
-          : { observed_at: rowValues[20] };
+          : { observed_at: rowValues[21] };
         return {
           rows: [{
             id: rowValues[0],
@@ -233,17 +236,18 @@ describe('history store', () => {
             name: rowValues[7],
             full_name: rowValues[8],
             skill: rowValues[9],
-            severity: rowValues[10],
-            confidence: rowValues[11],
-            title: rowValues[12],
-            description: rowValues[13],
-            path: rowValues[14],
-            start_line: rowValues[15],
-            end_line: rowValues[16],
-            observation_outcome: rowValues[17],
-            observation_reason: rowValues[18],
+            primary_model: rowValues[10],
+            severity: rowValues[11],
+            confidence: rowValues[12],
+            title: rowValues[13],
+            description: rowValues[14],
+            path: rowValues[15],
+            start_line: rowValues[16],
+            end_line: rowValues[17],
+            observation_outcome: rowValues[18],
+            observation_reason: rowValues[19],
             ...timestamps,
-            completed_at: rowValues[21],
+            completed_at: rowValues[22],
           }],
           rowCount: 1,
         };
@@ -279,7 +283,8 @@ describe('history store', () => {
           },
           verification: 'The route reads an account before checking the caller.',
           provider: 'github', owner: 'acme', name: 'widgets', full_name: 'acme/widgets',
-          skill: 'security-review', severity: 'high', confidence: 'high',
+          skill: 'security-review', primary_model: 'openrouter/moonshotai/kimi-k3',
+          severity: 'high', confidence: 'high',
           title: 'Missing authorization check', description: 'The endpoint does not verify ownership.',
           path: 'src/api route.ts', start_line: 42, end_line: 48,
           observation_outcome: 'skipped',
@@ -302,6 +307,7 @@ describe('history store', () => {
       sourceEvidence: { targetStartLine: 42, content: 'authorize(request);' },
       verification: 'The route reads an account before checking the caller.',
       finding: {
+        primaryModel: 'openrouter/moonshotai/kimi-k3',
         outcome: 'skipped',
         outcomeReason: 'pull_request_changed',
         firstObservedAt: '2026-08-12T09:55:00.000Z',

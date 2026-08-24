@@ -1,6 +1,6 @@
 {
   "name": "@sentry/warden",
-  "version": "0.46.2",
+  "version": "0.48.0",
   "description": "Event-driven agent that reacts to GitHub events and executes code-review skills",
   "type": "module",
   "main": "dist/index.js",

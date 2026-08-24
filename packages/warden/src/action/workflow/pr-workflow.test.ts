@@ -26,6 +26,7 @@ const RUNTIME_CLAUDE_FIXTURES_DIR = join(FIXTURES_DIR, 'runtime-claude');
 const EMPTY_AUXILIARY_MODEL_FIXTURES_DIR = join(FIXTURES_DIR, 'empty-auxiliary-model');
 const LAYERED_AUXILIARY_MODEL_FIXTURES_DIR = join(FIXTURES_DIR, 'layered-auxiliary-model');
 const NO_MATCH_EMPTY_AUXILIARY_MODEL_FIXTURES_DIR = join(FIXTURES_DIR, 'no-match-empty-auxiliary-model');
+const SCHEDULE_ONLY_FIXTURES_DIR = join(FIXTURES_DIR, 'schedule');
 const EVENT_PAYLOAD_PATH = join(FIXTURES_DIR, 'event-payloads/pull_request_opened.json');
 const PR_HEAD_SHA = 'abc123def456';
 const PREVIOUS_HEAD_SHA = 'previous123sha456';
@@ -129,7 +130,7 @@ import {
 } from './base.js';
 import { runPRWorkflow } from './pr-workflow.js';
 import { clearSkillsCache } from '../../skills/loader.js';
-import { Semaphore } from '../../utils/index.js';
+import { AsyncWorkQueue } from '../../utils/index.js';
 import { buildFindingsOutput } from '../../reporting/output.js';
 
 // Type the mocks
@@ -393,6 +394,30 @@ describe('runPRWorkflow', () => {
             }),
           ],
           skillExecutions: [expect.objectContaining({ report, skillExecutionId: expect.any(String) })],
+          configuredSkills: [{ name: 'test-skill', triggered: true }],
+        })
+      );
+    });
+
+    it('analyze mode lists a schedule-only skill as configured but not triggered on a PR run', async () => {
+      await runPRWorkflow(
+        mockOctokit,
+        createDefaultInputs({ mode: 'analyze' }),
+        'pull_request',
+        EVENT_PAYLOAD_PATH,
+        SCHEDULE_ONLY_FIXTURES_DIR
+      );
+
+      expect(mockRunSkillTask).not.toHaveBeenCalled();
+      expect(mockWriteFindingsOutput).toHaveBeenCalledWith(
+        [],
+        expect.objectContaining({
+          repository: expect.objectContaining({ fullName: 'test-owner/test-repo' }),
+        }),
+        [],
+        expect.objectContaining({
+          triggerResults: [],
+          configuredSkills: [{ name: 'test-skill', triggered: false }],
         })
       );
     });
@@ -421,6 +446,22 @@ describe('runPRWorkflow', () => {
           }),
         ])
       );
+    });
+
+    it('analyze mode includes configuredSkills in the live findings snapshot', async () => {
+      mockRunSkillTask.mockResolvedValue({ name: 'test-trigger', report: createSkillReport({ skill: 'test-skill' }) });
+
+      await runPRWorkflow(
+        mockOctokit,
+        createDefaultInputs({ mode: 'analyze' }),
+        'pull_request',
+        EVENT_PAYLOAD_PATH,
+        FIXTURES_DIR
+      );
+
+      expect(mockWriteFindingsOutputLive).toHaveBeenCalledTimes(1);
+      const [, , , liveOptions] = mockWriteFindingsOutputLive.mock.calls[0]!;
+      expect(liveOptions?.configuredSkills).toEqual([{ name: 'test-skill', triggered: true }]);
     });
 
     it('report mode carries skillExecutionId and resolvedDefaults into the final findings output', async () => {
@@ -1622,14 +1663,12 @@ describe('runPRWorkflow', () => {
       await runPRWorkflow(mockOctokit, createDefaultInputs(), 'pull_request', EVENT_PAYLOAD_PATH, FIXTURES_DIR);
 
       expect(mockRunSkillTask).toHaveBeenCalledTimes(1);
-      const [taskOptions, fileConcurrency, _callbacks, semaphore] = mockRunSkillTask.mock.calls[0]!;
+      const [taskOptions, _callbacks, analysisQueue] = mockRunSkillTask.mock.calls[0]!;
       expect(taskOptions).toEqual(expect.objectContaining({
         name: 'test-skill',
         displayName: 'test-skill',
       }));
-      // When a semaphore is provided, fileConcurrency is unlimited (semaphore is the gate)
-      expect(fileConcurrency).toBe(Number.MAX_SAFE_INTEGER);
-      expect(semaphore).toBeInstanceOf(Semaphore);
+      expect(analysisQueue).toBeInstanceOf(AsyncWorkQueue);
     });
 
     it('writes a live snapshot after the trigger completes, carrying skillExecutionId and skippedTriggers', async () => {
@@ -1644,6 +1683,7 @@ describe('runPRWorkflow', () => {
         expect.objectContaining({ skillExecutionId: expect.any(String), triggerName: 'test-skill' }),
       ]);
       expect(liveOptions?.skippedTriggers).toEqual([]);
+      expect(liveOptions?.configuredSkills).toEqual([{ name: 'test-skill', triggered: true }]);
 
       // The final write happens after the live write and includes the same enrichment.
       const [, , , finalOptions] = mockWriteFindingsOutput.mock.calls[0]!;
@@ -1694,6 +1734,7 @@ describe('runPRWorkflow', () => {
       let activeRuns = 0;
       let maxActiveRuns = 0;
       let invocationCount = 0;
+      const analysisQueues: (AsyncWorkQueue | undefined)[] = [];
       let resolveFirstRun!: () => void;
       let resolveFirstRunStarted!: () => void;
       const firstRun = new Promise<void>((resolve) => {
@@ -1703,7 +1744,8 @@ describe('runPRWorkflow', () => {
         resolveFirstRunStarted = resolve;
       });
 
-      mockRunSkillTask.mockImplementation(async (taskOptions) => {
+      mockRunSkillTask.mockImplementation(async (taskOptions, _callbacks, analysisQueue) => {
+        analysisQueues.push(analysisQueue);
         invocationCount++;
         activeRuns++;
         maxActiveRuns = Math.max(maxActiveRuns, activeRuns);
@@ -1743,6 +1785,10 @@ describe('runPRWorkflow', () => {
       expect(mockRunSkillTask).toHaveBeenCalledTimes(2);
       expect(callsBeforeFirstRunFinished).toBe(1);
       expect(maxActiveRuns).toBe(1);
+      expect(analysisQueues).toHaveLength(2);
+      expect(analysisQueues[0]).toBeInstanceOf(AsyncWorkQueue);
+      expect(analysisQueues[1]).toBe(analysisQueues[0]);
+      expect(analysisQueues[0]?.concurrency).toBe(1);
     });
 
     it('accounts for a trigger the circuit breaker aborted before dispatch, and fails the run since nothing succeeded', async () => {
@@ -1858,6 +1904,16 @@ describe('runPRWorkflow', () => {
         })
       );
       expect(mockRunSkillTask).not.toHaveBeenCalled();
+      expect(mockWriteFindingsOutput).toHaveBeenCalledWith(
+        [],
+        expect.objectContaining({
+          repository: expect.objectContaining({ fullName: 'test-owner/test-repo' }),
+        }),
+        [],
+        expect.objectContaining({
+          configuredSkills: [{ name: 'test-skill', triggered: true }],
+        })
+      );
     });
 
     it('fails when findings exceed fail-on threshold and failCheck is true', async () => {
@@ -2346,7 +2402,7 @@ describe('runPRWorkflow', () => {
       await runPRWorkflow(mockOctokit, createDefaultInputs(), 'pull_request', EVENT_PAYLOAD_PATH, FIXTURES_DIR);
 
       // runSkillTask receives options with context containing the custom files
-      const [taskOptions, fileConcurrency, _callbacks, semaphore] = mockRunSkillTask.mock.calls[0]!;
+      const [taskOptions] = mockRunSkillTask.mock.calls[0]!;
       expect(taskOptions.context.pullRequest?.files).toEqual(
         expect.arrayContaining([
           expect.objectContaining({
@@ -2355,8 +2411,6 @@ describe('runPRWorkflow', () => {
           }),
         ])
       );
-      expect(fileConcurrency).toBe(Number.MAX_SAFE_INTEGER);
-      expect(semaphore).toBeInstanceOf(Semaphore);
     });
   });
 
@@ -2851,7 +2905,9 @@ describe('runPRWorkflow', () => {
             resolvedReason: 'fix_evaluation',
           }),
         ],
-        expect.any(Object)
+        expect.objectContaining({
+          configuredSkills: [{ name: 'test-skill', triggered: false }],
+        })
       );
     });
 

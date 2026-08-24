@@ -162,7 +162,7 @@ export type SkillConfig = z.infer<typeof SkillConfigSchema>;
 
 // Runner configuration
 export const RunnerConfigSchema = z.object({
-  /** Max concurrent file analyses across all skills (default: 4) */
+  /** Max concurrent hunk analyses across all skills (default: 4) */
   concurrency: z.number().int().positive().optional(),
 });
 export type RunnerConfig = z.infer<typeof RunnerConfigSchema>;
@@ -270,7 +270,7 @@ export const DefaultsSchema = z.object({
   ignore: IgnoreConfigSchema.optional(),
   /** Global scan limits applied after ignore filtering */
   scan: ScanConfigSchema.optional(),
-  /** Delay in milliseconds between batch starts when processing files in parallel. Default: 0 */
+  /** Delay applied before each analysis dispatched after the first concurrent wave. Default: 0 */
   batchDelayMs: z.number().int().nonnegative().optional(),
   /** Max retries for auxiliary structured model calls (extraction repair, merging, dedup, fix evaluation). Default: 5 */
   auxiliaryMaxRetries: z.number().int().positive().optional(),

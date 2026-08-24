@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { Effort, SkillDefinition } from '../config/schema.js';
-import { FindingSchema, type Finding, type UsageStats } from '../types/index.js';
+import { FindingSchema, type Finding, type UsageStats, type VerifierRejections } from '../types/index.js';
 import { aggregateUsage } from './usage.js';
 import { extractBalancedJson } from './extract.js';
 import {
@@ -44,6 +44,7 @@ export interface VerifyFindingsOptions {
 export interface VerifyFindingsResult {
   findings: Finding[];
   usage?: UsageStats;
+  verifierRejections?: VerifierRejections;
 }
 
 const VerificationVerdictSchema = z.object({
@@ -57,10 +58,12 @@ type VerificationVerdict = z.infer<typeof VerificationVerdictSchema>;
 interface VerificationTaskResult {
   finding?: Finding;
   usage?: UsageStats;
+  rejectionReason?: string;
 }
 
 const JSON_OBJECT_START = /\{/g;
 const VERIFICATION_CONCURRENCY = 4;
+const MAX_REJECTION_REASON_LENGTH = 500;
 
 function isAbortRequested(error: unknown, abortController?: AbortController): boolean {
   return (abortController?.signal.aborted ?? false) || classifyError(error).code === 'aborted';
@@ -277,7 +280,10 @@ export async function verifyFindings(
           : null;
         const next = applyVerdict(finding, verdict);
         notifyVerdict(options, finding, verdict, next);
-        return { finding: next ?? undefined, usage: result?.usage };
+        const rejectionReason = verdict?.verdict === 'reject'
+          ? (verdict.reason ?? 'No reason provided').slice(0, MAX_REJECTION_REASON_LENGTH)
+          : undefined;
+        return { finding: next ?? undefined, usage: result?.usage, rejectionReason };
       } catch (error) {
         if (isAbortRequested(error, options.abortController)) {
           return keepFindingAfterInterruptedVerification(finding);
@@ -307,9 +313,15 @@ export async function verifyFindings(
 
   const verified = results.flatMap((result) => result.finding ? [result.finding] : []);
   const usage = results.map((result) => result.usage).filter((u): u is UsageStats => u !== undefined);
+  const rejectionReasons = results
+    .map((result) => result.rejectionReason)
+    .filter((reason): reason is string => reason !== undefined);
 
   return {
     findings: verified,
     usage: usage.length > 0 ? aggregateUsage(usage) : undefined,
+    verifierRejections: rejectionReasons.length > 0
+      ? { count: rejectionReasons.length, reasons: rejectionReasons }
+      : undefined,
   };
 }

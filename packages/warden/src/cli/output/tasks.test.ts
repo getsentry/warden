@@ -8,7 +8,6 @@ import type { SkillTaskOptions } from './tasks.js';
 import type { FileAnalysisResult } from '../../sdk/types.js';
 import type { HunkWithContext } from '../../diff/index.js';
 import type { SkillDefinition } from '../../config/schema.js';
-import { Semaphore, runPool } from '../../utils/index.js';
 import { SkillRunnerError, WardenAuthenticationError, type ProviderErrorContext } from '../../sdk/errors.js';
 import { ProviderFailureCircuitBreaker } from '../../sdk/circuit-breaker.js';
 import * as sdkRunner from '../../sdk/runner.js';
@@ -660,6 +659,75 @@ describe('runSkillTasks', () => {
     expect(resolveSkill).not.toHaveBeenCalled();
   });
 
+  it('shares the hunk concurrency limit across skills', async () => {
+    const fakeHunk = { hunk: { newStart: 1, newCount: 1 } } as unknown as HunkWithContext;
+    const releases: (() => void)[] = [];
+    let active = 0;
+    let maxActive = 0;
+
+    const prepareFiles = vi.spyOn(sdkRunner, 'prepareFiles').mockReturnValue({
+      files: [{ filename: 'src/example.ts', hunks: [fakeHunk] }],
+      skippedFiles: [],
+    });
+    const analyzeFile = vi.spyOn(sdkRunner, 'analyzeFile').mockImplementation(
+      async (_skill, prepared, _repoPath, _options, _callbacks, _prContext, analysisQueue) => {
+        expect(analysisQueue).toBeDefined();
+        await analysisQueue!.run(async () => {
+          active++;
+          maxActive = Math.max(maxActive, active);
+          await new Promise<void>((resolve) => {
+            releases.push(() => {
+              active--;
+              resolve();
+            });
+          });
+        });
+        return {
+          filename: prepared.filename,
+          findings: [],
+          usage: { inputTokens: 1, outputTokens: 1, costUSD: 0 },
+          failedHunks: 0,
+          failedExtractions: 0,
+          hunkFailures: [],
+        };
+      },
+    );
+    const postProcessFindings = vi.spyOn(sdkRunner, 'postProcessFindings').mockResolvedValue({
+      findings: [],
+      auxiliaryUsage: [],
+    });
+    const context = {
+      eventType: 'pull_request',
+      repository: { owner: 'o', name: 'n', fullName: 'o/n', defaultBranch: 'main' },
+      repoPath: '/tmp',
+      pullRequest: { number: 1, title: 't', body: '', headSha: 'abc', baseSha: 'def', files: [] },
+    } as unknown as SkillTaskOptions['context'];
+    const tasks = ['skill-a', 'skill-b'].map((name) => ({
+      name,
+      resolveSkill: async () => ({ name, description: 'Review.', prompt: 'Review.' }),
+      context,
+    }));
+
+    const run = runSkillTasks(tasks, {
+      mode: logMode(),
+      verbosity: Verbosity.Quiet,
+      concurrency: 1,
+    });
+
+    await vi.waitFor(() => expect(releases).toHaveLength(1));
+    releases.splice(0).forEach((release) => release());
+    await vi.waitFor(() => expect(releases).toHaveLength(1));
+    releases.splice(0).forEach((release) => release());
+
+    const results = await run;
+    expect(maxActive).toBe(1);
+    expect(results.map((result) => result.name)).toEqual(['skill-a', 'skill-b']);
+
+    prepareFiles.mockRestore();
+    analyzeFile.mockRestore();
+    postProcessFindings.mockRestore();
+  });
+
   it('does not fail-fast on findings rejected by post-processing', async () => {
     const candidate = makeFinding();
     const controller = new AbortController();
@@ -682,6 +750,7 @@ describe('runSkillTasks', () => {
     const postProcessFindings = vi.spyOn(sdkRunner, 'postProcessFindings').mockResolvedValue({
       findings: [],
       auxiliaryUsage: [],
+      verifierRejections: { count: 1, reasons: ['not reproducible'] },
     });
 
     const results = await runSkillTasks([{
@@ -705,6 +774,55 @@ describe('runSkillTasks', () => {
     expect(results[0]?.report?.files?.[0]?.findings).toBe(0);
     expect(controller.signal.aborted).toBe(false);
     expect(postProcessFindings).toHaveBeenCalled();
+    expect(results[0]?.report?.verifierRejections).toEqual({ count: 1, reasons: ['not reproducible'] });
+
+    prepareFiles.mockRestore();
+    analyzeFile.mockRestore();
+    postProcessFindings.mockRestore();
+  });
+
+  it('omits verifierRejections on the report when nothing is rejected', async () => {
+    const finalFinding = makeFinding();
+    const controller = new AbortController();
+    const fakeHunk = {
+      hunk: { newStart: 1, newCount: 10 },
+    } as unknown as HunkWithContext;
+
+    const prepareFiles = vi.spyOn(sdkRunner, 'prepareFiles').mockReturnValue({
+      files: [{ filename: 'a.ts', hunks: [fakeHunk] }],
+      skippedFiles: [],
+    });
+    const analyzeFile = vi.spyOn(sdkRunner, 'analyzeFile').mockResolvedValue({
+      filename: 'a.ts',
+      findings: [finalFinding],
+      usage: { inputTokens: 1, outputTokens: 1, costUSD: 0.001 },
+      failedHunks: 0,
+      failedExtractions: 0,
+      hunkFailures: [],
+    } satisfies FileAnalysisResult);
+    const postProcessFindings = vi.spyOn(sdkRunner, 'postProcessFindings').mockResolvedValue({
+      findings: [finalFinding],
+      auxiliaryUsage: [],
+    });
+
+    const results = await runSkillTasks([{
+      name: 'verify-skill',
+      resolveSkill: async () =>
+        ({ name: 'verify-skill', definition: '', files: [] } as unknown as SkillDefinition),
+      context: {
+        eventType: 'pull_request',
+        repository: { owner: 'o', name: 'n', fullName: 'o/n', defaultBranch: 'main' },
+        repoPath: '/tmp',
+        pullRequest: { number: 1, title: 't', body: '', headSha: 'abc', baseSha: 'def', files: [] },
+      } as unknown as SkillTaskOptions['context'],
+    }], {
+      mode: logMode(),
+      verbosity: Verbosity.Quiet,
+      concurrency: 1,
+      failFastController: controller,
+    });
+
+    expect(results[0]?.report?.verifierRejections).toBeUndefined();
 
     prepareFiles.mockRestore();
     analyzeFile.mockRestore();
@@ -856,7 +974,7 @@ describe('runSkillTask all-hunks-fail synthesis', () => {
     };
 
     const onSkillError = vi.fn();
-    const result = await runSkillTask(options, 1, { ...noopCallbacks(), onSkillError });
+    const result = await runSkillTask(options, { ...noopCallbacks(), onSkillError });
 
     expect(result.report).toBeDefined();
     expect(result.report!.error?.code).toBe('auth_failed');
@@ -917,7 +1035,7 @@ describe('runSkillTask all-hunks-fail synthesis', () => {
       } as unknown as SkillTaskOptions['context'],
     };
 
-    const result = await runSkillTask(options, 1, noopCallbacks());
+    const result = await runSkillTask(options, noopCallbacks());
 
     expect(result.report!.error?.code).toBe('auth_failed');
     expect(result.report!.failedHunks).toBe(1);
@@ -978,7 +1096,7 @@ describe('runSkillTask all-hunks-fail synthesis', () => {
     });
     options.runnerOptions = { circuitBreaker };
 
-    const result = await runSkillTask(options, 1, noopCallbacks());
+    const result = await runSkillTask(options, noopCallbacks());
 
     expect(result.report!.error?.code).toBe('provider_unavailable');
     expect(result.report!.error?.message).toContain('Provider unavailable');
@@ -1041,7 +1159,7 @@ describe('runSkillTask all-hunks-fail synthesis', () => {
         pullRequest: { number: 1, title: 't', body: '', headSha: 'abc', baseSha: 'def', files: [] },
       } as unknown as SkillTaskOptions['context'],
       runnerOptions: { circuitBreaker },
-    }, 1, noopCallbacks());
+    }, noopCallbacks());
 
     expect((result.error as SkillRunnerError).code).toBe('provider_unavailable');
     expect((result.error as SkillRunnerError).providerContext).toBeUndefined();
@@ -1086,7 +1204,7 @@ describe('runSkillTask all-hunks-fail synthesis', () => {
       } as unknown as SkillTaskOptions['context'],
     };
 
-    const result = await runSkillTask(options, 1, noopCallbacks());
+    const result = await runSkillTask(options, noopCallbacks());
 
     expect(result.report!.error?.code).toBe('invalid_model_selector');
     expect(result.report!.error?.message).toContain('provider/model format');
@@ -1129,7 +1247,7 @@ describe('runSkillTask all-hunks-fail synthesis', () => {
     };
 
     const onSkillError = vi.fn();
-    const result = await runSkillTask(options, 1, { ...noopCallbacks(), onSkillError });
+    const result = await runSkillTask(options, { ...noopCallbacks(), onSkillError });
 
     expect(result.error).toBeUndefined();
     expect(result.report).toBeDefined();
@@ -1194,7 +1312,7 @@ describe('runSkillTask all-hunks-fail synthesis', () => {
       } as unknown as SkillTaskOptions['context'],
     };
 
-    const result = await runSkillTask(options, 1, noopCallbacks());
+    const result = await runSkillTask(options, noopCallbacks());
 
     expect(result.report).toBeDefined();
     expect(result.report!.error?.code).toBe('extraction_llm_timeout');
@@ -1244,7 +1362,7 @@ describe('runSkillTask all-hunks-fail synthesis', () => {
     };
 
     const onSkillError = vi.fn();
-    const result = await runSkillTask(options, 1, { ...noopCallbacks(), onSkillError });
+    const result = await runSkillTask(options, { ...noopCallbacks(), onSkillError });
 
     expect(result.error).toBeUndefined();
     expect(result.report).toBeDefined();
@@ -1289,7 +1407,7 @@ describe('runSkillTask skipped path', () => {
 
     const onSkillSkipped = vi.fn();
     const onSkillComplete = vi.fn();
-    const result = await runSkillTask(options, 1, {
+    const result = await runSkillTask(options, {
       ...noopCallbacks(),
       onSkillSkipped,
       onSkillComplete,
@@ -1361,7 +1479,7 @@ describe('runSkillTask model lanes', () => {
         auxiliaryEffort: 'high',
         synthesisModel: 'claude-opus-4-5',
       },
-    }, 1, noopCallbacks());
+    }, noopCallbacks());
 
     expect(result.report?.error).toBeUndefined();
     expect(postProcessSpy).toHaveBeenCalledWith(
@@ -1374,6 +1492,88 @@ describe('runSkillTask model lanes', () => {
       })
     );
     expect(result.report?.runtime).toBe('pi');
+  });
+
+  it('reports the model that actually answered when no model override is configured', async () => {
+    const fakeHunk = {
+      hunk: { newStart: 1, newCount: 10 },
+    } as unknown as HunkWithContext;
+    const finding = makeFinding();
+
+    vi.spyOn(sdkRunner, 'prepareFiles').mockReturnValue({
+      files: [{ filename: 'a.ts', hunks: [fakeHunk] }],
+      skippedFiles: [],
+    });
+    vi.spyOn(sdkRunner, 'analyzeFile').mockResolvedValue({
+      filename: 'a.ts',
+      findings: [finding],
+      usage: { inputTokens: 1, outputTokens: 1, costUSD: 0.001 },
+      failedHunks: 0,
+      failedExtractions: 0,
+      hunkFailures: [],
+      responseModels: ['claude-sonnet-4-5-20260929'],
+    } satisfies FileAnalysisResult);
+    vi.spyOn(sdkRunner, 'postProcessFindings').mockResolvedValue({
+      findings: [finding],
+      auxiliaryUsage: [],
+    });
+
+    const result = await runSkillTask({
+      name: 'lane-skill',
+      resolveSkill: async () =>
+        ({ name: 'lane-skill', definition: '', files: [] } as unknown as SkillDefinition),
+      context: {
+        eventType: 'pull_request',
+        repository: { owner: 'o', name: 'n', fullName: 'o/n', defaultBranch: 'main' },
+        repoPath: '/tmp',
+        pullRequest: { number: 1, title: 't', body: '', headSha: 'abc', baseSha: 'def', files: [] },
+      } as unknown as SkillTaskOptions['context'],
+      runnerOptions: {
+        runtime: 'pi',
+      },
+    }, noopCallbacks());
+
+    expect(result.report?.model).toBe('claude-sonnet-4-5-20260929');
+  });
+
+  it('reports the observed model on the error path when post-processing throws after hunks succeed', async () => {
+    const fakeHunk = {
+      hunk: { newStart: 1, newCount: 10 },
+    } as unknown as HunkWithContext;
+    const finding = makeFinding();
+
+    vi.spyOn(sdkRunner, 'prepareFiles').mockReturnValue({
+      files: [{ filename: 'a.ts', hunks: [fakeHunk] }],
+      skippedFiles: [],
+    });
+    vi.spyOn(sdkRunner, 'analyzeFile').mockResolvedValue({
+      filename: 'a.ts',
+      findings: [finding],
+      usage: { inputTokens: 1, outputTokens: 1, costUSD: 0.001 },
+      failedHunks: 0,
+      failedExtractions: 0,
+      hunkFailures: [],
+      responseModels: ['claude-sonnet-4-5-20260929'],
+    } satisfies FileAnalysisResult);
+    vi.spyOn(sdkRunner, 'postProcessFindings').mockRejectedValue(new Error('verification blew up'));
+
+    const result = await runSkillTask({
+      name: 'lane-skill',
+      resolveSkill: async () =>
+        ({ name: 'lane-skill', definition: '', files: [] } as unknown as SkillDefinition),
+      context: {
+        eventType: 'pull_request',
+        repository: { owner: 'o', name: 'n', fullName: 'o/n', defaultBranch: 'main' },
+        repoPath: '/tmp',
+        pullRequest: { number: 1, title: 't', body: '', headSha: 'abc', baseSha: 'def', files: [] },
+      } as unknown as SkillTaskOptions['context'],
+      runnerOptions: {
+        runtime: 'pi',
+      },
+    }, noopCallbacks());
+
+    expect(result.report?.error).toBeDefined();
+    expect(result.report?.model).toBe('claude-sonnet-4-5-20260929');
   });
 });
 
@@ -1407,7 +1607,7 @@ describe('runSkillTask error capture', () => {
     };
 
     const onSkillError = vi.fn();
-    const result = await runSkillTask(options, 1, { ...noopCallbacks(), onSkillError });
+    const result = await runSkillTask(options, { ...noopCallbacks(), onSkillError });
 
     expect(result.name).toBe('auth-skill');
     expect(result.report).toBeDefined();
@@ -1429,7 +1629,7 @@ describe('runSkillTask error capture', () => {
       context: makeContext(),
     };
 
-    const result = await runSkillTask(options, 1, noopCallbacks());
+    const result = await runSkillTask(options, noopCallbacks());
 
     expect(result.report).toBeDefined();
     expect(result.report!.error?.code).toBe('skill_resolution_failed');
@@ -1448,41 +1648,9 @@ describe('runSkillTask error capture', () => {
       context: makeContext(),
     };
 
-    const result = await runSkillTask(options, 1, noopCallbacks());
+    const result = await runSkillTask(options, noopCallbacks());
 
     expect(result.failOn).toBe('high');
     expect(result.minConfidence).toBe('medium');
-  });
-});
-
-describe('Semaphore integration with runPool', () => {
-  it('limits concurrent file analyses across skills to the semaphore size', async () => {
-    // Track concurrent active file analyses
-    let active = 0;
-    let maxActive = 0;
-    const concurrencyLimit = 2;
-    const semaphore = new Semaphore(concurrencyLimit);
-
-    // Simulate 3 skills each with 3 files (9 total file analyses).
-    // runPool gets unlimited concurrency (like skills launching in parallel),
-    // but the semaphore gates how many run simultaneously.
-    const fileWork = Array.from({ length: 9 }, (_, i) => i);
-
-    const results = await runPool(fileWork, fileWork.length, async (item) => {
-      await semaphore.acquire();
-      try {
-        active++;
-        maxActive = Math.max(maxActive, active);
-        await new Promise((resolve) => setTimeout(resolve, 5));
-        active--;
-        return item;
-      } finally {
-        semaphore.release();
-      }
-    });
-
-    expect(results).toHaveLength(9);
-    expect(maxActive).toBeLessThanOrEqual(concurrencyLimit);
-    expect(maxActive).toBe(concurrencyLimit);
   });
 });

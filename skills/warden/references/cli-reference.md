@@ -50,7 +50,7 @@ Ambiguous targets (no path separator, no extension) are resolved by checking if 
 | `--fail-on <severity>` | Exit with code 1 if findings >= severity |
 | `--report-on <severity>` | Only show findings >= severity in output |
 | `--fix` | Automatically apply all suggested fixes |
-| `--parallel <n>` | Max concurrent skill executions (default: 4) |
+| `--parallel <n>` | Max concurrent hunk analyses across skills (default: 4) |
 | `--git` | Force ambiguous targets to be treated as git refs |
 | `--offline` | Use cached remote skills without network access |
 | `-q, --quiet` | Errors and final summary only |

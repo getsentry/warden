@@ -339,7 +339,7 @@ describe('runScheduleWorkflow', () => {
       ]);
     });
 
-    it('passes auxiliaryMaxRetries through resolved schedule triggers', async () => {
+    it('passes runner and auxiliary settings through resolved schedule triggers', async () => {
       mockRunSkill.mockResolvedValue(createSkillReport());
       mockBuildContext.mockResolvedValue(createScheduleContext());
 
@@ -355,12 +355,12 @@ describe('runScheduleWorkflow', () => {
       expect(mockRunSkill).toHaveBeenNthCalledWith(1,
         expect.anything(),
         expect.anything(),
-        expect.objectContaining({ auxiliaryMaxRetries: 7 })
+        expect.objectContaining({ auxiliaryMaxRetries: 7, concurrency: 2 })
       );
       expect(mockRunSkill).toHaveBeenNthCalledWith(2,
         expect.anything(),
         expect.anything(),
-        expect.objectContaining({ auxiliaryMaxRetries: 3 })
+        expect.objectContaining({ auxiliaryMaxRetries: 3, concurrency: 2 })
       );
     });
 
