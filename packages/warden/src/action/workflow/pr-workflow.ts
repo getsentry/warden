@@ -2007,6 +2007,7 @@ async function runAnalyzeMode(
             ...toErroredSkippedTriggers(completedSoFar),
           ]),
           skillExecutions: toSkillExecutions(completedSoFar),
+          configuredSkills: buildConfiguredSkillsList({ allTriggers: resolvedTriggers, matchedTriggers }),
         });
       },
     }),
@@ -2372,6 +2373,7 @@ export async function runPRWorkflow(
                   ...toErroredSkippedTriggers(completedSoFar),
                 ]),
                 skillExecutions: toSkillExecutions(completedSoFar),
+                configuredSkills: buildConfiguredSkillsList({ allTriggers: resolvedTriggers, matchedTriggers }),
               });
             },
           }),

@@ -447,6 +447,22 @@ describe('runPRWorkflow', () => {
       );
     });
 
+    it('analyze mode includes configuredSkills in the live findings snapshot', async () => {
+      mockRunSkillTask.mockResolvedValue({ name: 'test-trigger', report: createSkillReport({ skill: 'test-skill' }) });
+
+      await runPRWorkflow(
+        mockOctokit,
+        createDefaultInputs({ mode: 'analyze' }),
+        'pull_request',
+        EVENT_PAYLOAD_PATH,
+        FIXTURES_DIR
+      );
+
+      expect(mockWriteFindingsOutputLive).toHaveBeenCalledTimes(1);
+      const [, , , liveOptions] = mockWriteFindingsOutputLive.mock.calls[0]!;
+      expect(liveOptions?.configuredSkills).toEqual([{ name: 'test-skill', triggered: true }]);
+    });
+
     it('report mode carries skillExecutionId and resolvedDefaults into the final findings output', async () => {
       const finding = createFinding();
       const report = createSkillReport({ findings: [finding] });
@@ -1668,6 +1684,7 @@ describe('runPRWorkflow', () => {
         expect.objectContaining({ skillExecutionId: expect.any(String), triggerName: 'test-skill' }),
       ]);
       expect(liveOptions?.skippedTriggers).toEqual([]);
+      expect(liveOptions?.configuredSkills).toEqual([{ name: 'test-skill', triggered: true }]);
 
       // The final write happens after the live write and includes the same enrichment.
       const [, , , finalOptions] = mockWriteFindingsOutput.mock.calls[0]!;
