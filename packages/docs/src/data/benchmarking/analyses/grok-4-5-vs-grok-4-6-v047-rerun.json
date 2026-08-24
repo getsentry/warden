@@ -1,0 +1,167 @@
+{
+  "id": "grok-4-5-vs-grok-4-6-v047-controlled-rerun-2026-08-23",
+  "description": "Sanitized derived summary for the Warden 0.47.0 Grok 4.5 versus Grok 4.6 controlled benchmark rerun.",
+  "notes": [
+    "Both rows use Warden 0.47.0, Pi, high effort, GPT 5.6 Luna high for auxiliary calls, the same six corpus SHAs, explicit target lists, parallelism 4, and maxTurns 100.",
+    "The two model lanes launched concurrently against separate Sentry checkouts. Timing remains operational context and is not ranked.",
+    "Final-system scoring comes from the committed result files. Primary-output scoring is a separate agent-verified semantic review of candidates in the retained traces before Warden schema validation, verification, and merge processing.",
+    "Raw JSONL artifacts remain withheld pending sensitive-data review because traces can contain prompts, source snippets, and tool results."
+  ],
+  "rows": {
+    "grok45": {
+      "runId": "sentry-security-review-pi-openrouter-grok-4-5-high-luna-aux-high-traced-corpus-2026-08-23-001",
+      "model": "openrouter/x-ai/grok-4.5",
+      "knownFound": 41,
+      "knownFindingCount": 86,
+      "knownFoundRate": 0.4767,
+      "findingsTotal": 55,
+      "findingsWithKnownMatch": 40,
+      "scanCostUSD": 32.2194472,
+      "auxiliaryCostUSD": 2.6608471899999984,
+      "totalCostUSD": 34.880294389999996,
+      "costPerKnownUSD": 0.8507388875609755,
+      "cleanShardWallMs": 12688137,
+      "inputTokens": 66324703,
+      "outputTokens": 2227305,
+      "traceTurns": 1341
+    },
+    "grok46": {
+      "runId": "sentry-security-review-pi-openrouter-grok-4-6-high-luna-aux-high-traced-corpus-2026-08-23-001",
+      "model": "openrouter/x-ai/grok-4.6",
+      "knownFound": 25,
+      "knownFindingCount": 86,
+      "knownFoundRate": 0.2907,
+      "findingsTotal": 38,
+      "findingsWithKnownMatch": 24,
+      "scanCostUSD": 76.721192,
+      "auxiliaryCostUSD": 1.7472720500000065,
+      "totalCostUSD": 78.46846405000001,
+      "costPerKnownUSD": 3.1387385620000006,
+      "cleanShardWallMs": 30184052,
+      "inputTokens": 80115127,
+      "outputTokens": 5708634,
+      "traceTurns": 1953
+    }
+  },
+  "finalOverlap": {
+    "shared": 22,
+    "grok45Only": 19,
+    "grok46Only": 3,
+    "sharedIds": [
+      "sentry-vuln-001",
+      "sentry-vuln-003",
+      "sentry-vuln-004",
+      "sentry-vuln-007",
+      "sentry-vuln-011",
+      "sentry-vuln-014",
+      "sentry-vuln-015",
+      "sentry-vuln-017",
+      "sentry-vuln-018",
+      "sentry-vuln-025",
+      "sentry-vuln-030",
+      "sentry-vuln-034",
+      "sentry-vuln-036",
+      "sentry-vuln-039",
+      "sentry-vuln-051",
+      "sentry-vuln-055",
+      "sentry-vuln-056",
+      "sentry-vuln-062",
+      "sentry-vuln-069",
+      "sentry-vuln-071",
+      "sentry-vuln-079",
+      "sentry-vuln-082"
+    ],
+    "grok45OnlyIds": [
+      "sentry-vuln-002",
+      "sentry-vuln-012",
+      "sentry-vuln-013",
+      "sentry-vuln-019",
+      "sentry-vuln-021",
+      "sentry-vuln-026",
+      "sentry-vuln-035",
+      "sentry-vuln-037",
+      "sentry-vuln-046",
+      "sentry-vuln-047",
+      "sentry-vuln-048",
+      "sentry-vuln-057",
+      "sentry-vuln-058",
+      "sentry-vuln-067",
+      "sentry-vuln-070",
+      "sentry-vuln-075",
+      "sentry-vuln-081",
+      "sentry-vuln-084",
+      "sentry-vuln-085"
+    ],
+    "grok46OnlyIds": [
+      "sentry-vuln-006",
+      "sentry-vuln-020",
+      "sentry-vuln-031"
+    ]
+  },
+  "pipelineComparison": {
+    "grok45": {
+      "primaryCandidates": 80,
+      "primaryKnownFound": 44,
+      "schemaRejectedCandidates": 2,
+      "schemaRejectedKnownAbsentFromFinal": 1,
+      "schemaRejectedKnownAbsentFromFinalIds": [
+        "sentry-vuln-006"
+      ],
+      "finalFindings": 55,
+      "finalKnownFound": 41,
+      "rawToFinalKnownDelta": 3
+    },
+    "grok46": {
+      "primaryCandidates": 65,
+      "primaryKnownFound": 38,
+      "schemaRejectedCandidates": 12,
+      "schemaRejectedKnownAbsentFromFinal": 7,
+      "schemaRejectedKnownAbsentFromFinalIds": [
+        "sentry-vuln-013",
+        "sentry-vuln-032",
+        "sentry-vuln-047",
+        "sentry-vuln-072",
+        "sentry-vuln-081",
+        "sentry-vuln-084",
+        "sentry-vuln-085"
+      ],
+      "finalFindings": 38,
+      "finalKnownFound": 25,
+      "rawToFinalKnownDelta": 13
+    },
+    "schemaObservation": "Warden expects finding.verification to be a string. Grok 4.5 emitted two candidates with arrays and Grok 4.6 emitted twelve; those candidates did not enter final Warden output.",
+    "mergeObservations": [
+      "Auxiliary merging combined a client-secret JWT replay finding with an unrelated Mailgun replay location.",
+      "Auxiliary merging combined a Seer RPC authorization finding with unrelated project endpoint locations."
+    ]
+  },
+  "retryAccounting": {
+    "publishedGrok46CostUSD": 78.46846405000001,
+    "excludedFailedAttemptCostUSD": 38.722890720000006,
+    "actualGrok46SpendUSD": 117.19135477000002,
+    "excludedShardAttempts": [
+      {
+        "sha": "6993246259d0193a6a6aac49aa3763959b1126df",
+        "costUSD": 1.8760312000000003,
+        "failedChunk": "src/sentry/api/endpoints/auth_index.py:190-362",
+        "wardenError": "extraction_no_findings_json",
+        "providerTraceStatus": "success",
+        "providerFinishReason": "stop"
+      },
+      {
+        "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+        "costUSD": 36.84685952,
+        "failedChunk": "src/sentry/sentry_apps/api/endpoints/installation_external_issue_actions.py:1-67",
+        "wardenError": "extraction_no_findings_json",
+        "providerTraceStatus": "success",
+        "providerFinishReason": "stop"
+      }
+    ]
+  },
+  "interpretation": [
+    "The final Warden rows favor Grok 4.5 by 16 known corpus findings, 41 versus 25, while Grok 4.6 costs 2.25 times as much in the clean comparison.",
+    "The primary model outputs favor Grok 4.5 by six known corpus findings, 44 versus 38. Warden schema validation and auxiliary processing widened the final-system gap, so the full 16-finding difference should not be attributed to intrinsic model quality.",
+    "The direction replicates the earlier published rows, which scored 37 for Grok 4.5 and 19 for Grok 4.6, but these remain single-run samples rather than a deterministic model ranking.",
+    "Grok 4.6 used more turns, produced 2.6 times as many output tokens, took 2.4 times the clean shard wall time, and still emitted fewer primary candidates. The clean result does not support replacing Grok 4.5 with Grok 4.6 for this Warden workload."
+  ]
+}

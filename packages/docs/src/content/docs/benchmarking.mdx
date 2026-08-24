@@ -74,37 +74,76 @@ limit and explicit historical target lists; production uses the runtime's
 
 ### Production Model Stack Result
 
-The controlled production-model row found 37 of 86 known entries and emitted
-48 findings at a total cost of $29.25, or $0.79 per known entry. It ranks
-second among the 20 stable rows for known-corpus recall and sixth for cost per
+The latest controlled production-model-lane row found 41 of 86 known entries
+and emitted 55 findings. It cost $34.88, or $0.85 per known entry. It ranks
+first among the 21 stable rows for known-corpus recall and ninth for cost per
 known entry.
 
-Compared with the July Grok row, it found four more known entries and cost
-$9.39 less, a 24% reduction. The two rows share 25 known entries. The current
-row found 12 that the July row missed, while the July row found eight that the
-current row missed. The comparison includes more than the auxiliary model:
-the current row uses Warden 0.46.2 and an explicit Luna high auxiliary lane,
-while the July row used Warden 0.39.0 and did not record its auxiliary model.
-These single runs do not isolate which change caused the difference.
+This row uses Warden 0.47.0, while the organization baseline above records
+Warden 0.46.2. The matrix's **Production models** label means that the primary
+and auxiliary model lanes match production. It does not mean every runtime and
+workflow setting is identical.
 
-At nearly the same total cost as K3 high, the production model stack found 10
-more known entries. K3 max remained cheaper at $19.37 but found five fewer.
-This makes the production stack the stronger recall result in this sample,
-while K3 max remains more cost-efficient.
+The August 21 model-stack row remains in the result archive, but the matrix
+supersedes it with this controlled rerun. The older row found 37 known entries
+for $29.25. The July Grok row remains a separate Warden 0.39.0 result without a
+recorded auxiliary lane; it found 33 for $38.65. These historical rows show the
+same broad direction, but single runs do not isolate the effect of Warden,
+model sampling, or the auxiliary pipeline.
 
-The final merge also matters. In the last two shards, scan-time findings
-exactly matched the workflow-disconnect and system-option logging corpus bugs.
-The auxiliary merge retained different same-file findings instead. The
-standardized score follows final Warden output, so it gives no credit for those
-two dropped matches. The 37/86 result measures the full system, including this
-merge loss, rather than only the primary model's scan output.
+K3 max remains cheaper at $19.37 but found nine fewer known entries. K3 high
+cost $28.14 and found 14 fewer. Grok 4.5 is the stronger recall result in this
+sample, while K3 max remains more cost-efficient.
+
+### Grok 4.6 High
+
+The controlled rerun puts Grok 4.5 and Grok 4.6 on the same Warden 0.47.0
+pipeline. Both use Pi, high effort, GPT 5.6 Luna high for auxiliary calls, the
+same six corpus commits, parallelism 4, and a 100-turn limit.
+
+Grok 4.5 found 41 of 86 known entries, emitted 55 final findings, and cost
+$34.88. Grok 4.6 found 25, emitted 38, and cost $78.47. They share 22 known
+entries. Grok 4.5 found 19 that Grok 4.6 missed, while Grok 4.6 found three that
+Grok 4.5 missed. Grok 4.6 found 16 fewer known issues at 2.25 times the clean
+provider cost. Cost per known entry was $0.85 for Grok 4.5 and $3.14 for Grok
+4.6.
+
+Grok 4.5 ranks first among the 21 stable rows for recall and ninth for cost per
+known entry. Grok 4.6 ranks tenth and eighteenth. The clean shard aggregates
+were 3 hours 31 minutes and 8 hours 23 minutes. The overview does not rank
+timing because provider and host conditions are not controlled tightly enough.
+
+The final 16-finding gap is a Warden system result, not a pure model-quality
+gap. Before Warden schema validation, verification, and merging, Grok 4.5's 80
+primary candidates covered 44 unique corpus entries. Grok 4.6's 65 candidates
+covered 38. The raw primary-output gap was six.
+
+Pipeline handling widened that gap. Grok 4.5 emitted two candidates with a
+`verification` array where Warden expects a string. Grok 4.6 emitted 12. Those
+candidates did not enter final Warden output, and seven corpus entries absent
+from Grok 4.6's final score were present in the rejected candidates. Auxiliary
+merging also combined unrelated issues, including client-secret JWT replay
+with Mailgun replay and Seer RPC authorization with unrelated project
+endpoints. Final scoring excludes unsupported merged locations.
+
+The first Grok 4.6 attempts for two shards each contained one chunk that ended
+with reasoning but no final text. Provider traces reported success with a
+`stop` finish reason; Warden recorded `extraction_no_findings_json`. The clean
+comparison excludes those complete shard attempts. Published clean spend is
+$78.47. Actual Grok 4.6 spend including the failed attempts was $117.19.
+
+The earlier rows scored 37 for Grok 4.5 and 19 for Grok 4.6, so the direction
+replicated under the controlled rerun. The primary outputs still favor Grok
+4.5, but Warden's schema and auxiliary pipeline explain part of the final gap.
+These remain single runs, not a deterministic model ranking. The result does
+not support moving the benchmark or production model lane to Grok 4.6.
 
 ### Kimi K3 Effort Levels and K2.6
 
 The historical K3 max run remains the strongest Kimi result on this corpus. It
 found 32 of 86 known entries. K2.6 found 31, K3 high found 27, and K3 low found
-16. Across the 20 stable rows now published, those results rank fifth, sixth,
-eighth, and eighteenth by known-corpus recall.
+16. Across the 21 stable rows now published, those results rank fifth, sixth,
+eighth, and nineteenth by known-corpus recall.
 
 K3 max also has the best Kimi cost efficiency at $19.37, or $0.61 per known entry.
 K3 low cost $10.28, or $0.64 per known entry, but found half as many known
