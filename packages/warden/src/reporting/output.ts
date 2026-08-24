@@ -229,6 +229,10 @@ export const FindingsOutputSchema = z.object({
   discardedFindings: z.array(DiscardedFindingSchema).optional(),
   triggerResults: z.array(TriggerRunResultSchema).optional(),
   findingObservations: z.array(FindingObservationSchema).default([]),
+  configuredSkills: z.array(z.object({
+    name: z.string(),
+    triggered: z.boolean(),
+  })).optional(),
 });
 
 export type FindingsOutput = z.infer<typeof FindingsOutputSchema>;
@@ -273,6 +277,7 @@ export interface BuildFindingsOutputOptions {
   skillExecutions?: SkillExecutionMeta[];
   recalledMemories?: readonly { id: string; version: number }[];
   memoryRecallId?: string;
+  configuredSkills?: { name: string; triggered: boolean }[];
 }
 
 /** Build the action-level `resolvedDefaults` block from parsed action inputs. */
@@ -307,6 +312,27 @@ export function buildBaseOutputOptions(
     resolvedDefaults: buildResolvedDefaults(inputs),
     skippedTriggers,
   };
+}
+
+/** Build the configured-skills roster, deduping by name since a skill's multiple trigger blocks (e.g. PR + schedule) share one name. */
+export function buildConfiguredSkillsList({
+  allTriggers,
+  matchedTriggers,
+}: {
+  allTriggers: { name: string }[];
+  matchedTriggers: { name: string }[];
+}): { name: string; triggered: boolean }[] {
+  const matchedNames = new Set(matchedTriggers.map((t) => t.name));
+  const seen = new Set<string>();
+  const result: { name: string; triggered: boolean }[] = [];
+
+  for (const trigger of allTriggers) {
+    if (seen.has(trigger.name)) continue;
+    seen.add(trigger.name);
+    result.push({ name: trigger.name, triggered: matchedNames.has(trigger.name) });
+  }
+
+  return result;
 }
 
 function serializeTriggerError(error: unknown): z.infer<typeof TriggerErrorSchema> {
@@ -519,6 +545,7 @@ export function buildFindingsOutput(
       triggerResults: options.triggerResults.map(serializeTriggerResult),
     }),
     findingObservations,
+    ...(options.configuredSkills && { configuredSkills: options.configuredSkills }),
   };
 
   return FindingsOutputSchema.parse(output);
