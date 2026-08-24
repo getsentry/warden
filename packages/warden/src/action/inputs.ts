@@ -39,6 +39,8 @@ export interface ActionInputs {
   requestChanges?: boolean;
   /** Whether to fail the check run when findings exceed failOn */
   failCheck?: boolean;
+  /** Whether to create/update GitHub Check runs. Default true; explicit false disables the core check and all per-skill checks. */
+  postChecks: boolean;
   /** Max concurrent trigger executions */
   parallel: number;
   /** The action ref that produced this run, surfaced in the findings output harness field */
@@ -124,6 +126,7 @@ export function parseActionInputs(): ActionInputs {
   const serviceData = DataProfileSchema.safeParse(serviceDataInput);
   const serviceTimeoutInput = getInput('service-timeout-ms');
   const serviceTimeoutParsed = serviceTimeoutInput ? Number(serviceTimeoutInput) : undefined;
+  const postChecks = parseBooleanInput(getInput('post-checks')) ?? true;
 
   return {
     anthropicApiKey,
@@ -139,6 +142,7 @@ export function parseActionInputs(): ActionInputs {
     maxFindings: Number.isNaN(maxFindingsParsed) ? 50 : maxFindingsParsed,
     requestChanges,
     failCheck,
+    postChecks,
     parallel: Number.isNaN(parallelParsed) ? DEFAULT_CONCURRENCY : parallelParsed,
     actionRef: getInput('action-ref') || undefined,
     serviceUrl: getInput('service-url') || undefined,

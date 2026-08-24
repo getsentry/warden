@@ -18,6 +18,7 @@ function inputs(overrides: Partial<ActionInputs> = {}): ActionInputs {
     configPath: 'warden.toml',
     maxFindings: 50,
     parallel: 1,
+    postChecks: true,
     ...overrides,
   };
 }

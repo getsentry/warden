@@ -1,5 +1,8 @@
 version = 1
 
+[defaults]
+postChecks = false
+
 [defaults.auxiliary]
 model = "anthropic/org-aux-model"
 effort = "high"

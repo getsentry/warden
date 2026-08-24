@@ -236,6 +236,8 @@ export const DefaultsSchema = z.object({
   requestChanges: z.boolean().optional(),
   /** Fail the check run when findings exceed failOn. Default: false */
   failCheck: z.boolean().optional(),
+  /** Create/update GitHub Check runs (core + per-skill). Default: true */
+  postChecks: z.boolean().optional(),
   /** Default model for all skills (e.g., 'openai/gpt-5.5') */
   model: z.string().optional(),
   /** Maximum agentic turns (API round-trips) per hunk analysis. Default: 50 */

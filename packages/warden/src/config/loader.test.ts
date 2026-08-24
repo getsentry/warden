@@ -1735,6 +1735,47 @@ describe('requestChanges and failCheck config', () => {
   });
 });
 
+describe('postChecks config', () => {
+  it('accepts postChecks in defaults', () => {
+    const config = {
+      version: 1,
+      defaults: { postChecks: false },
+      skills: [],
+    };
+
+    const result = WardenConfigSchema.safeParse(config);
+    expect(result.success).toBe(true);
+    expect(result.data?.defaults?.postChecks).toBe(false);
+  });
+
+  it('rejects non-boolean postChecks', () => {
+    const config = {
+      version: 1,
+      defaults: { postChecks: 'yes' },
+      skills: [],
+    };
+
+    const result = WardenConfigSchema.safeParse(config);
+    expect(result.success).toBe(false);
+  });
+
+  it('repo config overrides base config for postChecks on merge', () => {
+    const baseConfig: WardenConfig = {
+      version: 1,
+      defaults: { postChecks: false },
+      skills: [],
+    };
+    const repoConfig: WardenConfig = {
+      version: 1,
+      defaults: { postChecks: true },
+      skills: [],
+    };
+
+    const merged = mergeWardenConfigs(baseConfig, repoConfig);
+    expect(merged.defaults?.postChecks).toBe(true);
+  });
+});
+
 describe('defaults.ignorePaths config', () => {
   it('accepts ignorePaths in defaults', () => {
     const config = {
