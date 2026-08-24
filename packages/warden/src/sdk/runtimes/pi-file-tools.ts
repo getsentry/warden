@@ -1,5 +1,6 @@
 import { realpath } from 'node:fs/promises';
 import { basename, dirname, isAbsolute, relative, resolve, sep } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import {
   createFindToolDefinition,
   createGrepToolDefinition,
@@ -59,7 +60,7 @@ function checkoutPathError(requestedPath: string, checkoutPath: string): Error {
   );
 }
 
-async function assertPathWithinCheckout(checkoutPath: string, requestedPath: string): Promise<void> {
+async function resolvePathWithinCheckout(checkoutPath: string, requestedPath: string): Promise<string> {
   const checkout = resolve(checkoutPath);
   const target = resolve(checkout, requestedPath);
 
@@ -74,6 +75,8 @@ async function assertPathWithinCheckout(checkoutPath: string, requestedPath: str
   if (!isWithinPath(canonicalCheckout, canonicalTarget)) {
     throw checkoutPathError(requestedPath, checkout);
   }
+
+  return canonicalTarget;
 }
 
 function confineTool<TParams extends TSchema, TDetails, TState>(
@@ -90,8 +93,12 @@ function confineTool<TParams extends TSchema, TDetails, TState>(
     async execute(toolCallId, params, signal, onUpdate, context) {
       const input = params as FileToolInput;
       const requestedPath = typeof input.path === 'string' ? input.path : '.';
-      await assertPathWithinCheckout(checkoutPath, requestedPath);
-      return tool.execute(toolCallId, params, signal, onUpdate, context);
+      const confinedPath = await resolvePathWithinCheckout(checkoutPath, requestedPath);
+      const confinedParams = {
+        ...params,
+        path: pathToFileURL(confinedPath).href,
+      } as typeof params;
+      return tool.execute(toolCallId, confinedParams, signal, onUpdate, context);
     },
   });
 }

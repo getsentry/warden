@@ -54,6 +54,14 @@ describe('createCheckoutFileTools', () => {
     );
   });
 
+  it.each(['@/', '~/', 'file:///'])(
+    'prevents Pi from reinterpreting %s outside the checkout',
+    async (path) => {
+      await expect(executeTool('ls', { path }))
+        .rejects.toThrow(checkoutPath);
+    },
+  );
+
   it('rejects symlinks that resolve outside the checkout', async () => {
     const outsidePath = join(testRoot, 'outside.ts');
     await writeFile(outsidePath, 'export const secret = true;\n');
