@@ -156,6 +156,11 @@ describe('findings output schema', () => {
           skillName: 'failed-skill',
           error: new Error('Token expired'),
         },
+        {
+          triggerName: 'pending-trigger',
+          skillName: 'pending-skill',
+          pending: true,
+        },
       ],
     });
 
@@ -175,6 +180,11 @@ describe('findings output schema', () => {
           name: 'Error',
           message: 'Token expired',
         },
+      },
+      {
+        triggerName: 'pending-trigger',
+        skillName: 'pending-skill',
+        status: 'pending',
       },
     ]);
   });

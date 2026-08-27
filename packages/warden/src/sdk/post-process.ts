@@ -78,6 +78,7 @@ export async function postProcessFindings(
     effort: options.auxiliaryEffort,
     maxRetries: options.auxiliaryMaxRetries,
     agentName: options.skill.name,
+    abortController: options.abortController,
     onFindingProcessing: options.onFindingProcessing,
   });
   currentFindings = mergeResult.findings;
