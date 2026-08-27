@@ -46,6 +46,7 @@ import {
   writeFindingsOutputLive,
 } from './base.js';
 import { captureActionTriggerError } from '../error-reporting.js';
+import { ActionCancellation } from '../cancellation.js';
 
 interface SkippedScheduleTrigger {
   skillName: string;
@@ -67,6 +68,7 @@ async function emitEmptyScheduleRun(
   inputs: ActionInputs,
   repoPath: string,
   service: ResolvedServiceOptions | undefined,
+  cancellation?: ActionCancellation,
 ): Promise<void> {
   const fullName = process.env['GITHUB_REPOSITORY'] ?? '';
   const [owner = '', name = ''] = fullName.split('/');
@@ -76,7 +78,10 @@ async function emitEmptyScheduleRun(
     repository: { owner, name, fullName, defaultBranch: '' },
     repoPath,
   };
-  const findingsOptions = buildBaseOutputOptions(inputs, []);
+  const findingsOptions = {
+    ...(cancellation?.requested ? { outcome: 'cancelled' as const } : {}),
+    ...buildBaseOutputOptions(inputs, []),
+  };
   try {
     writeFindingsOutput([], context, [], findingsOptions);
   } catch (error) {
@@ -91,11 +96,12 @@ async function emitEmptyScheduleRun(
 export async function runScheduleWorkflow(
   octokit: Octokit,
   inputs: ActionInputs,
-  repoPath: string
+  repoPath: string,
+  cancellation = new ActionCancellation(),
 ): Promise<void> {
   return Sentry.startSpan(
     { op: 'workflow.run', name: 'review schedule' },
-    (span) => runScheduleWorkflowInner(octokit, inputs, repoPath, span),
+    (span) => runScheduleWorkflowInner(octokit, inputs, repoPath, span, cancellation),
   );
 }
 
@@ -103,7 +109,8 @@ async function runScheduleWorkflowInner(
   octokit: Octokit,
   inputs: ActionInputs,
   repoPath: string,
-  workflowSpan: WorkflowSpan
+  workflowSpan: WorkflowSpan,
+  cancellation: ActionCancellation,
 ): Promise<void> {
   const githubRepository = process.env['GITHUB_REPOSITORY'];
   setRepositoryScope(githubRepository);
@@ -154,7 +161,7 @@ async function runScheduleWorkflowInner(
       setOutput('summary', 'No warden.toml found');
       workflowSpan.setAttribute('warden.trigger.count', 0);
       workflowSpan.setAttribute('warden.finding.count', 0);
-      await emitEmptyScheduleRun(inputs, repoPath, service);
+      await emitEmptyScheduleRun(inputs, repoPath, service, cancellation);
       return;
     }
     throw error;
@@ -174,7 +181,7 @@ async function runScheduleWorkflowInner(
     setOutput('high-count', 0);
     setOutput('summary', 'No schedule triggers configured');
     workflowSpan.setAttribute('warden.finding.count', 0);
-    await emitEmptyScheduleRun(inputs, repoPath, service);
+    await emitEmptyScheduleRun(inputs, repoPath, service, cancellation);
     return;
   }
 
@@ -208,7 +215,7 @@ async function runScheduleWorkflowInner(
   };
 
   let memoryRecall: ActionMemoryRecall | undefined;
-  if (service?.memory) {
+  if (service?.memory && !cancellation.requested) {
     try {
       const recallContext = await buildScheduleEventContext({
         patterns: [...new Set(scheduleTriggers.flatMap((trigger) =>
@@ -253,6 +260,16 @@ async function runScheduleWorkflowInner(
 
   // Process each schedule trigger
   for (const [triggerIndex, resolved] of scheduleTriggers.entries()) {
+    if (cancellation.requested) {
+      skippedTriggers.push(...scheduleTriggers.slice(triggerIndex).map((trigger) => ({
+        skillName: trigger.skill,
+        triggerId: trigger.id,
+        triggerName: trigger.name,
+        reason: 'pending' as const,
+      })));
+      break;
+    }
+
     logGroup(`Running trigger: ${resolved.name} (skill: ${resolved.skill})`);
     const findingProcessingEvents: FindingProcessingEvent[] = [];
     let executionRecorded = false;
@@ -297,30 +314,47 @@ async function runScheduleWorkflowInner(
         offline: isWardenOffline(),
       });
       const runtimeEnv = await prepareRuntimeEnvironment([resolved], inputs);
-      const report = await runSkill(skill, context, {
-        apiKey: inputs.anthropicApiKey,
-        model: resolved.model,
-        runtime: resolved.runtime,
-        effort: resolved.effort,
-        auxiliaryModel: resolved.auxiliaryModel,
-        auxiliaryEffort: resolved.auxiliaryEffort,
-        synthesisModel: resolved.synthesisModel,
-        maxTurns: resolved.maxTurns,
-        concurrency: runnerConcurrency ?? inputs.parallel,
-        batchDelayMs: resolved.batchDelayMs,
-        maxContextFiles: resolved.maxContextFiles,
-        ignore: resolved.ignore,
-        scan: resolved.scan,
-        chunking: resolved.chunking,
-        auxiliaryMaxRetries: resolved.auxiliaryMaxRetries,
-        verifyFindings: resolved.verifyFindings,
-        triggerName: resolved.name,
-        historicalEvidence: memoryRecall?.historicalEvidence,
-        pathToClaudeCodeExecutable: runtimeEnv.pathToClaudeCodeExecutable,
-        callbacks: {
-          onFindingProcessing: (event) => findingProcessingEvents.push(event),
-        },
-      });
+      const triggerAbortController = new AbortController();
+      const cancellationSignal = cancellation.signal;
+      const abortTriggerAnalysis = (): void => {
+        triggerAbortController.abort(cancellationSignal.reason);
+      };
+      if (cancellationSignal.aborted) {
+        abortTriggerAnalysis();
+      } else {
+        cancellationSignal.addEventListener('abort', abortTriggerAnalysis, { once: true });
+      }
+
+      let report: SkillReport;
+      try {
+        report = await runSkill(skill, context, {
+          apiKey: inputs.anthropicApiKey,
+          model: resolved.model,
+          runtime: resolved.runtime,
+          effort: resolved.effort,
+          auxiliaryModel: resolved.auxiliaryModel,
+          auxiliaryEffort: resolved.auxiliaryEffort,
+          synthesisModel: resolved.synthesisModel,
+          maxTurns: resolved.maxTurns,
+          concurrency: runnerConcurrency ?? inputs.parallel,
+          batchDelayMs: resolved.batchDelayMs,
+          maxContextFiles: resolved.maxContextFiles,
+          ignore: resolved.ignore,
+          scan: resolved.scan,
+          chunking: resolved.chunking,
+          auxiliaryMaxRetries: resolved.auxiliaryMaxRetries,
+          verifyFindings: resolved.verifyFindings,
+          triggerName: resolved.name,
+          historicalEvidence: memoryRecall?.historicalEvidence,
+          pathToClaudeCodeExecutable: runtimeEnv.pathToClaudeCodeExecutable,
+          abortController: triggerAbortController,
+          callbacks: {
+            onFindingProcessing: (event) => findingProcessingEvents.push(event),
+          },
+        });
+      } finally {
+        cancellationSignal.removeEventListener('abort', abortTriggerAnalysis);
+      }
       console.log(`Found ${report.findings.length} findings`);
 
       allReports.push(report);
@@ -341,6 +375,18 @@ async function runScheduleWorkflowInner(
       };
       skillExecutions.push(executionMeta);
       executionRecorded = true;
+
+      if (cancellation.requested) {
+        skippedTriggers.push(...scheduleTriggers.slice(triggerIndex + 1).map((trigger) => ({
+          skillName: trigger.skill,
+          triggerId: trigger.id,
+          triggerName: trigger.name,
+          reason: 'pending' as const,
+        })));
+        logGroupEnd();
+        writeLiveSnapshot(triggerIndex);
+        break;
+      }
 
       // Create/update issue with findings
       const scheduleConfig: Partial<ScheduleConfig> = resolved.schedule ?? {};
@@ -373,6 +419,19 @@ async function runScheduleWorkflowInner(
       writeLiveSnapshot(triggerIndex);
     } catch (error) {
       if (error instanceof ActionFailedError) throw error;
+      if (cancellation.requested) {
+        skippedTriggers.push(...scheduleTriggers.slice(
+          executionRecorded ? triggerIndex + 1 : triggerIndex,
+        ).map((trigger) => ({
+          skillName: trigger.skill,
+          triggerId: trigger.id,
+          triggerName: trigger.name,
+          reason: 'pending' as const,
+        })));
+        logGroupEnd();
+        writeLiveSnapshot(triggerIndex);
+        break;
+      }
       captureActionTriggerError(error, {
         triggerName: resolved.name,
         skillName: resolved.skill,
@@ -402,6 +461,7 @@ async function runScheduleWorkflowInner(
   // must land even when every trigger failed, or a terminated run is left
   // looking permanently in-progress to a follower of the live snapshots.
   const findingsOptions = {
+    ...(cancellation.requested ? { outcome: 'cancelled' as const } : {}),
     ...buildBaseOutputOptions(inputs, skippedTriggers),
     skillExecutions,
     recalledMemories: memoryRecall?.memories.map(({ id, version }) => ({ id, version })),
@@ -418,6 +478,11 @@ async function runScheduleWorkflowInner(
     service,
     () => buildFindingsOutput(allReports, scheduleContext, [], findingsOptions),
   );
+
+  if (cancellation.requested) {
+    console.log(`\nScheduled analysis cancelled: preserved ${totalFindings} findings`);
+    return;
+  }
 
   handleTriggerErrors(triggerErrors, scheduleTriggers.length);
 

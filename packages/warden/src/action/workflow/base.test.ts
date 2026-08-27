@@ -103,6 +103,22 @@ describe('findings output', () => {
     expect(payload.findingObservations).toHaveLength(1);
   });
 
+  it('writes a completed cancelled findings artifact', () => {
+    process.env['GITHUB_WORKSPACE'] = tempDir;
+
+    const filePath = writeFindingsOutput(
+      [createReport()],
+      createContext(tempDir),
+      [],
+      { outcome: 'cancelled' },
+    );
+
+    const payload = FindingsOutputSchema.parse(JSON.parse(readFileSync(filePath, 'utf-8')));
+    expect(payload.outcome).toBe('cancelled');
+    expect(payload.summary.totalFindings).toBe(1);
+    expect(existsSync(`${filePath}.done`)).toBe(true);
+  });
+
   it('falls back to RUNNER_TEMP when no repo path is provided', () => {
     const runnerTemp = join(tempDir, 'runner-temp');
     mkdirSync(runnerTemp);
