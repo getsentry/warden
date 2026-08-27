@@ -147,6 +147,8 @@ export const TriggerRunResultSchema = z.discriminatedUnion('status', [
 export const FindingsOutputSchema = z.object({
   version: z.literal('1'),
   timestamp: z.string().datetime(),
+  /** Final run disposition. Optional while older analyze artifacts remain replayable. */
+  outcome: z.enum(['success', 'failure', 'cancelled', 'skipped']).optional(),
   runAttempt: z.string().optional(),
   /** Which build of Warden produced this run. */
   harness: HarnessSchema.optional(),
@@ -269,6 +271,7 @@ export interface BuildFindingsOutputOptions {
   timestamp?: string;
   runId?: string;
   runAttempt?: string;
+  outcome?: NonNullable<FindingsOutput['outcome']>;
   actionRef?: string;
   triggerResults?: ReplayTriggerResult[];
   resolvedDefaults?: z.infer<typeof ResolvedDefaultsSchema>;
@@ -448,6 +451,7 @@ export function buildFindingsOutput(
   const output = {
     version: '1',
     timestamp: options.timestamp ?? new Date().toISOString(),
+    ...(options.outcome && { outcome: options.outcome }),
     runAttempt: options.runAttempt ?? process.env['GITHUB_RUN_ATTEMPT'],
     harness: { name: 'warden' as const, version: getVersion(), actionRef: options.actionRef },
     repository: {

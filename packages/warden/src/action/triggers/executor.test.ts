@@ -96,6 +96,12 @@ describe('executeTrigger', () => {
             ...checkOptions,
             ...options,
           }),
+        cancel: (report: SkillReport) =>
+          updateSkillCheck(mockOctokit, check.checkRunId, report, {
+            ...checkOptions,
+            conclusion: 'cancelled',
+            title: 'Analysis cancelled',
+          }),
         fail: (error: unknown) =>
           failSkillCheck(mockOctokit, check.checkRunId, error, checkOptions),
       };
@@ -318,6 +324,26 @@ describe('executeTrigger', () => {
     expect(result.triggerName).toBe('test-trigger');
     expect(result.report).toBe(mockReport);
     expect(result.error).toBeUndefined();
+  });
+
+  it('cancels the skill check when Action cancellation was requested', async () => {
+    const mockReport = createReport();
+    const cancellation = new AbortController();
+    cancellation.abort();
+    vi.mocked(runSkillTask).mockResolvedValue({ name: 'test-trigger', report: mockReport });
+    vi.mocked(createSkillCheck).mockResolvedValue({ checkRunId: 123, url: 'https://github.com/check/123' });
+    vi.mocked(updateSkillCheck).mockResolvedValue(undefined);
+
+    await executeTrigger(mockTrigger, {
+      ...mockDeps,
+      cancellationSignal: cancellation.signal,
+    });
+
+    expect(updateSkillCheck).toHaveBeenCalledWith(mockOctokit, 123, mockReport, {
+      ...checkOptions,
+      conclusion: 'cancelled',
+      title: 'Analysis cancelled',
+    });
   });
 
   it('handles skill resolution failure', async () => {

@@ -132,6 +132,7 @@ import { runPRWorkflow } from './pr-workflow.js';
 import { clearSkillsCache } from '../../skills/loader.js';
 import { AsyncWorkQueue } from '../../utils/index.js';
 import { buildFindingsOutput } from '../../reporting/output.js';
+import { ActionCancellation } from '../cancellation.js';
 
 // Type the mocks
 const mockRunSkillTask = vi.mocked(runSkillTask);
@@ -362,6 +363,30 @@ describe('runPRWorkflow', () => {
   });
 
   describe('split action modes', () => {
+    it('does not publish when analyze mode is cancelled before execution', async () => {
+      const cancellation = new ActionCancellation();
+      cancellation.request('SIGINT');
+      const fetchSpy = vi.spyOn(globalThis, 'fetch');
+
+      await runPRWorkflow(
+        mockOctokit,
+        createDefaultInputs({
+          mode: 'analyze',
+          serviceUrl: 'https://warden.example.com',
+          serviceToken: 'service-token',
+          serviceData: 'metrics',
+          serviceMemory: false,
+        }),
+        'pull_request',
+        EVENT_PAYLOAD_PATH,
+        FIXTURES_DIR,
+        cancellation,
+      );
+
+      expect(fetchSpy).not.toHaveBeenCalled();
+      expect(mockWriteFindingsOutput.mock.calls.at(-1)?.[3]?.outcome).toBe('cancelled');
+    });
+
     it('analyze mode writes findings without creating GitHub checks or reviews', async () => {
       const finding = createFinding();
       const report = createSkillReport({ findings: [finding] });
@@ -492,6 +517,33 @@ describe('runPRWorkflow', () => {
         expect.objectContaining({ skillExecutionId: expect.any(String), triggerName: 'test-skill' }),
       ]);
       expect(finalOptions?.resolvedDefaults).toBeDefined();
+    });
+
+    it('does not post checks or reviews from a cancelled analyze artifact', async () => {
+      const report = createSkillReport({ findings: [createFinding()] });
+      const findingsFile = writeFindingsArtifact(
+        [report],
+        [{ triggerName: 'test-skill', skillName: 'test-skill', report }],
+        (output) => {
+          output.outcome = 'cancelled';
+        },
+      );
+
+      try {
+        await runPRWorkflow(
+          mockOctokit,
+          createDefaultInputs({ mode: 'report', findingsFile }),
+          'pull_request',
+          EVENT_PAYLOAD_PATH,
+          FIXTURES_DIR,
+        );
+      } finally {
+        rmSync(dirname(findingsFile), { recursive: true, force: true });
+      }
+
+      expect(mockWriteFindingsOutput.mock.calls.at(-1)?.[3]?.outcome).toBe('cancelled');
+      expect(mockOctokit.checks.create).not.toHaveBeenCalled();
+      expect(mockOctokit.pulls.createReview).not.toHaveBeenCalled();
     });
 
     it('preserves the canonical analyze artifact when report mode starts', async () => {
@@ -1690,6 +1742,52 @@ describe('runPRWorkflow', () => {
       expect(finalOptions?.skillExecutions).toEqual([
         expect.objectContaining({ skillExecutionId: expect.any(String), triggerName: 'test-skill' }),
       ]);
+    });
+
+    it('flushes completed findings and finalizes as cancelled before posting reviews', async () => {
+      const cancellation = new ActionCancellation();
+      const finding = createFinding();
+      let notifyStarted!: () => void;
+      const started = new Promise<void>((resolve) => {
+        notifyStarted = resolve;
+      });
+      mockRunSkillTask.mockImplementation(async (taskOptions) => {
+        notifyStarted();
+        await new Promise<void>((resolve) => {
+          taskOptions.runnerOptions?.abortController?.signal.addEventListener('abort', () => resolve(), {
+            once: true,
+          });
+        });
+        return {
+          name: taskOptions.name,
+          report: createSkillReport({ skill: 'test-skill', findings: [finding] }),
+        };
+      });
+
+      const workflow = runPRWorkflow(
+        mockOctokit,
+        createDefaultInputs(),
+        'pull_request',
+        EVENT_PAYLOAD_PATH,
+        FIXTURES_DIR,
+        cancellation,
+      );
+      await started;
+      cancellation.request('SIGTERM');
+      await workflow;
+
+      const finalCall = mockWriteFindingsOutput.mock.calls.at(-1);
+      expect(finalCall?.[0]).toEqual([
+        expect.objectContaining({ findings: [finding] }),
+      ]);
+      expect(finalCall?.[3]?.outcome).toBe('cancelled');
+      expect(mockFetchExistingComments).not.toHaveBeenCalled();
+      expect(vi.mocked(mockOctokit.checks.update).mock.calls).toEqual(
+        expect.arrayContaining([
+          [expect.objectContaining({ conclusion: 'cancelled' })],
+          [expect.objectContaining({ conclusion: 'cancelled' })],
+        ]),
+      );
     });
 
     it('clears stale findings before the first trigger settles, not lazily on the first live write', async () => {
