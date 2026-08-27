@@ -148,6 +148,7 @@ async function runStructured<T>(
     tools?: AuxiliaryTool[];
     executeTool?: (name: string, input: Record<string, unknown>) => Promise<string>;
     maxIterations?: number;
+    abortController?: AbortController;
   }
 ): Promise<AuxiliaryRunResult<T>> {
   if (!request.apiKey) {
@@ -181,6 +182,7 @@ async function runStructured<T>(
     maxTokens: request.maxTokens,
     timeout: request.timeout,
     maxRetries: request.maxRetries,
+    abortController: request.abortController,
   });
 }
 
