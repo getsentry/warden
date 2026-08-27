@@ -49,7 +49,7 @@
     "@types/ws": "^8.18.1",
     "drizzle-kit": "^0.31.9",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.7"
+    "vitest": "^4.1.11"
   },
   "engines": {
     "node": ">=20.0.0"

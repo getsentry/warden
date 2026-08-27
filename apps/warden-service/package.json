@@ -12,7 +12,7 @@
   "dependencies": {
     "@ai-sdk/gateway": "^3.0.173",
     "@hono/node-server": "^1.19.17",
-    "@sentry/node": "^10.53.1",
+    "@sentry/node": "^10.71.0",
     "@sentry/warden-service": "workspace:*",
     "@vercel/oidc": "^3.4.1",
     "ai": "^6.0.255",
@@ -22,8 +22,8 @@
   "devDependencies": {
     "@types/node": "^25.9.1",
     "typescript": "^6.0.3",
-    "vercel": "^54.4.0",
-    "vitest": "^4.1.7"
+    "vercel": "^59.7.0",
+    "vitest": "^4.1.11"
   },
   "engines": {
     "node": ">=20.0.0"
