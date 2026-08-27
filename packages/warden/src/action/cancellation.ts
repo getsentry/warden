@@ -49,6 +49,9 @@ export function createActionSignalHandler(
     lastSignalAt = receivedAt;
     if (!options.cancellation.request(signalName)) {
       exit(signalName === 'SIGTERM' ? 143 : 130);
+      return;
     }
+
+    console.warn(`Cancellation requested by ${signalName}; finalizing partial results`);
   };
 }
