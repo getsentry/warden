@@ -40,12 +40,12 @@ Copy these instructions into your local coding agent to install and configure Wa
 
 <CopyPrompt content={setupPrompt} title="Set up Warden in this project" />
 
-## Install
+## Run Warden
 
-Install the CLI globally:
+Run the CLI without installing it globally:
 
 ```bash
-pnpm add -g @sentry/warden
+npx @sentry/warden
 ```
 
 ## Authenticate
@@ -72,10 +72,10 @@ defaults, per-skill overrides, and Claude runtime selection.
 Initialize Warden in a repository:
 
 ```bash
-warden init
+npx @sentry/warden init
 ```
 
-`warden init` creates:
+`npx @sentry/warden init` creates:
 
 | File | Purpose |
 | --- | --- |
@@ -85,7 +85,7 @@ warden init
 ## Run Locally
 
 ```bash
-warden
+npx @sentry/warden
 ```
 
 With no arguments, Warden reviews the current branch against the default branch.
