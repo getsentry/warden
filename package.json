@@ -48,25 +48,30 @@
     "@types/node": "^25.9.1",
     "@types/react": "^19.2.15",
     "@vercel/ncc": "^0.38.4",
-    "@vitest/coverage-v8": "^4.1.7",
+    "@vitest/coverage-v8": "^4.1.11",
     "ink-testing-library": "^4.0.0",
     "lint-staged": "^17.0.5",
     "oxlint": "^1.66.0",
     "simple-git-hooks": "^2.13.1",
-    "tsx": "^4.22.3",
+    "tsx": "^4.23.12",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.7"
+    "vitest": "^4.1.11"
   },
   "engines": {
     "node": ">=20.0.0"
   },
   "pnpm": {
     "overrides": {
+      "@esbuild-kit/core-utils>esbuild": "0.25.12",
+      "@vercel/fun>@tootallnate/once": "2.0.1",
       "@vercel/fun>tar": "7.5.22",
+      "@vercel/python-analysis>js-yaml": "4.3.1",
       "@vercel/python-analysis>minimatch": "10.2.5",
+      "@vercel/static-config>ajv": "8.18.0",
       "path-to-regexp@6.1.0": "6.3.0",
       "path-to-regexp@8.2.0": "8.4.2",
       "path-to-regexp@8.3.0": "8.4.2",
+      "smol-toml@<1.6.1": "1.8.0",
       "undici@5.28.4": "6.28.0",
       "undici@5.29.0": "6.28.0"
     }
