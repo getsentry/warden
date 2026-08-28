@@ -21,12 +21,16 @@ const piMocks = vi.hoisted(() => {
     id: string;
     provider: string;
     model: string;
+    contextWindow?: number;
+    maxTokens?: number;
     baseUrl?: string;
     headers?: Record<string, string>;
   } = {
     id: 'gpt-test',
     provider: 'openai',
     model: 'gpt-test',
+    contextWindow: 200_000,
+    maxTokens: 16_000,
   };
   const modelRuntime = {
     setRuntimeApiKey: vi.fn(),
