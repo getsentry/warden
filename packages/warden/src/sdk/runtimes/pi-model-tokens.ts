@@ -24,10 +24,10 @@
  */
 export const PI_INPUT_HEADROOM_TOKENS = 96_000;
 
-export type PiTokenBudgetModel = {
+export interface PiTokenBudgetModel {
   contextWindow?: number;
   maxTokens?: number;
-};
+}
 
 /**
  * Return a copy of `model` with maxTokens capped for provider headroom.
