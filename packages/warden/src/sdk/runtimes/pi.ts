@@ -53,6 +53,7 @@ import { aggregateUsage, emptyUsage } from '../usage.js';
 import { InvalidPiModelSelectorError, isPiModelSelector } from './model-selectors.js';
 import { isWardenOffline } from '../offline.js';
 import { createCheckoutFileTools } from './pi-file-tools.js';
+import { clampPiCatalogMaxTokens } from './pi-model-tokens.js';
 import type {
   AuxiliaryRunRequest,
   AuxiliaryRunResult,
@@ -375,16 +376,20 @@ function resolvePiModel(
     );
   }
 
+  // Remote catalogs can advertise maxTokens ≈ context (Grok 450k/500k). Cap before
+  // Pi's soft estimate clamp so request-time input+max_tokens stays in-window.
+  const budgeted = clampPiCatalogMaxTokens(resolved);
+
   const baseUrl = providerBaseUrlOverride(provider);
   const headers = providerHeadersOverride(provider);
   if (!baseUrl && !headers) {
-    return resolved;
+    return budgeted;
   }
 
   return {
-    ...resolved,
+    ...budgeted,
     ...(baseUrl ? { baseUrl } : {}),
-    ...(headers ? { headers: { ...resolved.headers, ...headers } } : {}),
+    ...(headers ? { headers: { ...budgeted.headers, ...headers } } : {}),
   };
 }
 

@@ -23,6 +23,8 @@ const piMocks = vi.hoisted(() => {
     model: string;
     baseUrl?: string;
     headers?: Record<string, string>;
+    contextWindow?: number;
+    maxTokens?: number;
   } = {
     id: 'gpt-test',
     provider: 'openai',
@@ -188,6 +190,33 @@ describe('piRuntime.runSkill', () => {
 
     expect(createAgentSession).toHaveBeenCalledWith(
       expect.objectContaining({ model: piMocks.model })
+    );
+  });
+
+  it('clamps remote catalog maxTokens that exhaust context headroom', async () => {
+    piMocks.modelRuntime.getModel.mockReturnValue({
+      ...piMocks.model,
+      id: 'x-ai/grok-4.5',
+      contextWindow: 500_000,
+      maxTokens: 450_000,
+    });
+
+    await piRuntime.runSkill({
+      ...baseSkillRequest(),
+      options: {
+        ...baseSkillRequest().options,
+        model: 'openrouter/x-ai/grok-4.5',
+      },
+    });
+
+    expect(createAgentSession).toHaveBeenCalledWith(
+      expect.objectContaining({
+        model: expect.objectContaining({
+          id: 'x-ai/grok-4.5',
+          contextWindow: 500_000,
+          maxTokens: 128_000,
+        }),
+      })
     );
   });
 
