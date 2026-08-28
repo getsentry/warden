@@ -108,9 +108,37 @@ function truncateTextByBytes(text: string, maxBytes: number): string {
   return bestFit;
 }
 
+function truncatedGenAiPlaceholderJson(reason: 'truncated' | 'unserializable' = 'truncated'): string {
+  const content = reason === 'unserializable'
+    ? '[unserializable gen_ai payload]'
+    : '[truncated gen_ai payload]';
+  return JSON.stringify([{
+    role: 'user',
+    parts: [{ type: 'text', content }],
+  }]);
+}
+
+function withBudgetedResult(
+  json: string,
+  originalMessageCount: number,
+  truncated: boolean,
+  maxBytes: number,
+): { json: string; originalMessageCount: number; truncated: boolean } {
+  if (utf8ByteLength(json) <= maxBytes) {
+    return { json, originalMessageCount, truncated };
+  }
+  return {
+    json: truncatedGenAiPlaceholderJson(),
+    originalMessageCount,
+    truncated: true,
+  };
+}
+
 /**
  * Serialize GenAI payload JSON and keep it under Sentry's GenAI attribute budget.
  * Prefers whole trailing messages; falls back to truncating the last message body.
+ * Multi-part envelopes (text + tool_call) drop trailing parts before truncating text
+ * so large tool arguments cannot push the attribute back over budget.
  */
 export function serializeGenAiMessagesJson(
   messages: unknown[],
@@ -134,46 +162,54 @@ export function serializeGenAiMessagesJson(
         const only = slice[0];
         if (only && typeof only === 'object') {
           const record = only as Record<string, unknown>;
-          const parts = Array.isArray(record['parts']) ? record['parts'] : undefined;
+          const parts = Array.isArray(record['parts']) ? [...record['parts']] : undefined;
           if (parts && parts.length > 0) {
             const first = parts[0];
             if (first && typeof first === 'object' && typeof (first as Record<string, unknown>)['content'] === 'string') {
-              // Budget against the final array payload (`[...]`), not the bare message.
-              const emptyPayload = [{
-                ...record,
-                parts: parts.map((part, index) => {
-                  if (index !== 0 || !part || typeof part !== 'object') {
-                    return part;
-                  }
-                  return { ...(part as Record<string, unknown>), content: '' };
-                }),
-              }];
-              const overhead = utf8ByteLength(JSON.stringify(emptyPayload));
-              const budget = Math.max(0, maxBytes - overhead);
-              const truncatedContent = truncateTextByBytes(
-                (first as Record<string, unknown>)['content'] as string,
-                budget,
-              );
-              const truncatedMessage = {
-                ...record,
-                parts: [
-                  { ...(first as Record<string, unknown>), content: truncatedContent },
-                  ...parts.slice(1),
-                ],
-              };
-              return {
-                json: JSON.stringify([truncatedMessage]),
-                originalMessageCount,
-                truncated: true,
-              };
+              // Drop trailing parts until the empty envelope fits. Otherwise a large
+              // tool_call after a short text part keeps the payload over budget forever.
+              let keptParts = parts;
+              while (keptParts.length > 0) {
+                const emptyPayload = [{
+                  ...record,
+                  parts: keptParts.map((part, index) => {
+                    if (index !== 0 || !part || typeof part !== 'object') {
+                      return part;
+                    }
+                    return { ...(part as Record<string, unknown>), content: '' };
+                  }),
+                }];
+                const overhead = utf8ByteLength(JSON.stringify(emptyPayload));
+                if (overhead <= maxBytes) {
+                  const budget = Math.max(0, maxBytes - overhead);
+                  const truncatedContent = truncateTextByBytes(
+                    (first as Record<string, unknown>)['content'] as string,
+                    budget,
+                  );
+                  const truncatedMessage = {
+                    ...record,
+                    parts: [
+                      { ...(first as Record<string, unknown>), content: truncatedContent },
+                      ...keptParts.slice(1),
+                    ],
+                  };
+                  return withBudgetedResult(
+                    JSON.stringify([truncatedMessage]),
+                    originalMessageCount,
+                    true,
+                    maxBytes,
+                  );
+                }
+                if (keptParts.length === 1) {
+                  break;
+                }
+                keptParts = keptParts.slice(0, -1);
+              }
             }
           }
         }
         return {
-          json: JSON.stringify([{
-            role: 'user',
-            parts: [{ type: 'text', content: '[truncated gen_ai payload]' }],
-          }]),
+          json: truncatedGenAiPlaceholderJson(),
           originalMessageCount,
           truncated: true,
         };
@@ -181,19 +217,13 @@ export function serializeGenAiMessagesJson(
     }
 
     return {
-      json: JSON.stringify([{
-        role: 'user',
-        parts: [{ type: 'text', content: '[truncated gen_ai payload]' }],
-      }]),
+      json: truncatedGenAiPlaceholderJson(),
       originalMessageCount,
       truncated: true,
     };
   } catch {
     return {
-      json: JSON.stringify([{
-        role: 'user',
-        parts: [{ type: 'text', content: '[unserializable gen_ai payload]' }],
-      }]),
+      json: truncatedGenAiPlaceholderJson('unserializable'),
       originalMessageCount,
       truncated: true,
     };

@@ -94,6 +94,25 @@ describe('OpenTelemetry GenAI message serialization', () => {
     expect(new TextEncoder().encode(serialized.json).length).toBeLessThanOrEqual(GEN_AI_MESSAGES_BYTE_LIMIT);
   });
 
+  it('stays under budget when trailing multi-part tool payloads alone exceed the limit', () => {
+    const hugeToolArgs = { body: 't'.repeat(GEN_AI_MESSAGES_BYTE_LIMIT + 1_000) };
+    const serialized = serializeGenAiMessagesJson([
+      {
+        role: 'assistant',
+        parts: [
+          { type: 'text', content: 'calling tool' },
+          { type: 'tool_call', id: 'tool-1', name: 'read', arguments: hugeToolArgs },
+        ],
+      },
+    ]);
+
+    expect(serialized.truncated).toBe(true);
+    expect(serialized.originalMessageCount).toBe(1);
+    expect(new TextEncoder().encode(serialized.json).length).toBeLessThanOrEqual(GEN_AI_MESSAGES_BYTE_LIMIT);
+    // Trailing tool_call must be dropped; only the text part (or placeholder) remains.
+    expect(serialized.json).not.toContain('tool-1');
+  });
+
   it('records truncation metadata on input and system instruction attrs', () => {
     const attrs = new Map<string, string | number | boolean | string[]>();
     const span = {
