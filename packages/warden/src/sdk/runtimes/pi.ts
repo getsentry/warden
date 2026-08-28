@@ -51,6 +51,7 @@ import {
 } from '../otel.js';
 import { aggregateUsage, emptyUsage } from '../usage.js';
 import { InvalidPiModelSelectorError, isPiModelSelector } from './model-selectors.js';
+import { clampPiCatalogMaxTokens } from './pi-model-tokens.js';
 import { isWardenOffline } from '../offline.js';
 import { createCheckoutFileTools } from './pi-file-tools.js';
 import type {
@@ -375,16 +376,19 @@ function resolvePiModel(
     );
   }
 
+  // Remote catalogs can advertise maxTokens ≈ contextWindow. Cap before session
+  // setup so provider request accounting keeps headroom for the prompt.
+  const bounded = clampPiCatalogMaxTokens(resolved);
   const baseUrl = providerBaseUrlOverride(provider);
   const headers = providerHeadersOverride(provider);
   if (!baseUrl && !headers) {
-    return resolved;
+    return bounded;
   }
 
   return {
-    ...resolved,
+    ...bounded,
     ...(baseUrl ? { baseUrl } : {}),
-    ...(headers ? { headers: { ...resolved.headers, ...headers } } : {}),
+    ...(headers ? { headers: { ...bounded.headers, ...headers } } : {}),
   };
 }
 
@@ -571,6 +575,20 @@ async function runPiPrompt(options: PiPromptOptions): Promise<PiPromptResult> {
     options.abortController?.signal,
   );
   const model = resolvePiModel(options.model, modelRuntime);
+  // Record catalog budget on the parent invoke span before the provider call so
+  // request-time context overflows still show max_tokens / context_window.
+  try {
+    if (options.parentSpan && model) {
+      if (model.maxTokens !== undefined) {
+        options.parentSpan.setAttribute('gen_ai.request.max_tokens', model.maxTokens);
+      }
+      if (model.contextWindow !== undefined) {
+        options.parentSpan.setAttribute('gen_ai.request.context_window', model.contextWindow);
+      }
+    }
+  } catch {
+    // Telemetry should never break the workflow.
+  }
   const settingsManager = buildSettingsManager(options.timeout, options.maxRetries);
   const agentDir = getAgentDir();
   const resourceLoader = new DefaultResourceLoader({

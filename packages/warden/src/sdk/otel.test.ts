@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { genAiProviderName, genAiToolCallAttributes, genAiUsageAttributes } from './otel.js';
+import {
+  GEN_AI_MESSAGES_BYTE_LIMIT,
+  genAiProviderName,
+  genAiToolCallAttributes,
+  genAiUsageAttributes,
+  serializeGenAiMessagesJson,
+  setGenAiInputMessagesAttr,
+  setGenAiSystemInstructionsAttr,
+} from './otel.js';
 
 describe('OpenTelemetry GenAI provider attribution', () => {
   it('uses provider ids from model selectors', () => {
@@ -46,5 +54,66 @@ describe('OpenTelemetry GenAI tool call attributes', () => {
       'gen_ai.tool.call.arguments': '{"path":"src/index.ts"}',
       'gen_ai.tool.call.result': '{"ok":true}',
     });
+  });
+
+  it('truncates oversized tool payloads instead of shipping unbounded JSON', () => {
+    const huge = 'x'.repeat(GEN_AI_MESSAGES_BYTE_LIMIT + 5_000);
+    const attrs = genAiToolCallAttributes({
+      toolName: 'Read',
+      arguments: { body: huge },
+      result: { body: huge },
+    });
+
+    expect(new TextEncoder().encode(String(attrs['gen_ai.tool.call.arguments'])).length)
+      .toBeLessThanOrEqual(GEN_AI_MESSAGES_BYTE_LIMIT);
+    expect(new TextEncoder().encode(String(attrs['gen_ai.tool.call.result'])).length)
+      .toBeLessThanOrEqual(GEN_AI_MESSAGES_BYTE_LIMIT);
+  });
+});
+
+describe('OpenTelemetry GenAI message serialization', () => {
+  it('preserves small payloads untouched', () => {
+    const serialized = serializeGenAiMessagesJson([
+      { role: 'user', parts: [{ type: 'text', content: 'hello' }] },
+    ]);
+
+    expect(serialized.truncated).toBe(false);
+    expect(serialized.originalMessageCount).toBe(1);
+    expect(serialized.json).toContain('hello');
+  });
+
+  it('truncates oversized message JSON under the Sentry GenAI byte budget', () => {
+    const huge = 'y'.repeat(GEN_AI_MESSAGES_BYTE_LIMIT);
+    const serialized = serializeGenAiMessagesJson([
+      { role: 'user', parts: [{ type: 'text', content: huge }] },
+      { role: 'assistant', parts: [{ type: 'text', content: huge }] },
+    ]);
+
+    expect(serialized.truncated).toBe(true);
+    expect(serialized.originalMessageCount).toBe(2);
+    expect(new TextEncoder().encode(serialized.json).length).toBeLessThanOrEqual(GEN_AI_MESSAGES_BYTE_LIMIT);
+  });
+
+  it('records truncation metadata on input and system instruction attrs', () => {
+    const attrs = new Map<string, string | number | boolean | string[]>();
+    const span = {
+      setAttribute(key: string, value: string | number | boolean | string[] | undefined) {
+        if (value !== undefined) {
+          attrs.set(key, value);
+        }
+      },
+    };
+    const huge = 'z'.repeat(GEN_AI_MESSAGES_BYTE_LIMIT);
+
+    setGenAiInputMessagesAttr(span, [{ role: 'user', content: huge }]);
+    setGenAiSystemInstructionsAttr(span, huge);
+
+    expect(attrs.get('sentry.sdk_meta.gen_ai.input.messages.truncated')).toBe(true);
+    expect(attrs.get('sentry.sdk_meta.gen_ai.input.messages.original_length')).toBe(1);
+    expect(attrs.get('sentry.sdk_meta.gen_ai.system_instructions.truncated')).toBe(true);
+    expect(new TextEncoder().encode(String(attrs.get('gen_ai.input.messages'))).length)
+      .toBeLessThanOrEqual(GEN_AI_MESSAGES_BYTE_LIMIT);
+    expect(new TextEncoder().encode(String(attrs.get('gen_ai.system_instructions'))).length)
+      .toBeLessThanOrEqual(GEN_AI_MESSAGES_BYTE_LIMIT);
   });
 });

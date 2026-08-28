@@ -26,6 +26,13 @@ export interface GenAiMessage {
 type GenAiUsageAttributes = Record<string, number>;
 type GenAiToolAttributeValue = string | number | boolean | string[] | undefined;
 
+/**
+ * Match Sentry SDK GenAI message truncation (`DEFAULT_GEN_AI_MESSAGES_BYTE_LIMIT`).
+ * Unbounded prompt JSON on pi/claude spans can bloat the transaction enough that
+ * analyze-mode traces lose every child span while errors/logs still land.
+ */
+export const GEN_AI_MESSAGES_BYTE_LIMIT = 20_000;
+
 const PROVIDER_NAME_ALIASES: Record<string, string> = {
   mistral: 'mistral_ai',
   xai: 'x_ai',
@@ -73,16 +80,145 @@ export function genAiUsageAttributes(usage: UsageStats): GenAiUsageAttributes {
   };
 }
 
-function stringifyGenAiAttribute(value: unknown): string | undefined {
+function utf8ByteLength(text: string): number {
+  return new TextEncoder().encode(text).length;
+}
+
+function truncateTextByBytes(text: string, maxBytes: number): string {
+  if (maxBytes <= 0) {
+    return '';
+  }
+  if (utf8ByteLength(text) <= maxBytes) {
+    return text;
+  }
+
+  let low = 0;
+  let high = text.length;
+  let bestFit = '';
+  while (low <= high) {
+    const mid = Math.floor((low + high) / 2);
+    const candidate = text.slice(0, mid);
+    if (utf8ByteLength(candidate) <= maxBytes) {
+      bestFit = candidate;
+      low = mid + 1;
+    } else {
+      high = mid - 1;
+    }
+  }
+  return bestFit;
+}
+
+/**
+ * Serialize GenAI payload JSON and keep it under Sentry's GenAI attribute budget.
+ * Prefers whole trailing messages; falls back to truncating the last message body.
+ */
+export function serializeGenAiMessagesJson(
+  messages: unknown[],
+  maxBytes = GEN_AI_MESSAGES_BYTE_LIMIT,
+): { json: string; originalMessageCount: number; truncated: boolean } {
+  const originalMessageCount = messages.length;
+  try {
+    const full = JSON.stringify(messages);
+    if (utf8ByteLength(full) <= maxBytes) {
+      return { json: full, originalMessageCount, truncated: false };
+    }
+
+    // Keep the newest messages first so multi-turn tool loops stay useful.
+    for (let start = Math.max(0, messages.length - 1); start >= 0; start -= 1) {
+      const slice = messages.slice(start);
+      const candidate = JSON.stringify(slice);
+      if (utf8ByteLength(candidate) <= maxBytes) {
+        return { json: candidate, originalMessageCount, truncated: true };
+      }
+      if (slice.length === 1) {
+        const only = slice[0];
+        if (only && typeof only === 'object') {
+          const record = only as Record<string, unknown>;
+          const parts = Array.isArray(record['parts']) ? record['parts'] : undefined;
+          if (parts && parts.length > 0) {
+            const first = parts[0];
+            if (first && typeof first === 'object' && typeof (first as Record<string, unknown>)['content'] === 'string') {
+              // Budget against the final array payload (`[...]`), not the bare message.
+              const emptyPayload = [{
+                ...record,
+                parts: parts.map((part, index) => {
+                  if (index !== 0 || !part || typeof part !== 'object') {
+                    return part;
+                  }
+                  return { ...(part as Record<string, unknown>), content: '' };
+                }),
+              }];
+              const overhead = utf8ByteLength(JSON.stringify(emptyPayload));
+              const budget = Math.max(0, maxBytes - overhead);
+              const truncatedContent = truncateTextByBytes(
+                (first as Record<string, unknown>)['content'] as string,
+                budget,
+              );
+              const truncatedMessage = {
+                ...record,
+                parts: [
+                  { ...(first as Record<string, unknown>), content: truncatedContent },
+                  ...parts.slice(1),
+                ],
+              };
+              return {
+                json: JSON.stringify([truncatedMessage]),
+                originalMessageCount,
+                truncated: true,
+              };
+            }
+          }
+        }
+        return {
+          json: JSON.stringify([{
+            role: 'user',
+            parts: [{ type: 'text', content: '[truncated gen_ai payload]' }],
+          }]),
+          originalMessageCount,
+          truncated: true,
+        };
+      }
+    }
+
+    return {
+      json: JSON.stringify([{
+        role: 'user',
+        parts: [{ type: 'text', content: '[truncated gen_ai payload]' }],
+      }]),
+      originalMessageCount,
+      truncated: true,
+    };
+  } catch {
+    return {
+      json: JSON.stringify([{
+        role: 'user',
+        parts: [{ type: 'text', content: '[unserializable gen_ai payload]' }],
+      }]),
+      originalMessageCount,
+      truncated: true,
+    };
+  }
+}
+
+function stringifyGenAiAttribute(value: unknown, maxBytes = GEN_AI_MESSAGES_BYTE_LIMIT): string | undefined {
   if (value === undefined) {
     return undefined;
   }
 
   try {
     const json = JSON.stringify(value);
-    return json === undefined ? String(value) : json;
+    if (json === undefined) {
+      return truncateTextByBytes(String(value), maxBytes);
+    }
+    if (utf8ByteLength(json) <= maxBytes) {
+      return json;
+    }
+    if (typeof value === 'string') {
+      return JSON.stringify(truncateTextByBytes(value, Math.max(0, maxBytes - 2)));
+    }
+    return truncateTextByBytes(json, maxBytes);
   } catch {
-    return String(value);
+    return truncateTextByBytes(String(value), maxBytes);
   }
 }
 
@@ -136,9 +272,13 @@ export function setGenAiUsageAttrs(span: SpanLike, usage: UsageStats): void {
 
 /** Set OpenTelemetry GenAI system-instruction attributes for prompt spans. */
 export function setGenAiSystemInstructionsAttr(span: SpanLike, systemPrompt: string): void {
-  span.setAttribute('gen_ai.system_instructions', JSON.stringify([
+  const serialized = serializeGenAiMessagesJson([
     { type: 'text', content: systemPrompt },
-  ]));
+  ]);
+  span.setAttribute('gen_ai.system_instructions', serialized.json);
+  if (serialized.truncated) {
+    span.setAttribute('sentry.sdk_meta.gen_ai.system_instructions.truncated', true);
+  }
 }
 
 function normalizeContentPart(part: unknown): Record<string, unknown> {
@@ -247,12 +387,24 @@ function normalizeMessage(message: GenAiMessage): Record<string, unknown> {
 
 /** Set OTel GenAI input messages from raw runtime transcript messages. */
 export function setGenAiInputMessagesAttr(span: SpanLike, messages: GenAiMessage[]): void {
-  span.setAttribute('gen_ai.input.messages', JSON.stringify(messages.map(normalizeMessage)));
+  const serialized = serializeGenAiMessagesJson(messages.map(normalizeMessage));
+  span.setAttribute('gen_ai.input.messages', serialized.json);
+  span.setAttribute(
+    'sentry.sdk_meta.gen_ai.input.messages.original_length',
+    serialized.originalMessageCount,
+  );
+  if (serialized.truncated) {
+    span.setAttribute('sentry.sdk_meta.gen_ai.input.messages.truncated', true);
+  }
 }
 
 /** Set OTel GenAI output messages from raw runtime response messages. */
 export function setGenAiOutputMessagesAttrFromMessages(span: SpanLike, messages: GenAiMessage[]): void {
-  span.setAttribute('gen_ai.output.messages', JSON.stringify(messages.map(normalizeMessage)));
+  const serialized = serializeGenAiMessagesJson(messages.map(normalizeMessage));
+  span.setAttribute('gen_ai.output.messages', serialized.json);
+  if (serialized.truncated) {
+    span.setAttribute('sentry.sdk_meta.gen_ai.output.messages.truncated', true);
+  }
 }
 
 /** Set OpenTelemetry GenAI output message attributes for text responses. */
@@ -261,11 +413,9 @@ export function setGenAiOutputMessagesAttr(
   responseText: string,
   finishReason?: string | null,
 ): void {
-  span.setAttribute('gen_ai.output.messages', JSON.stringify([
-    {
-      role: 'assistant',
-      parts: [{ type: 'text', content: responseText }],
-      ...(finishReason ? { finish_reason: finishReason } : {}),
-    },
-  ]));
+  setGenAiOutputMessagesAttrFromMessages(span, [{
+    role: 'assistant',
+    content: responseText,
+    finishReason,
+  }]);
 }
