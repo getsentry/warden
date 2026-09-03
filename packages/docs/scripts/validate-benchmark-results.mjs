@@ -85,6 +85,19 @@ for (const filename of readdirSync(resultsDir).filter((file) => file.endsWith(".
     }
   }
 
+  if (result.comparison?.include && !isStableComparison(result)) {
+    for (const field of ["label", "caveat"]) {
+      if (
+        typeof result.comparison[field] !== "string" ||
+        result.comparison[field].trim() === ""
+      ) {
+        errors.push(
+          `${label}: caveated comparison rows require comparison.${field}`,
+        );
+      }
+    }
+  }
+
   if (result.shards?.length && result.summary && !result.supersededBy) {
     const checks = [
       ["chunksTotal", "chunksTotal"],

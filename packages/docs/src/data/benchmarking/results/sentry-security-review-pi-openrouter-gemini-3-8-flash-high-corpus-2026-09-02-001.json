@@ -1,0 +1,461 @@
+{
+  "runId": "sentry-security-review-pi-openrouter-gemini-3-8-flash-high-corpus-2026-09-02-001",
+  "status": "completed-with-two-unresolved-chunks",
+  "stableComparisonEligible": false,
+  "comparison": {
+    "include": true,
+    "label": "154/156 chunks",
+    "caveat": "The two unfinished chunks contain one known entry each, limiting the score's possible increase to 21/86. Recorded cost is a lower bound."
+  },
+  "corpusId": "sentry-vulnerability-corpus",
+  "repository": "getsentry/sentry",
+  "wardenVersion": "0.48.0",
+  "wardenSourceCommit": "cac76087f80e3a99ae1313846b64b7078f25be25",
+  "skill": "security-review",
+  "model": "openrouter/google/gemini-3.8-flash",
+  "runtime": "pi",
+  "piVersion": "0.84.4",
+  "reasoningLevel": "high",
+  "targetMode": "all-corpus-files-by-sha",
+  "shardCount": 6,
+  "runOptions": {
+    "runtime": "pi",
+    "model": "openrouter/google/gemini-3.8-flash",
+    "effort": "high",
+    "auxiliaryModel": "openrouter/openai/gpt-5.6-luna",
+    "auxiliaryEffort": "high",
+    "traces": true,
+    "parallel": 4,
+    "repairParallel": 1,
+    "reportOn": "low",
+    "minConfidence": "low",
+    "maxTurns": 100
+  },
+  "providerRouting": {
+    "only": [
+      "Google"
+    ],
+    "allowFallbacks": false,
+    "requireParameters": true
+  },
+  "findingVerification": {
+    "enabled": true,
+    "source": "benchmark-config",
+    "notes": "The benchmark warden.toml explicitly enables finding verification. One oversized shard did not persist its final verifier usage."
+  },
+  "traceCapture": {
+    "enabled": true,
+    "coverage": "withheld",
+    "tracedShardCount": 6,
+    "tracedChunkCount": 156,
+    "notes": "All 156 final chunk records have local traces. Per-trace metadata and raw JSONL are withheld pending sensitive-data review."
+  },
+  "reportOn": "low",
+  "minConfidence": "low",
+  "summary": {
+    "corpusFindingCount": 86,
+    "targetFileCount": 79,
+    "filesAttempted": 79,
+    "filesAnalyzed": 78,
+    "skippedFileCount": 0,
+    "chunksTotal": 156,
+    "chunksAnalyzed": 154,
+    "chunksFailed": 2,
+    "findingsTotal": 25,
+    "findingsBySeverity": {
+      "low": 1,
+      "medium": 14,
+      "high": 10
+    },
+    "findingsByConfidence": {
+      "low": 0,
+      "medium": 2,
+      "high": 23
+    },
+    "analysisCostUSD": 77.140005525,
+    "auxiliaryCostUSD": 1.02737475,
+    "costUSD": 78.167380275,
+    "costIsLowerBound": true,
+    "inputTokens": 310996804,
+    "outputTokens": 3972753,
+    "cacheReadInputTokens": 248425592,
+    "cacheCreationInputTokens": 2229065,
+    "durationMs": 24587400,
+    "durationIsLowerBound": true
+  },
+  "timing": {
+    "contaminated": true,
+    "notes": "Total wall time includes the baseline and three serial exact-tuple repair passes. The oversized baseline shard did not persist its verifier tail, so duration and cost are lower bounds.",
+    "analysisChunkMs": {
+      "count": 156,
+      "total": 38162069,
+      "max": 1188988,
+      "p50": 214934,
+      "p75": 310832,
+      "p90": 432464,
+      "p95": 545782,
+      "source": "Selected baseline or exact failed-chunk repair record durationMs, including two terminal failed records"
+    }
+  },
+  "reliability": {
+    "firstPassSuccessRate": 0.9167,
+    "finalSuccessRate": 0.9872,
+    "repairPolicy": "Only originally failed file, chunk index, and chunk total tuples replace baseline records. Findings recentered onto originally successful tuples are excluded.",
+    "unresolved": [
+      {
+        "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+        "file": "src/sentry/api/endpoints/organization_pipeline.py",
+        "index": 1,
+        "total": 1,
+        "error": "max_turns",
+        "totalAttempts": 4,
+        "corpusIds": [
+          "sentry-vuln-049"
+        ]
+      },
+      {
+        "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+        "file": "src/sentry/integrations/msteams/webhook.py",
+        "index": 3,
+        "total": 4,
+        "error": "max_turns",
+        "totalAttempts": 4,
+        "corpusIds": [
+          "sentry-vuln-012"
+        ]
+      }
+    ]
+  },
+  "scoring": {
+    "reviewer": "agent-semantic-match-pass",
+    "scoredAt": "2026-09-02",
+    "knownFindingCount": 86,
+    "knownFound": 19,
+    "knownMissed": 67,
+    "knownPartial": 0,
+    "knownFoundRate": 0.2209,
+    "matchedFindingCount": 18,
+    "notKnownFindingCount": 7,
+    "costPerKnownFoundUSD": 4.114072646052631,
+    "notes": "Final emitted findings only. Same-commit semantic matching is required. Same-file adjacent issues and unsupported merged locations do not count."
+  },
+  "scores": [
+    {
+      "findingId": "DHL-47E",
+      "matchedCorpusIds": [
+        "sentry-vuln-007"
+      ],
+      "verdict": "known-found",
+      "notes": "Same cross-tenant release-threshold empty-project scope bug."
+    },
+    {
+      "findingId": "WYM-TUG",
+      "matchedCorpusIds": [
+        "sentry-vuln-003"
+      ],
+      "verdict": "known-found",
+      "notes": "Same InternalEAFeaturesEndpoint admin authorization gap."
+    },
+    {
+      "findingId": "6MV-U8A",
+      "matchedCorpusIds": [],
+      "verdict": "not-known",
+      "notes": "System-options GET secret redaction gap, not the allowlist tuple bug for this commit."
+    },
+    {
+      "findingId": "BNN-FKD",
+      "matchedCorpusIds": [
+        "sentry-vuln-001"
+      ],
+      "verdict": "known-found",
+      "notes": "Same accept-invite token-validation and member-deletion fallthrough."
+    },
+    {
+      "findingId": "LQK-HZ3",
+      "matchedCorpusIds": [
+        "sentry-vuln-056"
+      ],
+      "verdict": "known-found",
+      "notes": "Same OAuth application client-secret exposure to non-owners."
+    },
+    {
+      "findingId": "WQC-XWR",
+      "matchedCorpusIds": [],
+      "verdict": "not-known",
+      "notes": "Timing-unsafe comparisons, not the Statsig timestamp-freshness bug."
+    },
+    {
+      "findingId": "HJ4-4LU",
+      "matchedCorpusIds": [
+        "sentry-vuln-047"
+      ],
+      "verdict": "known-found",
+      "notes": "Same workflow-backed rule cross-project authorization bug."
+    },
+    {
+      "findingId": "RA6-LUV",
+      "matchedCorpusIds": [
+        "sentry-vuln-069",
+        "sentry-vuln-071"
+      ],
+      "verdict": "known-found",
+      "notes": "Same untrusted Atlassian JWT algorithm selection represented by two corpus entries."
+    },
+    {
+      "findingId": "UVM-LTL",
+      "matchedCorpusIds": [
+        "sentry-vuln-073"
+      ],
+      "verdict": "known-found",
+      "notes": "Same UUIDv1 release webhook token weakness."
+    },
+    {
+      "findingId": "ZU6-NK9",
+      "matchedCorpusIds": [
+        "sentry-vuln-058"
+      ],
+      "verdict": "known-found",
+      "notes": "Same detector anomaly-data project-access bypass."
+    },
+    {
+      "findingId": "4W7-RNP",
+      "matchedCorpusIds": [
+        "sentry-vuln-078"
+      ],
+      "verdict": "known-found",
+      "notes": "Same legacy Jira TLS verification disablement."
+    },
+    {
+      "findingId": "4TK-C3H",
+      "matchedCorpusIds": [
+        "sentry-vuln-082"
+      ],
+      "verdict": "known-found",
+      "notes": "Same ECharts feature-flag tooltip HTML injection."
+    },
+    {
+      "findingId": "DZ3-X6F",
+      "matchedCorpusIds": [
+        "sentry-vuln-055"
+      ],
+      "verdict": "known-found",
+      "notes": "Same public organization Seer RPC project-access bypass."
+    },
+    {
+      "findingId": "5UT-RHE",
+      "matchedCorpusIds": [
+        "sentry-vuln-081"
+      ],
+      "verdict": "known-found",
+      "notes": "Same copy-as-cURL method and header-name command injection."
+    },
+    {
+      "findingId": "5ZM-B2S",
+      "matchedCorpusIds": [
+        "sentry-vuln-018"
+      ],
+      "verdict": "known-found",
+      "notes": "Same pinned-search ownership bypass."
+    },
+    {
+      "findingId": "VNV-Y8F",
+      "matchedCorpusIds": [],
+      "verdict": "not-known",
+      "notes": "Accept-invite deletion bug represented at another corpus commit, not the commit-specific corpus summary."
+    },
+    {
+      "findingId": "BA6-PPW",
+      "matchedCorpusIds": [
+        "sentry-vuln-025"
+      ],
+      "verdict": "known-found",
+      "notes": "Same cross-team external actor modification gap."
+    },
+    {
+      "findingId": "4RY-AA7",
+      "matchedCorpusIds": [
+        "sentry-vuln-021"
+      ],
+      "verdict": "known-found",
+      "notes": "Same org:read destructive repository-token rotation."
+    },
+    {
+      "findingId": "CSK-KSE",
+      "matchedCorpusIds": [],
+      "verdict": "not-known",
+      "notes": "Perforce rsh command execution, not the corpus credential-disclosure bug."
+    },
+    {
+      "findingId": "9XG-CRT",
+      "matchedCorpusIds": [
+        "sentry-vuln-014"
+      ],
+      "verdict": "known-found",
+      "notes": "Same cross-tenant Slack options-load team and member disclosure."
+    },
+    {
+      "findingId": "JRQ-8RS",
+      "matchedCorpusIds": [],
+      "verdict": "not-known",
+      "notes": "Slack autofix membership gap, not either same-file corpus bug."
+    },
+    {
+      "findingId": "K5Y-KRM",
+      "matchedCorpusIds": [
+        "sentry-vuln-015"
+      ],
+      "verdict": "known-found",
+      "notes": "Same unauthenticated arbitrary GCP transfer-job trigger."
+    },
+    {
+      "findingId": "AUE-ZW2",
+      "matchedCorpusIds": [
+        "sentry-vuln-034"
+      ],
+      "verdict": "known-found",
+      "notes": "Same Seer autofix run-to-group ownership gap."
+    },
+    {
+      "findingId": "VLZ-WUQ",
+      "matchedCorpusIds": [],
+      "verdict": "not-known",
+      "notes": "Workflow attachment authorization gap, not the corpus disconnect bug; the merged open-periods location is not semantically supported by the final finding."
+    },
+    {
+      "findingId": "UKU-FKG",
+      "matchedCorpusIds": [],
+      "verdict": "not-known",
+      "notes": "System-options GET secret redaction gap, not the cleartext option-value logging bug for this commit."
+    }
+  ],
+  "shards": [
+    {
+      "sha": "2d929588e20b931d2631ade31405f6ddbd34603a",
+      "wardenRunId": "92ea9272-6edb-4d35-810e-818a899d6444",
+      "corpusFindingCount": 7,
+      "targetFileCount": 6,
+      "filesAnalyzed": 6,
+      "chunksTotal": 6,
+      "chunksAnalyzed": 6,
+      "chunksFailed": 0,
+      "findingsTotal": 3,
+      "skippedFileCount": 0,
+      "durationMs": 565673,
+      "costUSD": 2.98837641,
+      "attemptCount": 1,
+      "traceCount": 6,
+      "rawJsonl": "sentry-security-review-pi-openrouter-gemini-3-8-flash-high-corpus-2d929588.jsonl",
+      "rawArtifactStatus": "withheld-pending-sensitive-review",
+      "targetList": "targets-2d929588e20b931d2631ade31405f6ddbd34603a.txt"
+    },
+    {
+      "sha": "6993246259d0193a6a6aac49aa3763959b1126df",
+      "wardenRunId": "6c2aa596-c6e6-48ab-9b5e-31f2332007ef",
+      "corpusFindingCount": 1,
+      "targetFileCount": 1,
+      "filesAnalyzed": 1,
+      "chunksTotal": 2,
+      "chunksAnalyzed": 2,
+      "chunksFailed": 0,
+      "findingsTotal": 0,
+      "skippedFileCount": 0,
+      "durationMs": 266047,
+      "costUSD": 0.599717175,
+      "attemptCount": 1,
+      "traceCount": 2,
+      "rawJsonl": "sentry-security-review-pi-openrouter-gemini-3-8-flash-high-corpus-69932462.jsonl",
+      "rawArtifactStatus": "withheld-pending-sensitive-review",
+      "targetList": "targets-6993246259d0193a6a6aac49aa3763959b1126df.txt"
+    },
+    {
+      "sha": "788ba30f1aa42b00c02d64ed4b8b2515ff8ab8da",
+      "wardenRunId": "a2ce6b1b-2873-487b-b75f-8f91f9abba5c",
+      "corpusFindingCount": 1,
+      "targetFileCount": 1,
+      "filesAnalyzed": 1,
+      "chunksTotal": 2,
+      "chunksAnalyzed": 2,
+      "chunksFailed": 0,
+      "findingsTotal": 1,
+      "skippedFileCount": 0,
+      "durationMs": 494277,
+      "costUSD": 0.850085695,
+      "attemptCount": 1,
+      "traceCount": 2,
+      "rawJsonl": "sentry-security-review-pi-openrouter-gemini-3-8-flash-high-corpus-788ba30f.jsonl",
+      "rawArtifactStatus": "withheld-pending-sensitive-review",
+      "targetList": "targets-788ba30f1aa42b00c02d64ed4b8b2515ff8ab8da.txt"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "wardenRunId": "20d968d7-2455-4231-8654-f7d6f70d6c44",
+      "corpusFindingCount": 43,
+      "targetFileCount": 38,
+      "filesAnalyzed": 37,
+      "chunksTotal": 80,
+      "chunksAnalyzed": 79,
+      "chunksFailed": 1,
+      "findingsTotal": 10,
+      "skippedFileCount": 0,
+      "durationMs": 8011819,
+      "costUSD": 28.507293885,
+      "attemptCount": 4,
+      "traceCount": 80,
+      "rawJsonl": "sentry-security-review-pi-openrouter-gemini-3-8-flash-high-corpus-7f41cc50.jsonl",
+      "repairJsonl": [
+        "sentry-security-review-pi-openrouter-gemini-3-8-flash-high-corpus-7f41cc50-repair-1.jsonl",
+        "sentry-security-review-pi-openrouter-gemini-3-8-flash-high-corpus-7f41cc50-repair-2.jsonl",
+        "sentry-security-review-pi-openrouter-gemini-3-8-flash-high-corpus-7f41cc50-repair-3.jsonl"
+      ],
+      "rawArtifactStatus": "withheld-pending-sensitive-review",
+      "targetList": "targets-7f41cc502faa1088108e896565409be72d92bc38.txt"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "wardenRunId": "21c8962a-3c38-43a1-b729-94dc6209cd58",
+      "corpusFindingCount": 32,
+      "targetFileCount": 31,
+      "filesAnalyzed": 31,
+      "chunksTotal": 64,
+      "chunksAnalyzed": 63,
+      "chunksFailed": 1,
+      "findingsTotal": 10,
+      "skippedFileCount": 0,
+      "durationMs": 14334281,
+      "costUSD": 43.53245788,
+      "attemptCount": 4,
+      "traceCount": 64,
+      "rawJsonl": "sentry-security-review-pi-openrouter-gemini-3-8-flash-high-corpus-9fc06de5.jsonl",
+      "repairJsonl": [
+        "sentry-security-review-pi-openrouter-gemini-3-8-flash-high-corpus-9fc06de5-repair-1.jsonl",
+        "sentry-security-review-pi-openrouter-gemini-3-8-flash-high-corpus-9fc06de5-repair-2.jsonl",
+        "sentry-security-review-pi-openrouter-gemini-3-8-flash-high-corpus-9fc06de5-repair-3.jsonl"
+      ],
+      "rawArtifactStatus": "withheld-pending-sensitive-review",
+      "targetList": "targets-9fc06de579fbbee810565304efcc982e5dea1d1a.txt"
+    },
+    {
+      "sha": "fbecd17d210c2eacfad4bf17872be62320b8a110",
+      "wardenRunId": "313ccd24-923e-4c80-a0bc-53ddb1655340",
+      "corpusFindingCount": 2,
+      "targetFileCount": 2,
+      "filesAnalyzed": 2,
+      "chunksTotal": 2,
+      "chunksAnalyzed": 2,
+      "chunksFailed": 0,
+      "findingsTotal": 1,
+      "skippedFileCount": 0,
+      "durationMs": 915303,
+      "costUSD": 1.68944923,
+      "attemptCount": 2,
+      "traceCount": 2,
+      "rawJsonl": "sentry-security-review-pi-openrouter-gemini-3-8-flash-high-corpus-fbecd17d.jsonl",
+      "repairJsonl": [
+        "sentry-security-review-pi-openrouter-gemini-3-8-flash-high-corpus-fbecd17d-repair-1.jsonl"
+      ],
+      "rawArtifactStatus": "withheld-pending-sensitive-review",
+      "targetList": "targets-fbecd17d210c2eacfad4bf17872be62320b8a110.txt"
+    }
+  ],
+  "notes": "Incomplete Warden 0.48.0 benchmark using Pi with openrouter/google/gemini-3.8-flash at high effort and openrouter/openai/gpt-5.6-luna at high effort for auxiliary calls. Google-only routing disabled provider fallbacks. The initial run completed 143 of 156 chunks. Three serial repair passes recovered 11 exact failed tuples; two reached maxTurns in all four attempts and remain failed. Further retries were stopped to avoid best-of-N cherry-picking. The 622 MB 9fc06de5 artifact exceeded V8's string limit during finalization. Its streamed chunks survived, but final verifier usage and latency were not persisted, so cost and wall time are lower bounds. Raw JSONL artifacts are withheld pending sensitive-data review."
+}
