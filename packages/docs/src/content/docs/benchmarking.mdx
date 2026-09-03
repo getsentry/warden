@@ -138,6 +138,37 @@ replicated under the controlled rerun. The primary outputs still favor Grok
 These remain single runs, not a deterministic model ranking. The result does
 not support moving the benchmark or production model lane to Grok 4.6.
 
+### Gemini 3.8 Flash High
+
+Gemini 3.8 Flash found 19 of 86 known corpus entries and emitted 25 final
+findings. Eighteen findings matched 19 unique corpus entries. The other seven
+described different issues and received no corpus credit. Recorded spend was
+$78.17, or at least $4.11 per known entry.
+
+This is an incomplete operational result, not a stable comparison row. Two of
+156 chunks reached the 100-turn limit in the initial run and in all three
+serial repair passes. The failures cover the organization pipeline endpoint
+and one of four MS Teams webhook chunks. Exact-tuple repairs recovered the
+other 11 initial failures. Retrying these two again would turn the result into
+a best-of-N sample, so the run stopped after four attempts. The comparison
+matrix excludes every run with a failed chunk.
+
+For context only, 19 known entries would rank 16th among 22 rows if this result
+were treated as complete. It sits below Opus 4.8 high at 21 and above the two
+18-entry rows. Grok 4.6 high is the nearest recent configuration: it used Pi,
+high effort, and GPT 5.6 Luna high for auxiliary calls on Warden 0.47.0. Grok
+4.6 completed all chunks, found 25 known entries, and cost $78.47. Gemini used
+Warden 0.48.0, cost nearly the same recorded amount, and found six fewer known
+entries.
+
+The cost comparison is less favorable. Gemini's lower-bound $4.11 per known
+entry would rank 20th of 22, ahead of only the two Claude SDK rows. DeepSeek V4
+Flash found 18 known entries for $10.11. Gemini found one more for at least
+7.7 times the provider cost. The 622 MB shard for the largest corpus commit
+also exceeded V8's string limit during finalization. Its streamed chunk records
+survived, but the verifier tail did not, so the published cost and 6 hour 49
+minute wall time are lower bounds.
+
 ### Kimi K3 Effort Levels and K2.6
 
 The historical K3 max run remains the strongest Kimi result on this corpus. It
