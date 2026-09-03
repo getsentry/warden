@@ -5,7 +5,7 @@
   "comparison": {
     "include": true,
     "label": "154/156 chunks",
-    "caveat": "The two unfinished chunks contain one known entry each, limiting the score's possible increase to 21/86; cost and duration are lower bounds because one shard omitted final verifier accounting."
+    "caveat": "The two unfinished chunks contain one known entry each, limiting the score's possible increase to 21/86. Recorded cost is a lower bound."
   },
   "corpusId": "sentry-vulnerability-corpus",
   "repository": "getsentry/sentry",
