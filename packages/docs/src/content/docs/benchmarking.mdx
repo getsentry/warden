@@ -142,21 +142,29 @@ not support moving the benchmark or production model lane to Grok 4.6.
 
 ### Gemini 3.8 Flash High
 
-Gemini 3.8 Flash found 19 of 86 known corpus entries and emitted 25 final
-findings. Eighteen findings matched 19 unique corpus entries; the other seven
-described different issues and received no corpus credit. Its matched set spans
-organization, project, and team authorization boundaries, OAuth and JWT flaws,
-weak webhook and transport controls, command injection, and HTML injection.
+Gemini 3.8 Flash high uses Pi through OpenRouter as
+`openrouter/google/gemini-3.8-flash`. It found 19 of 86 known entries and
+emitted 25 findings. This puts it behind Claude Opus 4.8 high on Pi and ahead
+of Claude Opus 4.8 medium and DeepSeek V4 Flash on known-corpus recall. Eighteen
+emitted findings matched 19 unique corpus entries because one Atlassian JWT
+finding covered two entries. The other seven findings described different
+issues and did not count.
 
-The result ranks 16th of 22 rows for recall and 20th for cost efficiency. Grok
-4.6 high found 25 entries for nearly the same recorded cost, $78.47 compared
-with $78.17. The runs shared 13 entries; Gemini found six that Grok missed, and
-Grok found 12 that Gemini missed. DeepSeek V4 Flash found 18 entries for $10.11,
-so Gemini added one known match for at least 7.7 times the provider cost.
+The matched findings cover a broad range of security boundaries. Gemini found
+cross-organization, cross-project, and cross-team authorization gaps, OAuth
+client-secret exposure, untrusted JWT algorithm selection, weak webhook and
+transport controls, and two client-side injection issues. It also caught
+narrower logic errors, including the accept-invite deletion fallthrough,
+pinned-search ownership bypass, and arbitrary GCS transfer-job trigger.
 
-Gemini completed 154 of 156 chunks, or 98.7%; the two unfinished chunks contain
-one known corpus entry each, so full completion could raise recall only to
-21/86. Recorded cost is a lower bound.
+Gemini cost $78.17, or $4.11 per known corpus finding. That is nearly the same
+as Grok 4.6 high at $78.47, while Gemini found six fewer known entries.
+DeepSeek V4 Flash found one fewer for $10.11. Gemini recorded 311 million input
+tokens, the highest total in the matrix.
+
+The run completed 154 of 156 chunks. The two remaining chunks each cover one
+corpus entry, so a complete run could score at most 21/86. Recorded cost is a
+lower bound.
 
 ### Kimi K3 Effort Levels and K2.6
 
