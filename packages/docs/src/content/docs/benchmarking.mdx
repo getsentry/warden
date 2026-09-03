@@ -1,6 +1,6 @@
 ---
 title: Overview
-description: Stable Sentry benchmark comparisons for Warden.
+description: Sentry benchmark comparisons for Warden.
 editUrl: false
 ---
 
@@ -27,8 +27,9 @@ Sentry repository.
 ## Comparison Matrix
 
 The score table is the headline and sorts by known-corpus recall. The cost table
-ranks runs by recorded provider cost per known corpus finding. This matrix only
-includes complete runs with no failed chunks and per-chunk trace data.
+ranks runs by recorded provider cost per known corpus finding. Complete runs
+with no failed chunks and per-chunk trace data enter automatically. Explicit
+exceptions are labeled in the table and explained directly beneath it.
 
 Timing remains in result metadata for diagnostics, but the overview does not
 rank it. Provider load, network conditions, retries, queueing, and the benchmark
@@ -145,17 +146,17 @@ findings. Eighteen findings matched 19 unique corpus entries. The other seven
 described different issues and received no corpus credit. Recorded spend was
 $78.17, or at least $4.11 per known entry.
 
-This is an incomplete operational result, not a stable comparison row. Two of
-156 chunks reached the 100-turn limit in the initial run and in all three
-serial repair passes. The failures cover the organization pipeline endpoint
-and one of four MS Teams webhook chunks. Exact-tuple repairs recovered the
-other 11 initial failures. Retrying these two again would turn the result into
-a best-of-N sample, so the run stopped after four attempts. The comparison
-matrix excludes every run with a failed chunk.
+This is an incomplete operational result, not a stable comparison row. It is
+included in the matrix as an explicitly labeled exception. Two of 156 chunks
+reached the 100-turn limit in the initial run and in all three serial repair
+passes. The failures cover the organization pipeline endpoint and one of four
+MS Teams webhook chunks. Exact-tuple repairs recovered the other 11 initial
+failures. Retrying these two again would turn the result into a best-of-N
+sample, so the run stopped after four attempts.
 
-For context only, 19 known entries would rank 16th among 22 rows if this result
-were treated as complete. It sits below Opus 4.8 high at 21 and above the two
-18-entry rows. Grok 4.6 high is the nearest recent configuration: it used Pi,
+The incomplete 19-entry result ranks 16th among the 22 displayed rows. It sits
+below Opus 4.8 high at 21 and above the two 18-entry rows. Grok 4.6 high is the
+nearest recent configuration: it used Pi,
 high effort, and GPT 5.6 Luna high for auxiliary calls on Warden 0.47.0. Grok
 4.6 completed all chunks, found 25 known entries, and cost $78.47. Gemini used
 Warden 0.48.0, cost nearly the same recorded amount, and found six fewer known
