@@ -28,8 +28,9 @@ Sentry repository.
 
 The score table is the headline and sorts by known-corpus recall. The cost table
 ranks runs by recorded provider cost per known corpus finding. Complete runs
-with no failed chunks and per-chunk trace data enter automatically. Explicit
-exceptions are labeled in the table and explained directly beneath it.
+with no failed chunks and per-chunk trace data enter automatically. Rows based
+on partial run data show their chunk coverage and an accounting note below the
+table.
 
 Timing remains in result metadata for diagnostics, but the overview does not
 rank it. Provider load, network conditions, retries, queueing, and the benchmark
@@ -142,33 +143,21 @@ not support moving the benchmark or production model lane to Grok 4.6.
 ### Gemini 3.8 Flash High
 
 Gemini 3.8 Flash found 19 of 86 known corpus entries and emitted 25 final
-findings. Eighteen findings matched 19 unique corpus entries. The other seven
-described different issues and received no corpus credit. Recorded spend was
-$78.17, or at least $4.11 per known entry.
+findings. Eighteen findings matched 19 unique corpus entries; the other seven
+described different issues and received no corpus credit. Its matched set spans
+organization, project, and team authorization boundaries, OAuth and JWT flaws,
+weak webhook and transport controls, command injection, and HTML injection.
 
-This is an incomplete operational result, not a stable comparison row. It is
-included in the matrix as an explicitly labeled exception. Two of 156 chunks
-reached the 100-turn limit in the initial run and in all three serial repair
-passes. The failures cover the organization pipeline endpoint and one of four
-MS Teams webhook chunks. Exact-tuple repairs recovered the other 11 initial
-failures. Retrying these two again would turn the result into a best-of-N
-sample, so the run stopped after four attempts.
+The result ranks 16th of 22 rows for recall and 20th for cost efficiency. Grok
+4.6 high found 25 entries for nearly the same recorded cost, $78.47 compared
+with $78.17. The runs shared 13 entries; Gemini found six that Grok missed, and
+Grok found 12 that Gemini missed. DeepSeek V4 Flash found 18 entries for $10.11,
+so Gemini added one known match for at least 7.7 times the provider cost.
 
-The incomplete 19-entry result ranks 16th among the 22 displayed rows. It sits
-below Opus 4.8 high at 21 and above the two 18-entry rows. Grok 4.6 high is the
-nearest recent configuration: it used Pi,
-high effort, and GPT 5.6 Luna high for auxiliary calls on Warden 0.47.0. Grok
-4.6 completed all chunks, found 25 known entries, and cost $78.47. Gemini used
-Warden 0.48.0, cost nearly the same recorded amount, and found six fewer known
-entries.
-
-The cost comparison is less favorable. Gemini's lower-bound $4.11 per known
-entry would rank 20th of 22, ahead of only the two Claude SDK rows. DeepSeek V4
-Flash found 18 known entries for $10.11. Gemini found one more for at least
-7.7 times the provider cost. The 622 MB shard for the largest corpus commit
-also exceeded V8's string limit during finalization. Its streamed chunk records
-survived, but the verifier tail did not, so the published cost and 6 hour 49
-minute wall time are lower bounds.
+Gemini completed 154 of 156 chunks, or 98.7%; the two unfinished chunks contain
+one known corpus entry each, so full completion could raise recall only to
+21/86. The recorded cost and 6 hour 49 minute wall time are lower bounds because
+one oversized shard did not persist its final verifier accounting.
 
 ### Kimi K3 Effort Levels and K2.6
 

@@ -4,8 +4,8 @@
   "stableComparisonEligible": false,
   "comparison": {
     "include": true,
-    "label": "Incomplete: 154/156 chunks",
-    "caveat": "Two chunks reached the 100-turn limit in the baseline and all three exact-tuple repair passes. Treat 19/86 as an incomplete-run result. Recorded cost and duration are lower bounds because one oversized shard did not persist its verifier tail."
+    "label": "154/156 chunks",
+    "caveat": "The two unfinished chunks contain one known entry each, limiting the score's possible increase to 21/86; cost and duration are lower bounds because one shard omitted final verifier accounting."
   },
   "corpusId": "sentry-vulnerability-corpus",
   "repository": "getsentry/sentry",
