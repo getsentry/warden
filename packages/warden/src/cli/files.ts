@@ -9,6 +9,34 @@ import { getPrePatchFileSkip } from '../sdk/scan-policy.js';
 import { execGitNonInteractive } from '../utils/exec.js';
 import { isRepoRelativePath, normalizePath } from '../utils/path.js';
 
+/**
+ * Hard upper bound on the number of files returned by expandFileGlobs after
+ * gitignore filtering.  If this limit is hit it almost always means a
+ * dependency tree (vendor/, node_modules/, …) is not gitignored and the user
+ * is accidentally scanning it.  Fail fast with an actionable message rather
+ * than silently passing tens-of-thousands of files to the scan pipeline.
+ */
+export const MAX_GLOB_FILE_RESULTS = 10_000;
+
+/**
+ * Thrown by expandFileGlobs when the post-gitignore result set exceeds
+ * MAX_GLOB_FILE_RESULTS.
+ */
+export class WardenGlobExpansionError extends Error {
+  constructor(count: number, limit: number) {
+    super(
+      `Glob pattern matched ${count.toLocaleString()} files after gitignore filtering (limit is ${limit.toLocaleString()}).\n` +
+      `This usually means a dependency directory is not excluded by .gitignore.\n` +
+      `\nTry one of:\n` +
+      `  • Quote the pattern to avoid shell expansion:  warden 'dieter/**/*.php'\n` +
+      `  • Narrow to your application code:            warden dieter/app/**/*.php\n` +
+      `  • Add the dependency directory to .gitignore:\n` +
+      `      vendor/`,
+    );
+    this.name = 'WardenGlobExpansionError';
+  }
+}
+
 export interface ExpandGlobOptions {
   /** Working directory for glob expansion (default: process.cwd()) */
   cwd?: string;
@@ -112,27 +140,32 @@ function loadGitignoreRules(gitRoot: string): Ignore {
   // Always ignore .git directory
   ig.add('.git');
 
-  // Use git to discover .gitignore files. This naturally skips ignored
-  // directories (node_modules, .venv, vendor, etc.) without maintaining
-  // a hardcoded exclusion list.
+  // Discover .gitignore files via git.  Using --cached + --others without
+  // pathspecs and filtering client-side is intentional: pathspec-based queries
+  // like `**/.gitignore` may not recurse into brand-new untracked directories
+  // (e.g. a freshly-added Laravel app in dieter/) so they can miss the
+  // directory's own .gitignore and fail to exclude its vendor/ tree.
+  // Without pathspecs, git recurses into all untracked directories and returns
+  // every non-gitignored file; we then pick out .gitignore files ourselves.
   let gitignoreFiles: string[];
   try {
     const output = execGitNonInteractive(
-      ['ls-files', '--cached', '--others', '--exclude-standard', '.gitignore', '**/.gitignore'],
+      ['ls-files', '--cached', '--others', '--exclude-standard'],
       { cwd: gitRoot }
     );
     gitignoreFiles = output
-      ? output.split('\n').map((f) => resolve(gitRoot, f))
+      ? output
+        .split('\n')
+        .filter((f) => f === '.gitignore' || f.endsWith('/.gitignore'))
+        .map((f) => resolve(gitRoot, f))
       : [];
   } catch {
-    // Not a real git repo or git not available. Walk directories manually,
-    // skipping common large directories that would never contain relevant
-    // .gitignore files.
+    // Not a real git repo or git not available. Walk directories manually.
     gitignoreFiles = fg.sync('**/.gitignore', {
       cwd: gitRoot,
       absolute: true,
       dot: true,
-      ignore: ['**/.git/**', '**/node_modules/**'],
+      ignore: ['**/.git/**'],
     });
   }
 
@@ -165,9 +198,13 @@ function loadGitignoreRules(gitRoot: string): Ignore {
 /**
  * Expand glob patterns to a list of file paths.
  *
- * By default, respects .gitignore files to automatically exclude ignored
- * directories like node_modules/. This can be disabled by setting
+ * By default respects .gitignore files to automatically exclude ignored
+ * directories like node_modules/ and vendor/.  This can be disabled by setting
  * gitignore: false.
+ *
+ * Throws WardenGlobExpansionError if the result set after gitignore filtering
+ * exceeds MAX_GLOB_FILE_RESULTS, which almost always indicates an ungitignored
+ * dependency directory is being scanned.
  */
 export async function expandFileGlobs(
   patterns: string[],
@@ -180,24 +217,32 @@ export async function expandFileGlobs(
   const useGitignore = options.gitignore ?? true;
   const expandedPatterns = patterns.map((pattern) => expandDirectoryPattern(pattern, cwd));
 
-  // Get all matching files first
+  // Enumerate matching files.  Only .git/ is excluded at traversal time;
+  // dependency directories (vendor/, node_modules/, …) are excluded by
+  // gitignore filtering below, keeping the approach policy-free and letting
+  // each project's own .gitignore determine what is scanned.
   const files = await fg(expandedPatterns, {
     cwd,
     onlyFiles: true,
     absolute: true,
     dot: false,
-    // Always exclude .git directory
     ignore: ['**/.git/**'],
   });
 
-  // If gitignore is disabled, return files as-is
+  // If gitignore is disabled, check the raw count and return as-is
   if (!useGitignore) {
+    if (files.length >= MAX_GLOB_FILE_RESULTS) {
+      throw new WardenGlobExpansionError(files.length, MAX_GLOB_FILE_RESULTS);
+    }
     return files.sort();
   }
 
   // Find git root - if not in a git repo, don't apply gitignore rules
   const gitRoot = findGitRoot(cwd);
   if (!gitRoot) {
+    if (files.length >= MAX_GLOB_FILE_RESULTS) {
+      throw new WardenGlobExpansionError(files.length, MAX_GLOB_FILE_RESULTS);
+    }
     return files.sort();
   }
 
@@ -217,6 +262,13 @@ export async function expandFileGlobs(
     }
     return !ig.ignores(relativePath);
   });
+
+  // Guard after gitignore so that properly gitignored dependency directories
+  // do not trigger a false positive — the limit only fires when the project's
+  // .gitignore is misconfigured or missing.
+  if (filteredFiles.length >= MAX_GLOB_FILE_RESULTS) {
+    throw new WardenGlobExpansionError(filteredFiles.length, MAX_GLOB_FILE_RESULTS);
+  }
 
   return filteredFiles.sort();
 }
