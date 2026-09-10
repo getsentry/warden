@@ -63,7 +63,7 @@ importers:
         version: 3.0.173(zod@4.4.3)
       '@hono/node-server':
         specifier: ^1.19.17
-        version: 1.19.17(hono@4.13.1)
+        version: 1.19.17(hono@4.13.7)
       '@sentry/node':
         specifier: ^10.71.0
         version: 10.71.0(@opentelemetry/core@2.10.0(@opentelemetry/api@1.9.1))
@@ -77,8 +77,8 @@ importers:
         specifier: ^6.0.255
         version: 6.0.255(zod@4.4.3)
       hono:
-        specifier: ^4.12.27
-        version: 4.13.1
+        specifier: ^4.13.5
+        version: 4.13.7
       zod:
         specifier: ^4.4.3
         version: 4.4.3
@@ -240,7 +240,7 @@ importers:
     dependencies:
       '@hono/node-server':
         specifier: ^1.19.17
-        version: 1.19.17(hono@4.13.1)
+        version: 1.19.17(hono@4.13.7)
       '@neondatabase/serverless':
         specifier: ^1.1.0
         version: 1.1.0
@@ -254,8 +254,8 @@ importers:
         specifier: ^0.45.2
         version: 0.45.2(@neondatabase/serverless@1.1.0)(@opentelemetry/api@1.9.1)(@types/pg@8.15.6)(kysely@0.29.5)(pg@8.23.0)
       hono:
-        specifier: ^4.12.27
-        version: 4.13.1
+        specifier: ^4.13.5
+        version: 4.13.7
       pg:
         specifier: ^8.16.3
         version: 8.23.0
@@ -4285,12 +4285,8 @@ packages:
   highlight.js@10.7.3:
     resolution: {integrity: sha512-tzcUFauisWKNHaRkN4Wjl/ZA07gENAjFl3J/c480dprkGTg5EQstgaNFqBfUqCq54kZRIEcreTsAgF/m2quD7A==}
 
-  hono@4.13.1:
-    resolution: {integrity: sha512-kdJoFVv2xmayw6cY09H7AbMJMt8Jn5jdlEdXsP7AGBdF2DIptVlKlOLKXP41yPip4/a3yQPv9gVcJYI8YY04dw==}
-    engines: {node: '>=16.9.0'}
-
-  hono@4.13.5:
-    resolution: {integrity: sha512-O6+/eCYRkzzzy0rPWwKLiGBR1nFuUPZynnwjxN1MBA62NNqbT0wQEzQyK2gSO5yDIDB336sXQleAhOHrzlYyKw==}
+  hono@4.13.7:
+    resolution: {integrity: sha512-c8/gF9ac8Y78/agExVocyLevgR+JlpNB444Py0FSX8pJoPdYUfUzRcXtYEYGwt6l19qIlVZPN5Mfsw9jFShmQQ==}
     engines: {node: '>=16.9.0'}
 
   hosted-git-info@9.0.3:
@@ -4494,8 +4490,8 @@ packages:
   jose@5.9.6:
     resolution: {integrity: sha512-AMlnetc9+CV9asI19zHmrgS/WYsWUwCn2R7RzlbJWD7F9eWYUTGyBmU9o6PxngtLGOiDGPRu+Uc4fhKzbpteZQ==}
 
-  jose@6.2.10:
-    resolution: {integrity: sha512-iiW7J9qRFlGxvCOIBDBDxFePQSn7ZMAnrYGhrrOo6siO/MIqwfyilLR27pkfDgUk+raLuzADS8A3S/KLBisc0g==}
+  jose@6.2.12:
+    resolution: {integrity: sha512-9NiFmJEex0sy2Dk58j2UGBSHgUs2ypF9eZSu4L6vjOX3Dp96Sw1F3uL+H+D1sx02jZZdzUT0HgvCy59CuvXcWw==}
 
   jose@6.2.3:
     resolution: {integrity: sha512-YYVDInQKFJfR/xa3ojUTl8c2KoTwiL1R5Wg9YCydwH0x0B9grbzlg5HC7mMjCtUJjbQ/YnGEZIhI5tCgfTb4Hw==}
@@ -7362,13 +7358,9 @@ snapshots:
       - supports-color
       - utf-8-validate
 
-  '@hono/node-server@1.19.17(hono@4.13.1)':
+  '@hono/node-server@1.19.17(hono@4.13.7)':
     dependencies:
-      hono: 4.13.1
-
-  '@hono/node-server@1.19.17(hono@4.13.5)':
-    dependencies:
-      hono: 4.13.5
+      hono: 4.13.7
 
   '@img/colour@1.1.0':
     optional: true
@@ -7608,7 +7600,7 @@ snapshots:
 
   '@modelcontextprotocol/sdk@1.29.0(zod@4.4.3)':
     dependencies:
-      '@hono/node-server': 1.19.17(hono@4.13.5)
+      '@hono/node-server': 1.19.17(hono@4.13.7)
       ajv: 8.20.0
       ajv-formats: 3.0.1(ajv@8.20.0)
       content-type: 1.0.5
@@ -7618,8 +7610,8 @@ snapshots:
       eventsource-parser: 3.1.1
       express: 5.2.1
       express-rate-limit: 8.7.0(express@5.2.1)
-      hono: 4.13.5
-      jose: 6.2.10
+      hono: 4.13.7
+      jose: 6.2.12
       json-schema-typed: 8.0.2
       pkce-challenge: 5.0.1
       raw-body: 3.0.2
@@ -10202,9 +10194,7 @@ snapshots:
 
   highlight.js@10.7.3: {}
 
-  hono@4.13.1: {}
-
-  hono@4.13.5: {}
+  hono@4.13.7: {}
 
   hosted-git-info@9.0.3:
     dependencies:
@@ -10388,7 +10378,7 @@ snapshots:
 
   jose@5.9.6: {}
 
-  jose@6.2.10: {}
+  jose@6.2.12: {}
 
   jose@6.2.3: {}
 

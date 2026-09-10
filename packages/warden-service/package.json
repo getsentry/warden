@@ -38,7 +38,7 @@
     "@sentry/warden-service-api": "workspace:*",
     "better-auth": "^1.6.27",
     "drizzle-orm": "^0.45.2",
-    "hono": "^4.12.27",
+    "hono": "^4.13.5",
     "pg": "^8.16.3",
     "ws": "^8.18.3",
     "zod": "^4.4.3"
