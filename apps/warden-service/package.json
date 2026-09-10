@@ -16,7 +16,7 @@
     "@sentry/warden-service": "workspace:*",
     "@vercel/oidc": "^3.4.1",
     "ai": "^6.0.255",
-    "hono": "^4.12.27",
+    "hono": "^4.13.5",
     "zod": "^4.4.3"
   },
   "devDependencies": {
