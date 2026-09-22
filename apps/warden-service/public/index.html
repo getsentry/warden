@@ -3,59 +3,86 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="color-scheme" content="dark">
+    <meta name="color-scheme" content="light dark">
     <meta name="robots" content="noindex">
-    <title>Warden Service</title>
+    <title>Findings · Warden</title>
+    <script>
+      // Select the palette before the stylesheet can paint the page.
+      {
+        let theme = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        try {
+          const saved = localStorage.getItem('warden.theme');
+          if (saved === 'light' || saved === 'dark') theme = saved;
+        } catch { /* Use system appearance when storage is unavailable. */ }
+        document.documentElement.dataset.theme = theme;
+      }
+    </script>
     <link rel="stylesheet" href="/assets/styles.css">
     <script type="module" src="/assets/app.js"></script>
   </head>
   <body>
+    <a class="skip-link" href="#content">Skip to content</a>
     <header class="topbar">
       <a class="brand" href="/">
         <svg class="brand-mark" viewBox="0 0 64 64" aria-hidden="true">
           <path d="M32 10 50 17v18c0 10-8 17-18 20-10-3-18-10-18-20V17Z" fill="currentColor"/>
-          <path d="m32 17 12 5v13c0 7-5 12-12 14-7-2-12-7-12-14V22Z" fill="#0c0a0f"/>
+          <path d="m32 17 12 5v13c0 7-5 12-12 14-7-2-12-7-12-14V22Z" fill="var(--chrome)"/>
           <circle cx="32" cy="33" r="5" fill="currentColor"/>
         </svg>
         <span>Warden</span>
       </a>
-      <div id="account-menu" class="account-menu" hidden>
-        <button id="account-menu-trigger" class="account-menu-trigger" type="button" aria-controls="account-menu-popover" aria-expanded="false" aria-haspopup="true" aria-label="Open account menu">
-          <span class="account-avatar" aria-hidden="true">
-            <svg viewBox="0 0 24 24">
-              <circle cx="12" cy="8" r="4"/>
-              <path d="M4.5 21a7.5 7.5 0 0 1 15 0"/>
-            </svg>
-          </span>
-          <svg class="account-chevron" viewBox="0 0 16 16" aria-hidden="true">
-            <path d="m4 6 4 4 4-4"/>
+      <nav class="workspace-nav" aria-label="Workspace">
+        <a id="nav-findings" href="/" aria-current="page">Findings</a>
+        <a id="nav-usage" href="/?view=usage">Usage</a>
+      </nav>
+      <span class="workspace-label">Code oversight</span>
+      <div class="header-actions">
+        <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Use dark theme" title="Use dark theme">
+          <svg class="theme-moon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M20.5 13.2A8.6 8.6 0 0 1 10.8 3.5 8.6 8.6 0 1 0 20.5 13.2Z"/>
+          </svg>
+          <svg class="theme-sun" viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="12" r="4"/>
+            <path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5"/>
           </svg>
         </button>
-        <div id="account-menu-popover" class="account-popover" hidden>
-          <button id="api-access" class="account-menu-item" type="button" hidden>
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <circle cx="7.5" cy="15.5" r="4.5"/>
-              <path d="m11 12 9-9m-4 4 3 3m-1.5-5.5 2 2"/>
+        <div id="account-menu" class="account-menu" hidden>
+          <button id="account-menu-trigger" class="account-menu-trigger" type="button" aria-controls="account-menu-popover" aria-expanded="false" aria-haspopup="true" aria-label="Open account menu">
+            <span class="account-avatar" aria-hidden="true">
+              <svg viewBox="0 0 24 24">
+                <circle cx="12" cy="8" r="4"/>
+                <path d="M4.5 21a7.5 7.5 0 0 1 15 0"/>
+              </svg>
+            </span>
+            <svg class="account-chevron" viewBox="0 0 16 16" aria-hidden="true">
+              <path d="m4 6 4 4 4-4"/>
             </svg>
-            API access
           </button>
-          <button id="sign-out" class="account-menu-item" type="button" hidden>
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M10 17 15 12 10 7m5 5H3m12-9h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/>
-            </svg>
-            Sign out
-          </button>
+          <div id="account-menu-popover" class="account-popover" hidden>
+            <button id="api-access" class="account-menu-item" type="button" hidden>
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <circle cx="7.5" cy="15.5" r="4.5"/>
+                <path d="m11 12 9-9m-4 4 3 3m-1.5-5.5 2 2"/>
+              </svg>
+              API access
+            </button>
+            <button id="sign-out" class="account-menu-item" type="button" hidden>
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M10 17 15 12 10 7m5 5H3m12-9h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/>
+              </svg>
+              Sign out
+            </button>
+          </div>
         </div>
       </div>
     </header>
     <main class="shell">
       <header class="page-header">
-        <div class="eyebrow">Warden Service</div>
-        <h1 id="page-title">Explore</h1>
-        <p id="page-description">Filter findings and understand where Warden spends time and money.</p>
+        <h1 id="page-title">Findings</h1>
+        <p id="page-description">Review findings and the evidence behind them.</p>
       </header>
       <section id="filters" class="filter-host" hidden></section>
-      <section id="content" aria-live="polite">
+      <section id="content" aria-live="polite" tabindex="-1">
         <div class="empty">Loading data</div>
       </section>
     </main>

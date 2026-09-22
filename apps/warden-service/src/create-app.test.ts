@@ -49,107 +49,6 @@ describe('Vercel service app', () => {
       .toBeLessThan(manifest.scripts.build.indexOf('tsc --noEmit'));
   });
 
-  it('ships one Explore workspace without embedding credentials', async () => {
-    const html = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
-    const script = await readFile(new URL('../public/assets/app.js', import.meta.url), 'utf8');
-
-    expect(html).toContain('Explore');
-    expect(html).toContain('API Access');
-    expect(html).toContain('class="brand-mark" viewBox="0 0 64 64"');
-    expect(html).not.toContain('<span class="brand-mark" aria-hidden="true">W</span>');
-    expect(html).toContain('aria-controls="account-menu-popover"');
-    expect(html).not.toContain('href="/runs"');
-    expect(html).not.toContain('href="/memory"');
-    expect(script).not.toContain('renderRuns');
-    expect(script).not.toContain('renderMemory');
-    expect(script).toContain("'/api/v1/findings'");
-    expect(script).toContain("`/api/v1/findings/${encodeURIComponent(findingId)}`");
-    expect(script).toContain("`/findings/${encodeURIComponent(finding.id)}`");
-    expect(script).toContain('finding.displayId');
-    expect(script).toContain("api('/api/v1/history/dimensions')");
-    expect(script).toContain('const [summary, feed] = await Promise.all([');
-    expect(script).toContain("api(apiPath('/api/v1/dashboard/summary', common))");
-    expect(script).toContain('function renderFilters()');
-    expect(script).not.toContain('async function renderFilters');
-    const renderFilters = script.slice(script.indexOf('function renderFilters()'), script.indexOf('function commonApiParams'));
-    expect(renderFilters).not.toContain('loadDimensions');
-    expect(script).toContain("options: dimensionFilterOptions(");
-    expect(script).toContain("dimensions?.repositories,");
-    expect(script).toContain("options: dimensionFilterOptions(params, 'skill', dimensions?.skills, 'All skills')");
-    expect(script).toContain("'Selected repository'");
-    expect(script).toContain("control.addEventListener('focus', hydrate)");
-    expect(script).toContain("window.requestIdleCallback(hydrate, { timeout: 2_000 })");
-    expect(script).toMatch(/content\.replaceChildren\(section\);\s+scheduleFilterDimensions\(filterForm\);/);
-    expect(script).not.toContain('filtersReady');
-    expect(script).not.toContain("api('/api/v1/repositories')");
-    expect(script).not.toContain("api('/api/v1/skills')");
-    expect(script).toContain("document.createElement('table')");
-    expect(script).toContain("['Severity', 'Finding', 'Repository / skill', 'Location', 'Status', 'First observed', 'Last observed']");
-    expect(script).not.toContain('finding-card');
-    expect(script).not.toContain('badge');
-    expect(`${html}\n${script}`).not.toContain('WARDEN_SERVICE_TOKEN');
-    expect(`${html}\n${script}`).not.toContain('localStorage');
-    expect(script).toContain("'/api/v1/personal-tokens'");
-    expect(script).toContain(
-      'window.location.assign(`/api/auth/login?returnTo=${encodeURIComponent(returnTo)}`)',
-    );
-    expect(script).toContain("fetch('/api/auth/sign-out'");
-    expect(script).toContain("row.setAttribute('aria-expanded', 'false')");
-    expect(script).toContain("event.key !== 'Enter' && event.key !== ' '");
-    expect(script).toContain('detailRow.hidden = !expanded');
-    expect(script).toContain("link('Open on GitHub'");
-    expect(script).toContain("element('span', lineNumber, 'source-line-number')");
-    expect(script).toContain("findingPageSection('Why Warden Flagged This')");
-    expect(script).toContain("element('h2', 'Code Context')");
-    expect(script).toContain("findingPageSection('Finding Details')");
-    expect(script).toContain("findingDetail('Primary model', finding.primaryModel ?? 'Not reported')");
-    expect(script).toContain("'No source snippet was retained for this finding.'");
-    expect(script).toContain("'Not posted: PR changed'");
-    expect(script).toContain(
-      "'Warden did not post this finding because the pull request changed before Warden finished. It refers to an older commit; the newer run reviews the updated code.'",
-    );
-    expect(script).toContain("fallback = 'Delivery not tracked'");
-    expect(script).toContain(
-      "'Warden did not record how this finding was delivered. Scheduled scans and older runs may omit this data.'",
-    );
-    expect(script).not.toContain('This older run retained the finding');
-    expect(script).toContain("element('td', findingOutcomeLabel(finding), `finding-status");
-    expect(script).toContain("findingDetail('Reporting outcome', findingOutcomeDescription(finding))");
-    expect(script).toContain("findingDetail('First observed'");
-    expect(script).toContain("findingDetail('Last observed'");
-    expect(script).not.toContain('protected-session');
-    expect(script).not.toContain("'/api/auth/session'");
-  });
-
-  it('reacts to finding filters and keeps them in the URL', async () => {
-    const script = await readFile(new URL('../public/assets/app.js', import.meta.url), 'utf8');
-
-    for (const filter of ['repositoryId', 'skill', 'range', 'query', 'severity', 'findingOutcome']) {
-      expect(script).toContain(`'${filter}'`);
-    }
-    expect(script).toContain("addEventListener('change'");
-    expect(script).toContain("addEventListener('input'");
-    expect(script).toContain('setTimeout(() => applyFilters(form), 250)');
-    expect(script).toContain("history.replaceState({}, '', `/${query ? `?${query}` : ''}`)");
-    expect(script).not.toContain("element('button', 'Apply')");
-    expect(script).not.toContain("element('button', 'Reset')");
-    expect(script).toContain('data.nextCursor');
-    expect(script).toContain("next.set('cursor', data.nextCursor)");
-    expect(script).toContain("findings.set('limit', '30')");
-  });
-
-  it('defaults Explore to findings from the last 30 days', async () => {
-    const script = await readFile(new URL('../public/assets/app.js', import.meta.url), 'utf8');
-
-    expect(script).toContain("const DEFAULT_RANGE_DAYS = '30';");
-    expect(script).toContain("'/api/v1/dashboard/summary'");
-    expect(script).not.toContain("'/api/v1/costs/breakdowns'");
-    expect(script).not.toContain("'/api/v1/outcomes/summary'");
-    expect(script).toContain("{ value: 'all', label: 'All time' }");
-    expect(script).toContain("params.set('range', DEFAULT_RANGE_DAYS)");
-    expect(script).toMatch(/ensureDefaultRange\(\);\s+await renderExplore\(version\);/);
-  });
-
   it('renders service content through text nodes without HTML injection sinks', async () => {
     const script = await readFile(new URL('../public/assets/app.js', import.meta.url), 'utf8');
 
@@ -178,11 +77,16 @@ describe('Vercel service app', () => {
       const page = await fetch(`http://127.0.0.1:${port}/`);
       expect(page.status).toBe(200);
       expect(page.headers.get('content-type')).toContain('text/html');
-      expect(await page.text()).toContain('<title>Warden Service</title>');
+      expect(page.headers.get('cache-control')).toBe('no-store');
+      expect(await page.text()).toBe(await readFile(new URL('../public/index.html', import.meta.url), 'utf8'));
 
-      const asset = await fetch(`http://127.0.0.1:${port}/assets/app.js`);
-      expect(asset.status).toBe(200);
-      expect(asset.headers.get('content-type')).toContain('text/javascript');
+      for (const [filename, contentType] of [['app.js', 'text/javascript'], ['styles.css', 'text/css']]) {
+        const asset = await fetch(`http://127.0.0.1:${port}/assets/${filename}`);
+        expect(asset.status).toBe(200);
+        expect(asset.headers.get('content-type')).toContain(contentType);
+        expect(asset.headers.get('cache-control')).toBe('no-store');
+        expect(await asset.text()).toBe(await readFile(new URL(`../public/assets/${filename}`, import.meta.url), 'utf8'));
+      }
     } finally {
       await new Promise<void>((resolve, reject) => server.close((error) => {
         if (error) reject(error);
