@@ -54,23 +54,18 @@ Warden works in two contexts:
 
 ## Quick Start
 
-### Install
+### Run Warden
+
+Run the CLI without installing it globally:
 
 ```bash
-# npm
-npm install -g @sentry/warden
-
-# pnpm
-pnpm add -g @sentry/warden
-
-# bun
-bun add -g @sentry/warden
+npx @sentry/warden
 ```
 
 ### Initialize
 
 ```bash
-warden init
+npx @sentry/warden init
 ```
 
 Creates `warden.toml` (configuration) and `.github/workflows/warden.yml` (GitHub Actions workflow).
@@ -78,14 +73,14 @@ Creates `warden.toml` (configuration) and `.github/workflows/warden.yml` (GitHub
 ### Add a Skill
 
 ```bash
-warden add security-review
-warden add code-review
+npx @sentry/warden add security-review
+npx @sentry/warden add code-review
 ```
 
 ### Run Locally
 
 ```bash
-warden
+npx @sentry/warden
 ```
 
 ### Authentication
