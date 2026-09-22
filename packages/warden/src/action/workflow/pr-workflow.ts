@@ -11,7 +11,7 @@ import { readFileSync } from 'node:fs';
 import { isAbsolute, join, resolve } from 'node:path';
 import type { Octokit } from '@octokit/rest';
 import type { Effort } from '../../config/schema.js';
-import { Sentry, logger, emitStaleResolutionMetric, setRepositoryScope, emitRunMetric } from '../../sentry.js';
+import { Sentry, logger, emitStaleResolutionMetric, setRepositoryScope, emitRunMetric, flushSentry } from '../../sentry.js';
 import {
   buildSkillRootsByName,
   loadLayeredWardenConfig,
@@ -2061,6 +2061,9 @@ async function runAnalyzeMode(
   }
 
   handleTriggerErrors(collectTriggerErrors(results), matchedTriggers.length, { failAll: false });
+  // Analyze mode is its own short-lived process. Flush after trigger work so
+  // gen_ai / skill spans are not racing process exit when the step returns.
+  await flushSentry();
   logAction(`Analysis complete: ${outputs.findingsCount} total findings`);
 }
 
