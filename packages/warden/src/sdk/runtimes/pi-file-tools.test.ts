@@ -79,6 +79,20 @@ describe('createCheckoutFileTools', () => {
     await expect(linkedRead!.execute('linked-resource', { path: join(linkedSkill, 'references', 'guide.md') }, undefined, undefined, undefined as never)).resolves.toBeDefined();
   });
 
+  it('keeps checkout reads available through local skill reference symlinks', async () => {
+    const skillRoot = join(checkoutPath, '.agents', 'skills', 'local-review');
+    const reference = join(skillRoot, 'references', 'example.ts');
+    await mkdir(join(skillRoot, 'references'), { recursive: true });
+    await symlink(join(checkoutPath, 'src', 'index.ts'), reference);
+    const [read] = createCheckoutFileTools(checkoutPath, ['read'], skillRoot);
+
+    const result = await read!.execute('reference', { path: reference }, undefined, undefined, undefined as never);
+
+    expect(result.content).toEqual([
+      expect.objectContaining({ type: 'text', text: expect.stringContaining('export const answer = 42;') }),
+    ]);
+  });
+
   it('rejects resource files and resource directories that symlink outside the skill', async () => {
     const skillRoot = join(testRoot, 'external-skill');
     const outside = join(testRoot, 'outside');

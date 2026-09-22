@@ -73,20 +73,25 @@ async function resolveAllowedPath(checkoutPath: string, requestedPath: string, s
     throw checkoutPathError(requestedPath, checkout);
   }
 
-  const [canonicalRoot, canonicalTarget] = await Promise.all([
-    resolveThroughExistingAncestor(resourceRoot && skillRoot ? skillRoot : checkout),
+  const [canonicalCheckout, canonicalTarget] = await Promise.all([
+    resolveThroughExistingAncestor(checkout),
     resolveThroughExistingAncestor(target),
   ]);
-  // Anchor resources to the skill itself: a symlinked resource directory must
-  // not grant access to unrelated files outside the resolved skill.
-  const allowedRoot = resourceRoot && skillRoot
-    ? resolve(canonicalRoot, relative(resolve(skillRoot), resourceRoot))
-    : canonicalRoot;
-  if (!isWithinPath(allowedRoot, canonicalTarget)) {
-    throw checkoutPathError(requestedPath, checkout);
+  if (withinCheckout && isWithinPath(canonicalCheckout, canonicalTarget)) {
+    return canonicalTarget;
   }
 
-  return canonicalTarget;
+  if (resourceRoot && skillRoot) {
+    // Anchor the extra access to the skill itself, so resource symlinks cannot
+    // grant access to unrelated files outside the checkout.
+    const canonicalSkillRoot = await resolveThroughExistingAncestor(skillRoot);
+    const allowedRoot = resolve(canonicalSkillRoot, relative(resolve(skillRoot), resourceRoot));
+    if (isWithinPath(allowedRoot, canonicalTarget)) {
+      return canonicalTarget;
+    }
+  }
+
+  throw checkoutPathError(requestedPath, checkout);
 }
 
 function confineTool<TParams extends TSchema, TDetails, TState>(

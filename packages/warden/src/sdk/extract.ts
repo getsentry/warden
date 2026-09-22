@@ -538,9 +538,10 @@ function readSnippet(repoPath: string, filePath: string, startLine: number, cont
  * Merge findings that describe the same issue across different code locations.
  *
  * Uses the configured auxiliary runtime to identify groups of findings about
- * the same root cause at different locations. For each group, the
- * highest-priority finding becomes the primary; other locations move to
- * `additionalLocations`.
+ * the same root cause at different locations. Only findings with identical
+ * trimmed titles, descriptions, and verification text are merged: the
+ * highest-priority finding keeps the other locations in `additionalLocations`.
+ * Differing claims or evidence remain independent.
  *
  * Skips entirely (no LLM call) when:
  * - Fewer than 2 findings have locations
