@@ -40,6 +40,7 @@ vi.mock('./workflow/schedule.js', () => ({
 }));
 
 import { runAction } from './runner.js';
+import { ActionCancellation } from './cancellation.js';
 
 const baseInputs: ActionInputs = {
   anthropicApiKey: 'test-api-key',
@@ -79,7 +80,8 @@ describe('runAction without telemetry', () => {
     expect(mocks.runScheduleWorkflow).toHaveBeenCalledWith(
       mocks.octokit,
       baseInputs,
-      '/tmp/workspace'
+      '/tmp/workspace',
+      expect.any(Object),
     );
   });
 });
@@ -173,7 +175,8 @@ describe('runAction', () => {
       baseInputs,
       'push',
       '/tmp/event.json',
-      '/tmp/workspace'
+      '/tmp/workspace',
+      expect.any(Object),
     );
     expect(emit).toHaveBeenCalledWith(
       'processMetric',
@@ -198,6 +201,47 @@ describe('runAction', () => {
         }),
       })
     );
+  });
+
+  it('records a requested cancellation as the Action outcome', async () => {
+    const cancellation = new ActionCancellation();
+    cancellation.request('SIGTERM');
+    const emit = spyOnClientEmit();
+
+    await runAction(cancellation);
+    await Sentry.flush(1000);
+
+    expect(emit).toHaveBeenCalledWith(
+      'processMetric',
+      expect.objectContaining({
+        name: 'warden.action.runs',
+        attributes: expect.objectContaining({
+          'warden.action.outcome': 'cancelled',
+        }),
+      }),
+    );
+  });
+
+  it('keeps the cancelled outcome when cleanup throws', async () => {
+    const cancellation = new ActionCancellation();
+    cancellation.request('SIGTERM');
+    const error = new Error('cleanup failed');
+    mocks.runScheduleWorkflow.mockRejectedValueOnce(error);
+    const emit = spyOnClientEmit();
+
+    await expect(runAction(cancellation)).rejects.toBe(error);
+    await Sentry.flush(1000);
+
+    expect(emit).toHaveBeenCalledWith(
+      'processMetric',
+      expect.objectContaining({
+        name: 'warden.action.runs',
+        attributes: expect.objectContaining({
+          'warden.action.outcome': 'cancelled',
+        }),
+      }),
+    );
+    expect(capturedEvents).toHaveLength(0);
   });
 
   it('attributes input parsing failures before capturing them', async () => {

@@ -120,4 +120,4 @@ runs:
         INPUT_SERVICE_DATA: ${{ inputs.service-data }}
         INPUT_SERVICE_MEMORY: ${{ inputs.service-memory }}
         INPUT_SERVICE_TIMEOUT_MS: ${{ inputs.service-timeout-ms }}
-      run: node ${{ github.action_path }}/dist/action/index.js
+      run: exec node "${{ github.action_path }}/dist/action/index.js"
