@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { coalesceHunks, wouldCoalesceReduce, splitLargeHunks } from './coalesce.js';
 import type { DiffHunk } from './parser.js';
+import { parsePatch } from './parser.js';
 
 function makeHunk(
   newStart: number,
@@ -233,6 +234,56 @@ describe('splitLargeHunks', () => {
   });
 
   describe('splitting large hunks', () => {
+    it('splits an added file at a blank line without losing source lines', () => {
+      const lines = [
+        ...Array.from({ length: 8 }, () => '+    validate_token(token, required_scopes, organization)'),
+        '+',
+        ...Array.from({ length: 8 }, () => '+    validate_token(token, required_scopes, organization)'),
+      ];
+      const hunks = parsePatch(`@@ -0,0 +1,17 @@\n${lines.join('\n')}`);
+
+      const result = splitLargeHunks(hunks, { maxChunkSize: 600 });
+
+      expect(result).toHaveLength(2);
+      expect(result[1]!.newStart).toBe(9);
+      expect(result.flatMap((hunk) => hunk.lines)).toEqual(lines);
+      expect(result.reduce((count, hunk) => count + hunk.newCount, 0)).toBe(17);
+      expect(result.every((hunk) => hunk.oldCount === 0)).toBe(true);
+    });
+
+    it('chooses a nearby boundary instead of repeatedly making tiny chunks in a long file', () => {
+      const lines = Array.from({ length: 200 }, (_, index) =>
+        index % 10 === 0 ? ' ' : ` ${'x'.repeat(49)}`);
+      const hunks = parsePatch(`@@ -1,200 +1,200 @@\n${lines.join('\n')}`);
+
+      const result = splitLargeHunks(hunks, { maxChunkSize: 1000 });
+
+      expect(result[0]!.newCount).toBe(20);
+      expect(result.flatMap((hunk) => hunk.lines)).toEqual(lines);
+    });
+
+    it('keeps trailing blank lines with the preceding chunk', () => {
+      const lines = [...Array.from({ length: 10 }, () => `+${'x'.repeat(84)}`), '+'];
+      const hunks = parsePatch(`@@ -0,0 +1,11 @@\n${lines.join('\n')}`);
+
+      const result = splitLargeHunks(hunks, { maxChunkSize: 850 });
+
+      expect(result).toHaveLength(1);
+      expect(result[0]!.lines).toEqual(lines);
+      expect(result[0]!.newCount).toBe(11);
+    });
+
+    it('still splits a large whitespace-only tail into bounded chunks', () => {
+      const lines = Array.from({ length: 200 }, () => `+${' '.repeat(49)}`);
+      const hunks = parsePatch(`@@ -0,0 +1,200 @@\n${lines.join('\n')}`);
+
+      const result = splitLargeHunks(hunks, { maxChunkSize: 1000 });
+
+      expect(result.length).toBeGreaterThan(1);
+      expect(result.every((hunk) => hunk.content.length < 1500)).toBe(true);
+      expect(result.flatMap((hunk) => hunk.lines)).toEqual(lines);
+    });
+
     it('splits a large hunk into multiple chunks', () => {
       // Create a hunk with ~2000 chars of content (will exceed 500 char limit)
       const lines = Array.from({ length: 50 }, (_, i) => ` line ${i}: ${'x'.repeat(30)}`);

@@ -426,6 +426,7 @@ async function analyzeHunk(
             userPrompt,
             repoPath,
             skillName: skill.name,
+            skillRoot: skill.rootDir,
             tools: skill.tools,
             parentSpan: span,
             traceRecorder,

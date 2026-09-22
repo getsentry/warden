@@ -10,6 +10,7 @@ import {
   type ToolDefinition,
 } from '@earendil-works/pi-coding-agent';
 import type { TSchema } from '@earendil-works/pi-ai';
+import { SKILL_RESOURCE_DIRECTORIES } from '../../skills/resources.js';
 
 const CHECKOUT_GUIDANCE = 'Stay inside the current checkout. Use repository-relative paths.';
 
@@ -60,11 +61,15 @@ function checkoutPathError(requestedPath: string, checkoutPath: string): Error {
   );
 }
 
-async function resolvePathWithinCheckout(checkoutPath: string, requestedPath: string): Promise<string> {
+async function resolveAllowedPath(checkoutPath: string, requestedPath: string, skillRoot?: string): Promise<string> {
   const checkout = resolve(checkoutPath);
   const target = resolve(checkout, requestedPath);
 
-  if (!isWithinPath(checkout, target)) {
+  const resourceRoot = skillRoot ? SKILL_RESOURCE_DIRECTORIES
+    .map((dir) => resolve(skillRoot, dir))
+    .find((root) => isWithinPath(root, target)) : undefined;
+  const withinCheckout = isWithinPath(checkout, target);
+  if (!withinCheckout && !resourceRoot) {
     throw checkoutPathError(requestedPath, checkout);
   }
 
@@ -72,28 +77,42 @@ async function resolvePathWithinCheckout(checkoutPath: string, requestedPath: st
     resolveThroughExistingAncestor(checkout),
     resolveThroughExistingAncestor(target),
   ]);
-  if (!isWithinPath(canonicalCheckout, canonicalTarget)) {
-    throw checkoutPathError(requestedPath, checkout);
+  if (withinCheckout && isWithinPath(canonicalCheckout, canonicalTarget)) {
+    return canonicalTarget;
   }
 
-  return canonicalTarget;
+  if (resourceRoot && skillRoot) {
+    // Anchor the extra access to the skill itself, so resource symlinks cannot
+    // grant access to unrelated files outside the checkout.
+    const canonicalSkillRoot = await resolveThroughExistingAncestor(skillRoot);
+    const allowedRoot = resolve(canonicalSkillRoot, relative(resolve(skillRoot), resourceRoot));
+    if (isWithinPath(allowedRoot, canonicalTarget)) {
+      return canonicalTarget;
+    }
+  }
+
+  throw checkoutPathError(requestedPath, checkout);
 }
 
 function confineTool<TParams extends TSchema, TDetails, TState>(
   tool: ToolDefinition<TParams, TDetails, TState>,
   checkoutPath: string,
+  skillRoot?: string,
 ): ToolDefinition {
+  const guidance = skillRoot
+    ? `${CHECKOUT_GUIDANCE} Read may also access scripts/, references/, and assets/ under the resolved skill at ${skillRoot}.`
+    : CHECKOUT_GUIDANCE;
   return defineTool({
     ...tool,
-    description: `${tool.description} Paths must stay within the current checkout.`,
+    description: `${tool.description} ${guidance}`,
     promptGuidelines: [
       ...(tool.promptGuidelines ?? []),
-      CHECKOUT_GUIDANCE,
+      guidance,
     ],
     async execute(toolCallId, params, signal, onUpdate, context) {
       const input = params as FileToolInput;
       const requestedPath = typeof input.path === 'string' ? input.path : '.';
-      const confinedPath = await resolvePathWithinCheckout(checkoutPath, requestedPath);
+      const confinedPath = await resolveAllowedPath(checkoutPath, requestedPath, skillRoot);
       const confinedParams = {
         ...params,
         path: pathToFileURL(confinedPath).href,
@@ -103,16 +122,17 @@ function confineTool<TParams extends TSchema, TDetails, TState>(
   });
 }
 
-/** Create Pi file tools that reject reads and searches outside the current checkout. */
+/** Confine Pi tools to the checkout, with read-only access to resolved skill resources. */
 export function createCheckoutFileTools(
   checkoutPath: string,
   toolNames: readonly string[],
+  skillRoot?: string,
 ): ToolDefinition[] {
   const requestedTools = new Set(toolNames);
   const tools: ToolDefinition[] = [];
 
   if (requestedTools.has('read')) {
-    tools.push(confineTool(createReadToolDefinition(checkoutPath), checkoutPath));
+    tools.push(confineTool(createReadToolDefinition(checkoutPath), checkoutPath, skillRoot));
   }
   if (requestedTools.has('grep')) {
     tools.push(confineTool(createGrepToolDefinition(checkoutPath), checkoutPath));

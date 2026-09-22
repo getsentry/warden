@@ -112,6 +112,7 @@ interface PiPromptResult {
 
 interface PiPromptOptions {
   cwd: string;
+  skillRoot?: string;
   systemPrompt: string;
   userPrompt: string;
   agentName?: string;
@@ -120,6 +121,7 @@ interface PiPromptOptions {
   toolNames: string[];
   customTools?: ToolDefinition[];
   maxTurns?: number;
+  maxTokens?: number;
   effort?: Effort;
   maxRetries?: number;
   timeout?: number;
@@ -602,6 +604,7 @@ async function runPiPrompt(options: PiPromptOptions): Promise<PiPromptResult> {
   const checkoutFileTools = createCheckoutFileTools(
     options.cwd,
     options.toolNames.filter((toolName) => !customToolNames.has(toolName)),
+    options.skillRoot,
   );
   const sessionCustomTools = [...customTools, ...checkoutFileTools];
 
@@ -741,6 +744,15 @@ async function runPiPrompt(options: PiPromptOptions): Promise<PiPromptResult> {
       settingsManager,
     });
     session = result.session;
+    if (options.maxTokens !== undefined) {
+      // Preserve Pi's provider/auth wrapper while forwarding the caller's cap.
+      // Otherwise structured calls silently use the model's full output limit.
+      const stream = session.agent.streamFunction.bind(session.agent);
+      session.agent.streamFunction = (model, context, streamOptions) => stream(model, context, {
+        ...streamOptions,
+        maxTokens: options.maxTokens,
+      });
+    }
     if (result.modelFallbackMessage) {
       warnings.push(result.modelFallbackMessage);
     }
@@ -926,6 +938,7 @@ async function runStructured<T>(
           customTools,
           toolDescriptions,
           maxTurns: request.maxIterations,
+          maxTokens: request.maxTokens,
           maxRetries: request.maxRetries,
           timeout: request.timeout,
           parentSpan: span,
@@ -1017,6 +1030,7 @@ export const piRuntime: Runtime = {
         try {
           const run = await runPiPrompt({
             cwd: repoPath,
+            skillRoot: request.skillRoot,
             systemPrompt,
             userPrompt,
             agentName: skillName,

@@ -8,6 +8,7 @@ import {
   createAgentSession,
 } from '@earendil-works/pi-coding-agent';
 import { piRuntime } from './pi.js';
+import { createCheckoutFileTools } from './pi-file-tools.js';
 import {
   configureWardenOffline,
   resetWardenOfflineForTests,
@@ -38,7 +39,9 @@ const piMocks = vi.hoisted(() => {
     getModel: vi.fn((_provider: string, _modelId: string) => model),
     getModels: vi.fn(() => [model]),
   };
+  const streamFunction = vi.fn();
   const session = {
+    agent: { streamFunction },
     sessionId: 'pi-session-1',
     subscribe: vi.fn((listener: (event: unknown) => void) => {
       piMocks.listeners.push(listener);
@@ -61,6 +64,7 @@ const piMocks = vi.hoisted(() => {
     resourceLoader,
     sessionManager,
     settingsManager,
+    streamFunction,
     listeners: [] as ((event: unknown) => void)[],
     resourceLoaderOptions: [] as unknown[],
     customTools: [] as unknown[],
@@ -349,6 +353,14 @@ describe('piRuntime.runSkill', () => {
         costUSD: 0.033,
       },
     });
+  });
+
+  it('passes only the resolved skill root to its confined file tools', async () => {
+    await piRuntime.runSkill({ ...baseSkillRequest(), skillRoot: '/installed/skills/security-review' });
+
+    expect(createCheckoutFileTools).toHaveBeenCalledWith(
+      '/repo', ['read', 'grep', 'find', 'ls'], '/installed/skills/security-review',
+    );
   });
 
   it('records Pi tool execution spans when trace capture is active', async () => {
@@ -823,11 +835,36 @@ describe('piRuntime structured calls', () => {
     piMocks.listeners = [];
     piMocks.resourceLoaderOptions = [];
     piMocks.customTools = [];
+    piMocks.session.agent.streamFunction = piMocks.streamFunction;
     piMocks.session.prompt.mockImplementation(async () => emitSuccessfulRun(
       assistantMessage({ content: [{ type: 'text', text: '{"ok":true}' }] })
     ));
     piMocks.modelRuntime.getModel.mockReturnValue(piMocks.model);
     piMocks.modelRuntime.getModels.mockReturnValue([piMocks.model]);
+  });
+
+  it.each(['auxiliary', 'synthesis'] as const)('honors the output-token limit on %s provider requests', async (kind) => {
+    piMocks.session.prompt.mockImplementation(async () => {
+      await piMocks.session.agent.streamFunction(piMocks.model, { messages: [] }, {
+        reasoning: 'high', sessionId: 'pi-session-1',
+      });
+      emitSuccessfulRun(assistantMessage({ content: [{ type: 'text', text: '{"ok":true}' }] }));
+    });
+    const request = {
+      prompt: 'Return {"ok": true}',
+      schema: z.object({ ok: z.boolean() }),
+      model: 'openai/gpt-test',
+      maxTokens: 512,
+    };
+
+    const result = kind === 'auxiliary'
+      ? await piRuntime.runAuxiliary({ ...request, task: 'extraction' })
+      : await piRuntime.runSynthesis({ ...request, task: 'consolidation' });
+
+    expect(result.success).toBe(true);
+    expect(piMocks.streamFunction).toHaveBeenCalledWith(piMocks.model, { messages: [] }, {
+      reasoning: 'high', sessionId: 'pi-session-1', maxTokens: 512,
+    });
   });
 
   it('parses and validates auxiliary JSON output', async () => {

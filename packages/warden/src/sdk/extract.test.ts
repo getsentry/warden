@@ -250,6 +250,62 @@ describe('mergeCrossLocationFindings', () => {
     }));
   });
 
+  it('preserves independent authorization bugs even when synthesis groups them together', async () => {
+    // Sanitized from the Sentry corpus: one broad authorization category, three fixes.
+    const findings = [
+      makeFinding({
+        id: 'thresholds',
+        title: 'Empty project filter exposes release thresholds',
+        description: 'An empty project selection falls back to thresholds from every tenant.',
+        verification: 'The empty branch omits the project predicate.',
+        location: { path: 'src/thresholds.py', startLine: 40 },
+      }),
+      makeFinding({
+        id: 'plugins',
+        title: 'Plugin endpoint skips project access',
+        description: 'A caller-supplied project ID is loaded without checking membership.',
+        verification: 'The plugin handler never checks access to the loaded project.',
+        location: { path: 'src/plugins.py', startLine: 25 },
+      }),
+      makeFinding({
+        id: 'detectors',
+        title: 'Detector endpoint skips project access',
+        description: 'Detector lookup accepts project IDs outside the caller organization.',
+        verification: 'The detector query does not intersect the accessible projects.',
+        location: { path: 'src/detectors.py', startLine: 30 },
+      }),
+    ];
+    mockCallHaiku.mockResolvedValue({
+      success: true, data: [[1, 2, 3]],
+      usage: { inputTokens: 100, outputTokens: 10, costUSD: 0.001 },
+    });
+    const onFindingProcessing = vi.fn();
+
+    const result = await mergeCrossLocationFindings(findings, { apiKey: 'test-key', repoPath: tempDir, onFindingProcessing });
+
+    expect(result.findings).toEqual(findings);
+    expect(result.mergedCount).toBe(0);
+    expect(onFindingProcessing).not.toHaveBeenCalled();
+  });
+
+  it('keeps distinct evidence while merging identical claims within an overbroad group', async () => {
+    const first = makeFinding({ id: 'first', verification: 'The create handler omits the tenant guard.', location: { path: 'src/a.ts', startLine: 1 } });
+    const duplicate = { ...first, id: 'duplicate', location: { path: 'src/b.ts', startLine: 2 } };
+    const distinct = { ...first, id: 'distinct', verification: 'The delete handler checks the wrong tenant.', location: { path: 'src/a.ts', startLine: 5 } };
+    mockCallHaiku.mockResolvedValue({
+      success: true, data: [[1, 2, 3]],
+      usage: { inputTokens: 100, outputTokens: 10, costUSD: 0.001 },
+    });
+
+    const result = await mergeCrossLocationFindings([first, duplicate, distinct], { apiKey: 'test-key', repoPath: tempDir });
+
+    expect(result.findings).toEqual([
+      { ...first, additionalLocations: [duplicate.location] },
+      distinct,
+    ]);
+    expect(result.mergedCount).toBe(1);
+  });
+
   it('still attributes the absorbed finding to its winner when both share the exact same location', async () => {
     // Regression: mergeGroupLocations seeds `seen` with the winner's own
     // location, so a loser at that same location is filtered out of
@@ -267,7 +323,7 @@ describe('mergeCrossLocationFindings', () => {
       makeFinding({
         id: 'f2',
         severity: 'medium',
-        title: 'Missing null check (duplicate wording)',
+        title: 'Missing null check',
         location: { path: 'src/a.ts', startLine: 3 },
       }),
     ];

@@ -4,6 +4,7 @@ import type { Finding, UsageStats } from '../types/index.js';
 import { WardenAuthenticationError } from './errors.js';
 import { verifyFindings } from './verify.js';
 import { getRuntime, type Runtime, type SkillRunResponse } from './runtimes/index.js';
+import { resolveSkillAsync } from '../skills/loader.js';
 
 vi.mock('./runtimes/index.js', () => ({
   getRuntime: vi.fn(),
@@ -77,6 +78,20 @@ function makeErrorResult(errors: string[]): SkillRunResponse {
 describe('verifyFindings', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  it('advertises built-in references and grants the verifier the same resolved skill root', async () => {
+    const skill = await resolveSkillAsync('security-review', '/repo');
+    const runtime = mockRuntime('{"verdict":"keep"}');
+    vi.mocked(getRuntime).mockReturnValue(runtime);
+
+    await verifyFindings([makeFinding()], { repoPath: '/repo', skill, runtime: 'pi' });
+
+    expect(runtime.runSkill).toHaveBeenCalledWith(expect.objectContaining({
+      repoPath: '/repo',
+      skillRoot: skill.rootDir,
+      systemPrompt: expect.stringContaining(`This skill is located at: ${skill.rootDir}`),
+    }));
   });
 
   it('rejects findings when the verifier returns reject', async () => {

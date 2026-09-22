@@ -176,7 +176,10 @@ const LOGICAL_BREAKPOINT_PATTERNS = [
  * Returns a priority score (lower is better) or -1 if not a breakpoint.
  */
 function getBreakpointPriority(line: string): number {
-  const index = LOGICAL_BREAKPOINT_PATTERNS.findIndex((pattern) => pattern.test(line));
+  // Match source syntax, not the unified-diff marker. File scans use '+' on
+  // every line, including the blank lines that should separate chunks.
+  const source = /^[ +-]/.test(line) ? line.slice(1) : line;
+  const index = LOGICAL_BREAKPOINT_PATTERNS.findIndex((pattern) => pattern.test(source));
   return index;
 }
 
@@ -197,7 +200,7 @@ function findBestSplitPoint(
   targetIdx: number
 ): number {
   // Search window: look within 20% of chunk size from target
-  const windowSize = Math.max(10, Math.floor((endIdx - startIdx) * 0.2));
+  const windowSize = Math.max(10, Math.floor((targetIdx - startIdx) * 0.2));
   const searchStart = Math.max(startIdx + 1, targetIdx - windowSize);
   const searchEnd = Math.min(endIdx - 1, targetIdx + windowSize);
 
@@ -209,7 +212,8 @@ function findBestSplitPoint(
     if (line === undefined) continue;
 
     const priority = getBreakpointPriority(line);
-    if (priority >= 0 && priority < bestPriority) {
+    if (priority >= 0 && (priority < bestPriority
+      || (priority === bestPriority && Math.abs(i - targetIdx) < Math.abs(bestIdx - targetIdx)))) {
       bestPriority = priority;
       bestIdx = i;
     }
@@ -306,6 +310,13 @@ function splitHunk(hunk: DiffHunk, maxChunkSize: number): DiffHunk[] {
     let splitIdx = findBestSplitPoint(lines, currentStart, lines.length, targetEnd);
     if (splitIdx <= currentStart) {
       splitIdx = currentStart + 1;
+    }
+    // Keep a small blank-only tail here instead of starting another agent for
+    // trailing whitespace. Large whitespace changes must still be split.
+    const tail = lines.slice(splitIdx);
+    if (tail.join('\n').length <= maxChunkSize * 0.1
+      && tail.every((line) => /^[ +-]?\s*$/.test(line))) {
+      splitIdx = lines.length;
     }
 
     // Extract lines for this chunk
