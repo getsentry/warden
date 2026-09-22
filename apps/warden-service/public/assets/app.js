@@ -13,6 +13,7 @@ const pageTitle = document.querySelector('#page-title');
 const pageDescription = document.querySelector('#page-description');
 let dimensions;
 let dimensionsPromise;
+let accountPromise;
 let filterTimer;
 let renderVersion = 0;
 
@@ -164,6 +165,19 @@ async function api(path, options) {
     throw error;
   }
   return response.json();
+}
+
+function loadAccount() {
+  accountPromise ??= api('/api/v1/auth/context').then((authContext) => {
+    apiAccess.hidden = !authContext.canManagePersonalTokens;
+    signOut.hidden = authContext.authDisabled;
+    accountMenu.hidden = apiAccess.hidden && signOut.hidden;
+  }).catch((error) => {
+    accountPromise = undefined;
+    // Retry controls on navigation; data endpoints handle expired sessions.
+    console.warn('Could not load account controls.', error);
+  });
+  return accountPromise;
 }
 
 function tokenRow(token) {
@@ -404,7 +418,7 @@ function updateFilterSummary(form) {
 
 function renderFilters() {
   const params = new URLSearchParams(location.search);
-  const usage = params.get('view') === 'usage';
+  const usage = params.get('view') !== 'findings';
   const form = element('form', undefined, 'filter-bar');
   form.setAttribute('aria-label', usage ? 'Usage filters' : 'Finding filters');
   if (usage) form.classList.add('usage-filters');
@@ -822,7 +836,7 @@ async function inspectFinding(finding, trigger) {
 
 async function renderExplore(version) {
   const params = new URLSearchParams(location.search);
-  const usage = params.get('view') === 'usage';
+  const usage = params.get('view') !== 'findings';
   setPage(usage ? 'Usage' : 'Findings', usage
     ? 'The cost of keeping watch.'
     : 'Review findings and the evidence behind them.');
@@ -880,7 +894,9 @@ async function renderFinding(version, findingId) {
   setPage(finding.title, `${finding.displayId} · ${finding.repository.fullName} · ${finding.skill}`);
 
   const section = element('section', undefined, 'finding-page');
-  section.append(link('Back to findings', `/${location.search}`));
+  const params = new URLSearchParams(location.search);
+  params.set('view', 'findings');
+  section.append(link('Back to findings', `/?${params}`));
   section.append(findingArticle(detail));
   content.replaceChildren(section);
 }
@@ -946,13 +962,13 @@ async function render() {
   const version = ++renderVersion;
   clearTimeout(filterTimer);
   const current = new URLSearchParams(location.search);
-  const activeView = location.pathname.startsWith('/findings/') ? 'findings' : current.get('view') ?? 'findings';
+  const findingPath = location.pathname.match(/^\/findings\/([^/]+)\/?$/);
+  const activeView = findingPath || current.get('view') === 'findings' ? 'findings' : 'usage';
   for (const view of ['findings', 'usage']) {
     const navigation = document.querySelector(`#nav-${view}`);
     const params = new URLSearchParams(current);
     params.delete('cursor');
-    if (view === 'usage') params.set('view', 'usage');
-    else params.delete('view');
+    params.set('view', view);
     navigation.href = `/?${params}`;
     if (view === activeView) navigation.setAttribute('aria-current', 'page');
     else navigation.removeAttribute('aria-current');
@@ -962,18 +978,12 @@ async function render() {
     content.replaceChildren(empty('Loading data'));
   }
   try {
-    const authContext = await api('/api/v1/auth/context');
-    if (version !== renderVersion) return;
-    apiAccess.hidden = !authContext.canManagePersonalTokens;
-    signOut.hidden = authContext.authDisabled;
-    accountMenu.hidden = apiAccess.hidden && signOut.hidden;
-    const findingPath = location.pathname.match(/^\/findings\/([^/]+)\/?$/);
-    if (findingPath) await renderFinding(version, decodeURIComponent(findingPath[1]));
-    else {
-      ensureDefaultRange();
-      await renderExplore(version);
-    }
-    if (version !== renderVersion) return;
+    const findingId = findingPath ? decodeURIComponent(findingPath[1]) : undefined;
+    if (!findingPath) ensureDefaultRange();
+    // Data endpoints authenticate independently; account controls must not delay the feed.
+    loadAccount();
+    if (findingPath) await renderFinding(version, findingId);
+    else await renderExplore(version);
   } catch (error) {
     if (version !== renderVersion) return;
     if (error instanceof Error && error.status === 401) {

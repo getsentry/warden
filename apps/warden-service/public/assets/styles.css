@@ -96,8 +96,7 @@ button, a, input, select, [tabindex] { -webkit-tap-highlight-color: transparent;
 .workspace-nav a { display: flex; align-items: center; padding: 3px 0 0; border-bottom: 3px solid transparent; color: #c6bfd6; font-size: 13px; font-weight: 550; }
 .workspace-nav a:hover { color: #fff; }
 .workspace-nav a[aria-current] { border-color: #f5bda5; color: #fff; }
-.workspace-label { margin-left: auto; color: #c6bfd6; font: 11px var(--mono); }
-.header-actions { display: flex; align-items: center; flex-shrink: 0; gap: 16px; }
+.header-actions { margin-left: auto; display: flex; align-items: center; flex-shrink: 0; gap: 16px; }
 .theme-toggle { display: grid; place-items: center; width: 32px; min-height: 32px; padding: 6px; border: 1px solid transparent; background: transparent; color: #e5ddef; }
 .theme-toggle:hover { border-color: #77698f; background: #514369; }
 .theme-toggle svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
@@ -305,7 +304,6 @@ dialog::backdrop { background: var(--backdrop); backdrop-filter: blur(3px); }
   .brand { font-size: 17px; }
   .brand-mark { width: 24px; height: 24px; }
   .workspace-nav { gap: 14px; }
-  .workspace-label { display: none; }
   .header-actions { margin-left: auto; gap: 10px; }
   .account-chevron { display: none; }
   .shell { padding: 28px 18px 48px; }
