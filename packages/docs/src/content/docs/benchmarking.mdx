@@ -26,11 +26,10 @@ Sentry repository.
 
 ## Comparison Matrix
 
-The score table is the headline and sorts by known-corpus recall. The cost table
-ranks runs by recorded provider cost per known corpus finding. Complete runs
-with no failed chunks and per-chunk trace data enter automatically. Rows based
-on partial run data show their chunk coverage and an accounting note below the
-table.
+The score table lists the best scores first, ranked by known-corpus recall.
+The cost table ranks runs by recorded provider cost per known corpus finding.
+Complete runs with no failed chunks and per-chunk trace data enter automatically.
+Rows based on partial run data include an accounting note below the table.
 
 Timing remains in result metadata for diagnostics, but the overview does not
 rank it. Provider load, network conditions, retries, queueing, and the benchmark
@@ -57,41 +56,13 @@ signals.
 
 ## Analysis
 
-### Production Model Configuration
+### Grok 4.5 High
 
-As of August 21, 2026, the getsentry organization baseline runs Warden 0.46.2
-on Pi. It uses `openrouter/x-ai/grok-4.5` at high effort for the primary review
-and `openrouter/openai/gpt-5.6-luna` at high effort for auxiliary extraction,
-verification, and merge calls. The source is the checked-in
-[`getsentry/.github` configuration](https://github.com/getsentry/.github/blob/7cdd503f30fe20e024894507380753ed7131d099/warden.toml).
-
-The matrix labels the July Grok row as **Production primary** because its
-runtime, primary model, and effort match production. That run predates the
-explicit Luna auxiliary configuration, so it is not an exact measurement of
-the current model stack. New rows record both model lanes and receive the
-**Production models** label only when both match. That label covers the model
-lanes, not every workflow setting. Corpus runs keep the standardized 100-turn
-limit and explicit historical target lists; production uses the runtime's
-50-turn default and normal pull request selection.
-
-### Production Model Stack Result
-
-The latest controlled production-model-lane row found 41 of 86 known entries
-and emitted 55 findings. It cost $34.88, or $0.85 per known entry. It ranks
-first among the 21 stable rows for known-corpus recall and ninth for cost per
-known entry.
-
-This row uses Warden 0.47.0, while the organization baseline above records
-Warden 0.46.2. The matrix's **Production models** label means that the primary
-and auxiliary model lanes match production. It does not mean every runtime and
-workflow setting is identical.
-
-The August 21 model-stack row remains in the result archive, but the matrix
-supersedes it with this controlled rerun. The older row found 37 known entries
-for $29.25. The July Grok row remains a separate Warden 0.39.0 result without a
-recorded auxiliary lane; it found 33 for $38.65. These historical rows show the
-same broad direction, but single runs do not isolate the effect of Warden,
-model sampling, or the auxiliary pipeline.
+Grok 4.5 high uses Pi through OpenRouter as `openrouter/x-ai/grok-4.5`, with
+GPT 5.6 Luna high for auxiliary calls. The Warden 0.47.0 run found 41 of 86
+known entries and emitted 55 findings. It cost $34.88, or $0.85 per known entry.
+It ranks first among the 20 stable rows for known-corpus recall and ninth for
+cost per known entry.
 
 K3 max remains cheaper at $19.37 but found nine fewer known entries. K3 high
 cost $28.14 and found 14 fewer. Grok 4.5 is the stronger recall result in this
@@ -110,8 +81,8 @@ Grok 4.5 missed. Grok 4.6 found 16 fewer known issues at 2.25 times the clean
 provider cost. Cost per known entry was $0.85 for Grok 4.5 and $3.14 for Grok
 4.6.
 
-Grok 4.5 ranks first among the 21 stable rows for recall and ninth for cost per
-known entry. Grok 4.6 ranks tenth and eighteenth. The clean shard aggregates
+Grok 4.5 ranks first among the 20 stable rows for recall and ninth for cost per
+known entry. Grok 4.6 ranks ninth and seventeenth. The clean shard aggregates
 were 3 hours 31 minutes and 8 hours 23 minutes. The overview does not rank
 timing because provider and host conditions are not controlled tightly enough.
 
@@ -162,22 +133,21 @@ as Grok 4.6 high at $78.47, while Gemini found six fewer known entries.
 DeepSeek V4 Flash found one fewer for $10.11. Gemini recorded 311 million input
 tokens, the highest total in the matrix.
 
-The run completed 154 of 156 chunks. The two remaining chunks each cover one
-corpus entry, so a complete run could score at most 21/86. Recorded cost is a
+This partial run could score at most 21/86 if completed. Recorded cost is a
 lower bound.
 
 ### Kimi K3 Effort Levels and K2.6
 
 The historical K3 max run remains the strongest Kimi result on this corpus. It
 found 32 of 86 known entries. K2.6 found 31, K3 high found 27, and K3 low found
-16. Across the 21 stable rows now published, those results rank fifth, sixth,
-eighth, and nineteenth by known-corpus recall.
+16. Across the 20 stable rows now published, those results rank fourth, fifth,
+seventh, and eighteenth by known-corpus recall.
 
 K3 max also has the best Kimi cost efficiency at $19.37, or $0.61 per known entry.
 K3 low cost $10.28, or $0.64 per known entry, but found half as many known
 issues. K3 high cost $28.14, or $1.04 per known entry. K2.6 cost $67.18, or
 $2.17 per known entry. By cost per known entry, K3 max ranks third overall,
-K3 low fourth, K3 high eleventh, and K2.6 seventeenth.
+K3 low fourth, K3 high eleventh, and K2.6 sixteenth.
 
 K2.6 spent much more time carrying context through long investigations. Its
 selected traces contain 2,440 agent turns and the row records 105.7 million
@@ -210,42 +180,14 @@ Raw JSONL traces remain withheld pending sensitive-data review.
 
 GPT 5.6 Luna high uses Pi directly as `openai/gpt-5.6-luna`. It found 36 of
 86 known entries and emitted 57 findings. This puts it behind GPT 5.5 high and
-the production model stack, and ahead of the historical Grok 4.5 high row on
-known-corpus recall. Thirty-three emitted findings matched 36 unique corpus
-entries. The other 24 findings described different bugs and did not count.
+Grok 4.5 high on known-corpus recall. Thirty-three emitted findings matched 36
+unique corpus entries. The other 24 findings described different bugs and did
+not count.
 
 The run cost $56.98, or $1.58 per known corpus finding. All 156 final chunks
 completed with traces. One MS Teams chunk lost its terminal OpenAI stream
 event in the main shard. A parallelism-1 repair replaced that exact chunk, and
 the recorded cost includes both the main shard and the full repair run.
-
-### Grok 4.5 High
-
-Grok 4.5 high uses Pi through OpenRouter as `openrouter/x-ai/grok-4.5`.
-It found 33 of 86 known entries and emitted 41 findings. It trails GPT 5.5
-high, the production model stack, and GPT 5.6 Luna high on known-corpus recall.
-Thirty-two emitted findings matched 33 unique corpus entries because one
-Atlassian JWT finding covered two entries. The other nine findings did not
-count because they described different bugs in the same files.
-
-The matched findings cover a broad range of security boundaries. Grok found
-cross-project and cross-organization authorization gaps, OAuth and JWT
-validation problems, unsigned or replayable webhooks, exposed credentials,
-and four client-side injection issues. It also caught narrower logic errors,
-including the account-merge expiry bypass, pinned-search ownership issue, and
-workflow detector disconnect authorization gap.
-
-Grok cost $38.65, nearly the same as GPT 5.5 low at $39.36, while finding five
-more known entries. Post-processing and verification cost $11.77 because the
-run produced more candidate findings. All 156 chunks completed with traces and
-no repair runs.
-
-The full-run timing is not comparable. macOS entered idle sleep during the
-fifth shard and stayed in sleep or dark wake through the final shard. The first
-four shards completed before sustained sleep and covered 90 chunks with a
-62.3-second P50, 3.4-minute P90, and 5.4-minute maximum. Grok was not fast, but
-the recorded 217.5-minute total and 81.6-minute maximum chunk were inflated by
-the sleeping benchmark host. The public comparison does not rank timing.
 
 ### Sonnet 5 High on Pi
 

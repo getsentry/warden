@@ -85,6 +85,8 @@ pnpm lint && pnpm build && pnpm test
 
 Repo-wide defaults live under `policies/`.
 
+- [Benchmark tables](policies/benchmark-tables.md):
+  Don't add metadata to benchmark tables or their variants unless explicitly requested.
 - `policies/code-comments.md`:
   Exported functions need brief JSDoc.
   Comments explain non-obvious intent, invariants, or tradeoffs.
