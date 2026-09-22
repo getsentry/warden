@@ -365,11 +365,12 @@ function ensureDefaultRange() {
 }
 
 function applyFilters(form) {
-  const next = new URLSearchParams();
-  if (new URLSearchParams(location.search).get('view') === 'usage') next.set('view', 'usage');
+  const next = new URLSearchParams(location.search);
+  next.delete('cursor');
   for (const [name, value] of new FormData(form)) {
     const normalized = String(value).trim();
     if (normalized) next.set(name, normalized);
+    else next.delete(name);
   }
   const query = next.toString();
   history.replaceState({}, '', `/${query ? `?${query}` : ''}`);
@@ -380,12 +381,9 @@ function applyFilters(form) {
 function updateFilterSummary(form) {
   const summary = form.querySelector('.advanced-filters > summary');
   if (!summary) return;
-  const fields = ['skill', 'severity'];
-  const count = fields.filter((name) => form.elements.namedItem(name).value).length;
-  summary.textContent = count ? `Filters · ${count}` : 'Filters';
   const chips = form.querySelector('.active-filters');
   chips.replaceChildren();
-  for (const name of fields) {
+  for (const name of ['skill', 'severity']) {
     const control = form.elements.namedItem(name);
     if (!control.value) continue;
     const label = control.selectedOptions[0]?.textContent ?? control.value;
@@ -399,7 +397,9 @@ function updateFilterSummary(form) {
     });
     chips.append(clear);
   }
-  chips.hidden = !chips.children.length;
+  const count = chips.children.length;
+  summary.textContent = count ? `Filters · ${count}` : 'Filters';
+  chips.hidden = count === 0;
 }
 
 function renderFilters() {
@@ -408,67 +408,76 @@ function renderFilters() {
   const form = element('form', undefined, 'filter-bar');
   form.setAttribute('aria-label', usage ? 'Usage filters' : 'Finding filters');
   if (usage) form.classList.add('usage-filters');
-  if (!usage) form.append(field(params, {
+  const primary = element('div', undefined, 'filter-main');
+  if (!usage) primary.append(field(params, {
     name: 'query',
     label: 'Search findings',
     placeholder: 'Search findings, files, or descriptions…',
     className: 'search-field',
   }));
-  form.append(
-    field(params, {
-      name: 'repositoryId',
-      label: 'Repository',
-      options: dimensionFilterOptions(
-        params,
-        'repositoryId',
-        dimensions?.repositories,
-        'All repositories',
-        'Selected repository',
-      ),
-    }),
-    field(params, {
-      name: 'skill',
-      label: 'Skill',
-      options: dimensionFilterOptions(params, 'skill', dimensions?.skills, 'All skills'),
-    }),
-    field(params, {
-      name: 'range',
-      label: 'Time',
-      options: [
-        // Keep "all" explicit so a missing range can retain its faster default.
-        { value: 'all', label: 'All time' },
-        { value: '7', label: 'Last 7 days' },
-        { value: '30', label: 'Last 30 days' },
-        { value: '90', label: 'Last 90 days' },
-      ],
-    }),
-  );
-  if (!usage) form.append(
-    field(params, {
-      name: 'severity',
-      label: 'Severity',
-      options: [
-        { value: '', label: 'All severities' },
-        { value: 'high', label: 'High' },
-        { value: 'medium', label: 'Medium' },
-        { value: 'low', label: 'Low' },
-      ],
-    }),
-    field(params, {
-      name: 'findingOutcome',
-      label: 'Finding status',
-      options: [
-        { value: '', label: 'Any status' },
-        { value: 'posted', label: 'Posted' },
-        { value: 'resolved', label: 'Resolved' },
-        { value: 'rejected', label: 'Rejected' },
-        { value: 'revised', label: 'Revised' },
-        { value: 'deduped', label: 'Deduped' },
-        { value: 'skipped', label: 'Skipped' },
-        { value: 'failed', label: 'Failed' },
-      ],
-    }),
-  );
+  primary.append(field(params, {
+    name: 'repositoryId',
+    label: 'Repository',
+    options: dimensionFilterOptions(
+      params,
+      'repositoryId',
+      dimensions?.repositories,
+      'All repositories',
+      'Selected repository',
+    ),
+  }));
+  const skill = field(params, {
+    name: 'skill',
+    label: 'Skill',
+    options: dimensionFilterOptions(params, 'skill', dimensions?.skills, 'All skills'),
+  });
+  if (usage) primary.append(skill);
+  primary.append(field(params, {
+    name: 'range',
+    label: 'Time',
+    options: [
+      // Keep "all" explicit so a missing range can retain its faster default.
+      { value: 'all', label: 'All time' },
+      { value: '7', label: 'Last 7 days' },
+      { value: '30', label: 'Last 30 days' },
+      { value: '90', label: 'Last 90 days' },
+    ],
+  }));
+  if (!usage) {
+    const advanced = element('details', undefined, 'advanced-filters');
+    const controls = element('div', undefined, 'advanced-filter-controls');
+    controls.append(
+      skill,
+      field(params, {
+        name: 'severity',
+        label: 'Severity',
+        options: [
+          { value: '', label: 'All severities' },
+          { value: 'high', label: 'High' },
+          { value: 'medium', label: 'Medium' },
+          { value: 'low', label: 'Low' },
+        ],
+      }),
+      field(params, {
+        name: 'findingOutcome',
+        label: 'Finding status',
+        options: [
+          { value: '', label: 'Any status' },
+          { value: 'posted', label: 'Posted' },
+          { value: 'resolved', label: 'Resolved' },
+          { value: 'rejected', label: 'Rejected' },
+          { value: 'revised', label: 'Revised' },
+          { value: 'deduped', label: 'Deduped' },
+          { value: 'skipped', label: 'Skipped' },
+          { value: 'failed', label: 'Failed' },
+        ],
+      }),
+    );
+    advanced.append(element('summary', 'Filters'), controls);
+    primary.append(advanced);
+  }
+  form.append(primary);
+  if (!usage) form.append(element('div', undefined, 'active-filters'));
   form.addEventListener('submit', (event) => {
     event.preventDefault();
     clearTimeout(filterTimer);
@@ -484,21 +493,6 @@ function renderFilters() {
     clearTimeout(filterTimer);
     filterTimer = setTimeout(() => applyFilters(form), 250);
   });
-  const primary = element('div', undefined, 'filter-main');
-  for (const name of usage ? ['repositoryId', 'skill', 'range'] : ['query', 'repositoryId', 'range']) {
-    primary.append(form.elements.namedItem(name).closest('label'));
-  }
-  if (!usage) {
-    const advanced = element('details', undefined, 'advanced-filters');
-    advanced.append(element('summary', 'Filters'));
-    const controls = element('div', undefined, 'advanced-filter-controls');
-    controls.append(...form.children);
-    advanced.append(controls);
-    primary.append(advanced);
-  }
-  const chips = element('div', undefined, 'active-filters');
-  chips.hidden = true;
-  form.append(primary, chips);
   updateFilterSummary(form);
   filterHost.replaceChildren(form);
   filterHost.hidden = false;

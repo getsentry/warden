@@ -6,6 +6,17 @@
     <meta name="color-scheme" content="light dark">
     <meta name="robots" content="noindex">
     <title>Findings · Warden</title>
+    <script>
+      // Select the palette before the stylesheet can paint the page.
+      {
+        let theme = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        try {
+          const saved = localStorage.getItem('warden.theme');
+          if (saved === 'light' || saved === 'dark') theme = saved;
+        } catch { /* Use system appearance when storage is unavailable. */ }
+        document.documentElement.dataset.theme = theme;
+      }
+    </script>
     <link rel="stylesheet" href="/assets/styles.css">
     <script type="module" src="/assets/app.js"></script>
   </head>

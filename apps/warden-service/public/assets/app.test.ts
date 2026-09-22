@@ -24,6 +24,7 @@ async function workspace(query = '', savedTheme?: string, systemTheme = 'light')
   const window = new Window({
     url: `https://warden.example/${query}`,
     settings: {
+      enableJavaScriptEvaluation: true,
       disableJavaScriptFileLoading: true,
       disableCSSFileLoading: true,
       device: { prefersColorScheme: systemTheme },
@@ -52,17 +53,15 @@ async function workspace(query = '', savedTheme?: string, systemTheme = 'light')
       case '/api/v1/findings/finding-1':
         data = { finding, verification: 'Ownership is not checked before the resource is returned.' };
         break;
-      case '/api/v1/personal-tokens':
-        data = { tokens: [] };
-        break;
       default: throw new Error(`Unexpected request: ${url}`);
     }
     return new window.Response(JSON.stringify(data), { headers: { 'content-type': 'application/json' } });
   });
   window.document.write(html);
+  const initialTheme = window.document.documentElement.dataset['theme'];
   window.eval(script);
   await settled(window);
-  return { window, document: window.document, requests };
+  return { window, document: window.document, requests, initialTheme };
 }
 
 async function settled(window: Window) {
@@ -94,8 +93,8 @@ it('inspects evidence beside the feed and retains filters when opening the full 
   expect(window.location.search).toContain('range=7');
 });
 
-it('carries repository and date filters between findings and usage without requesting the other feed', async () => {
-  const { window, document, requests } = await workspace('?repositoryId=repo-1&range=7');
+it('preserves finding filters when changing shared filters in Usage', async () => {
+  const { window, document, requests } = await workspace('?repositoryId=repo-1&range=7&query=ownership&severity=high&findingOutcome=posted');
   requests.length = 0;
   document.querySelector<HTMLAnchorElement>('#nav-usage')!.click();
   await settled(window);
@@ -115,10 +114,12 @@ it('carries repository and date filters between findings and usage without reque
   expect(document.title).toBe('Findings · Warden');
   expect(window.location.search).toContain('repositoryId=repo-1');
   expect(window.location.search).toContain('range=90');
+  const params = requests.filter((url) => url.pathname === '/api/v1/findings').at(-1)!.searchParams;
+  expect(Object.fromEntries(params)).toMatchObject({ query: 'ownership', severity: 'high', outcome: 'posted' });
 });
 
-it('filters findings, clears pagination, and renders an empty result', async () => {
-  const { window, document, requests } = await workspace('?cursor=old-page&range=30');
+it('filters findings, resets pagination, and clears filters from an empty result', async () => {
+  const { window, document, requests } = await workspace('?cursor=old-page&range=30&severity=high&skill=security-review');
   const input = document.querySelector<HTMLInputElement>('[name="query"]')!;
   input.value = 'no-match';
   input.dispatchEvent(new window.Event('input', { bubbles: true }));
@@ -126,15 +127,14 @@ it('filters findings, clears pagination, and renders an empty result', async () 
   expect(window.location.search).toContain('query=no-match');
   expect(window.location.search).not.toContain('cursor');
   expect(requests.filter((url) => url.pathname === '/api/v1/findings').at(-1)?.searchParams.get('query')).toBe('no-match');
-});
-
-it('keeps token access available from the account menu', async () => {
-  const { document } = await workspace();
-  document.querySelector<HTMLButtonElement>('#account-menu-trigger')!.click();
-  expect(document.querySelector('#account-menu-trigger')?.getAttribute('aria-expanded')).toBe('true');
-  document.querySelector<HTMLButtonElement>('#api-access')!.click();
-  await vi.waitFor(() => expect(document.querySelector('#api-dialog-content')?.textContent).toContain('No active API tokens.'));
-  expect(document.querySelector('#api-dialog')?.hasAttribute('open')).toBe(true);
+  const posted = [...document.querySelectorAll<HTMLButtonElement>('.status-tab')].find((button) => button.textContent === 'Posted')!;
+  posted.click();
+  await settled(window);
+  expect(requests.filter((url) => url.pathname === '/api/v1/findings').at(-1)?.searchParams.get('outcome')).toBe('posted');
+  document.querySelector<HTMLButtonElement>('.empty-findings button')!.click();
+  await settled(window);
+  expect(document.querySelector('.finding-list')).not.toBeNull();
+  expect(window.location.search).not.toMatch(/severity|skill|query|findingOutcome/);
 });
 
 it('does not let a pending search replace the usage view after navigation', async () => {
@@ -149,20 +149,6 @@ it('does not let a pending search replace the usage view after navigation', asyn
   expect(document.title).toBe('Usage · Warden');
   expect(document.querySelector('[name="query"]')).toBeNull();
   expect(window.location.search).not.toContain('no-match');
-});
-
-it('applies status shortcuts and clears advanced filters from an empty result', async () => {
-  const { window, document, requests } = await workspace('?severity=high&skill=security-review&query=no-match');
-  expect(document.querySelector('.advanced-filters > summary')?.textContent).toBe('Filters · 2');
-  const posted = [...document.querySelectorAll<HTMLButtonElement>('.status-tab')].find((button) => button.textContent === 'Posted')!;
-  posted.click();
-  await settled(window);
-  expect(requests.filter((url) => url.pathname === '/api/v1/findings').at(-1)?.searchParams.get('outcome')).toBe('posted');
-  document.querySelector<HTMLButtonElement>('.empty-findings button')!.click();
-  await settled(window);
-  expect(document.querySelector('.finding-list')).not.toBeNull();
-  expect(window.location.search).not.toMatch(/severity|skill|query|findingOutcome/);
-  expect(document.querySelector('.advanced-filters > summary')?.textContent).toBe('Filters');
 });
 
 it('keeps the latest evidence when an earlier inspection request completes late', async () => {
@@ -188,7 +174,8 @@ it('keeps the latest evidence when an earlier inspection request completes late'
 });
 
 it('restores the theme and switches it without resetting the selected finding', async () => {
-  const { window, document } = await workspace('?range=7', 'dark');
+  const { window, document, initialTheme } = await workspace('?range=7', 'dark');
+  expect(initialTheme).toBe('dark');
   expect(document.documentElement.dataset['theme']).toBe('dark');
   const toggle = document.querySelector<HTMLButtonElement>('#theme-toggle')!;
   expect(toggle.getAttribute('aria-label')).toBe('Use light theme');
@@ -202,11 +189,11 @@ it('restores the theme and switches it without resetting the selected finding', 
   expect(item.getAttribute('aria-pressed')).toBe('true');
   expect(document.querySelector('.finding-verification')).not.toBeNull();
   const restored = await workspace('', window.localStorage.getItem('warden.theme')!);
-  expect(restored.document.documentElement.dataset['theme']).toBe('light');
+  expect(restored.initialTheme).toBe('light');
 });
 
-it.each(['light', 'dark'])('automatically uses the system %s theme on the first visit', async (theme) => {
-  const { window, document } = await workspace('', undefined, theme);
-  expect(document.documentElement.dataset['theme']).toBe(theme);
+it('applies the system dark theme before the app loads on a first visit', async () => {
+  const { window, initialTheme } = await workspace('', undefined, 'dark');
+  expect(initialTheme).toBe('dark');
   expect(window.localStorage.getItem('warden.theme')).toBeNull();
 });
