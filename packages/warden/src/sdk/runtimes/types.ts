@@ -44,6 +44,8 @@ export interface SkillRunRequest {
   userPrompt: string;
   repoPath: string;
   skillName: string;
+  /** Resolved skill directory whose scripts, references, and assets may be read. */
+  skillRoot?: string;
   options: SkillRunOptions;
   tools?: ToolConfig;
   /**

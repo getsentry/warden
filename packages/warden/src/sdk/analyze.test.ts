@@ -11,6 +11,7 @@ import { SkillRunnerError, WardenAuthenticationError } from './errors.js';
 import { Sentry } from '../sentry.js';
 import { startTracedSpan } from '../sentry-trace.js';
 import { AsyncWorkQueue } from '../utils/index.js';
+import { resolveSkillAsync } from '../skills/loader.js';
 
 vi.mock('./runtimes/index.js', () => ({
   getRuntime: vi.fn(),
@@ -316,6 +317,22 @@ describe('buildSourceSnippet', () => {
 });
 
 describe('analyzeFile', () => {
+  it('passes the advertised built-in skill root to the analysis runtime', async () => {
+    const skill = await resolveSkillAsync('security-review', '/tmp/repo');
+    const run = vi.fn().mockResolvedValue({ result: {
+      status: 'success', text: '{"findings":[]}', errors: [], usage: makeUsage(),
+    } });
+    vi.mocked(getRuntime).mockReturnValue({ name: 'pi', runSkill: run } as unknown as Runtime);
+
+    await analyzeFile(skill, makePreparedFile(), '/tmp/repo', { runtime: 'pi' });
+
+    expect(run).toHaveBeenCalledWith(expect.objectContaining({
+      repoPath: '/tmp/repo',
+      skillRoot: skill.rootDir,
+      systemPrompt: expect.stringContaining(`This skill is located at: ${skill.rootDir}`),
+    }));
+  });
+
   afterEach(() => {
     vi.restoreAllMocks();
   });

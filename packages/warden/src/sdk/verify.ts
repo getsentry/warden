@@ -3,6 +3,7 @@ import type { Effort, SkillDefinition } from '../config/schema.js';
 import { FindingSchema, type Finding, type UsageStats, type VerifierRejections } from '../types/index.js';
 import { aggregateUsage } from './usage.js';
 import { extractBalancedJson } from './extract.js';
+import { buildSkillResourcesSection } from './prompt.js';
 import {
   WardenAuthenticationError,
   classifyError,
@@ -84,6 +85,8 @@ The candidate was produced for this skill. Use these criteria as the only scope 
 
 ${skill.prompt}
 </skill_instructions>
+
+${buildSkillResourcesSection(skill) ?? ''}
 
 <verification_stance>
 - Keep findings only when the issue is still real after tracing.
@@ -261,6 +264,7 @@ export async function verifyFindings(
           userPrompt: buildVerificationUserPrompt(finding, options.prContext),
           repoPath: options.repoPath,
           skillName: `${options.skill.name}:verification`,
+          skillRoot: options.skill.rootDir,
           options: {
             model: options.model,
             maxTurns: options.maxTurns,

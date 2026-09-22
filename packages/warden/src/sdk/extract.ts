@@ -405,11 +405,27 @@ interface ApplyGroupsResult {
   absorbedToWinner: Map<Finding, Finding>;
 }
 
+function splitMergeGroupByClaim(findings: Finding[], indices: number[]): number[][] {
+  const claims = new Map<string, number[]>();
+  for (const index of indices) {
+    const finding = findings[index - 1];
+    if (!finding || !finding.title.trim() || !finding.description.trim()) continue;
+    // Location-only merging cannot preserve a different title, claim, or
+    // evidence trace. Keep those reports independent even if synthesis groups them.
+    const key = JSON.stringify([finding.title.trim(), finding.description.trim(), finding.verification?.trim() ?? '']);
+    const group = claims.get(key) ?? [];
+    group.push(index);
+    claims.set(key, group);
+  }
+  return [...claims.values()];
+}
+
 /**
  * Apply LLM-returned merge groups to a list of findings.
  *
  * For each group, the highest-priority finding becomes the winner, and all
- * other findings' locations are folded into its additionalLocations.
+ * other findings' locations are folded into its additionalLocations only when
+ * their titles, descriptions, and evidence agree. Distinct claims survive.
  * Handles overlapping groups by substituting prior replacements and tracking
  * absorbed findings by their original identity.
  *
@@ -424,7 +440,7 @@ export function applyMergeGroups(
   const replacements = new Map<Finding, Finding>();
   const absorbedToWinner = new Map<Finding, Finding>();
 
-  for (const group of groups) {
+  for (const group of groups.flatMap((indices) => splitMergeGroupByClaim(indexedFindings, indices))) {
     const uniqueIndices = [...new Set(group)];
     if (uniqueIndices.length < 2) continue;
 
@@ -548,6 +564,7 @@ export async function mergeCrossLocationFindings(
 
   const findingDescriptions = formatIndexedFindingsForPrompt(withLocations, {
     locationStyle: 'range',
+    includeVerification: true,
     snippet: (finding) => {
       const loc = finding.location;
       return loc ? readSnippet(repoPath, loc.path, loc.startLine) : undefined;
@@ -557,6 +574,7 @@ export async function mergeCrossLocationFindings(
   const prompt = joinPromptSections([
     `<task>
 Identify which of these code review findings describe the SAME underlying issue appearing at different locations. Group them by shared root cause.
+Sharing a category such as missing authorization is not enough: independent endpoints requiring separate fixes are separate findings. Keep uncertain matches separate.
 </task>`,
     `<findings>
 ${findingDescriptions}

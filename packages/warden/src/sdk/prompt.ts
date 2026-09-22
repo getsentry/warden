@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import type { SkillDefinition } from '../config/schema.js';
+import { SKILL_RESOURCE_DIRECTORIES } from '../skills/resources.js';
 import { formatHunkForAnalysis, type HunkWithContext } from '../diff/index.js';
 import {
   buildChangedFilesSection,
@@ -80,21 +81,23 @@ Requirements:
 
   if (historicalEvidence) sections.push(historicalEvidence);
 
-  const { rootDir } = skill;
-  if (rootDir) {
-    const resourceDirs = ['scripts', 'references', 'assets'].filter((dir) =>
-      existsSync(join(rootDir, dir))
-    );
-    if (resourceDirs.length > 0) {
-      const dirList = resourceDirs.map((d) => `${d}/`).join(', ');
-      sections.push(`<skill_resources>
-This skill is located at: ${rootDir}
-You can read files from ${dirList} subdirectories using the Read tool with the full path.
-</skill_resources>`);
-    }
-  }
+  const resources = buildSkillResourcesSection(skill);
+  if (resources) sections.push(resources);
 
   return sections.join('\n\n');
+}
+
+/** Advertise resolved skill resources consistently to analysis and verification. */
+export function buildSkillResourcesSection(skill: SkillDefinition): string | undefined {
+  const { rootDir } = skill;
+  if (!rootDir) return undefined;
+  const resourceDirs = SKILL_RESOURCE_DIRECTORIES.filter((dir) => existsSync(join(rootDir, dir)));
+  if (resourceDirs.length === 0) return undefined;
+  const dirList = resourceDirs.map((d) => `${d}/`).join(', ');
+  return `<skill_resources>
+This skill is located at: ${rootDir}
+You can read files from ${dirList} subdirectories using the Read tool with the full path.
+</skill_resources>`;
 }
 
 /**

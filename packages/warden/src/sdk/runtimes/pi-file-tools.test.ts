@@ -4,6 +4,8 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { ToolDefinition } from '@earendil-works/pi-coding-agent';
 import { createCheckoutFileTools } from './pi-file-tools.js';
+import { resolveSkillAsync } from '../../skills/loader.js';
+import { buildHunkSystemPrompt } from '../prompt.js';
 
 describe('createCheckoutFileTools', () => {
   let testRoot: string;
@@ -43,6 +45,53 @@ describe('createCheckoutFileTools', () => {
     expect(read.promptGuidelines).toContain(
       'Stay inside the current checkout. Use repository-relative paths.',
     );
+  });
+
+  it('reads the built-in references advertised when analyzing a separate checkout', async () => {
+    const skill = await resolveSkillAsync('security-review', checkoutPath);
+    const reference = join(skill.rootDir!, 'references', 'python.md');
+    expect(buildHunkSystemPrompt(skill)).toContain(skill.rootDir);
+    const [read] = createCheckoutFileTools(checkoutPath, ['read'], skill.rootDir);
+
+    const result = await read!.execute('reference', { path: reference }, undefined, undefined, undefined as never);
+
+    expect(result.content).toEqual([
+      expect.objectContaining({ type: 'text', text: expect.stringContaining('Python') }),
+    ]);
+  });
+
+  it('allows external skill resources without granting access to sibling files or searches', async () => {
+    const skillRoot = join(testRoot, 'external-skill');
+    await mkdir(join(skillRoot, 'references'), { recursive: true });
+    await writeFile(join(skillRoot, 'references', 'guide.md'), 'Trace the effective authorization guard.');
+    await writeFile(join(skillRoot, 'private.txt'), 'not a skill resource');
+    const tools = createCheckoutFileTools(checkoutPath, ['read', 'grep'], skillRoot);
+    const read = tools.find((tool) => tool.name === 'read')!;
+    const grep = tools.find((tool) => tool.name === 'grep')!;
+
+    await expect(read.execute('read', { path: join(skillRoot, 'references', 'guide.md') }, undefined, undefined, undefined as never)).resolves.toBeDefined();
+    await expect(read.execute('private', { path: join(skillRoot, 'private.txt') }, undefined, undefined, undefined as never)).rejects.toThrow('outside');
+    await expect(grep.execute('search', { path: skillRoot, pattern: 'guard' }, undefined, undefined, undefined as never)).rejects.toThrow('outside');
+
+    const linkedSkill = join(checkoutPath, 'linked-skill');
+    await symlink(skillRoot, linkedSkill);
+    const [linkedRead] = createCheckoutFileTools(checkoutPath, ['read'], linkedSkill);
+    await expect(linkedRead!.execute('linked-resource', { path: join(linkedSkill, 'references', 'guide.md') }, undefined, undefined, undefined as never)).resolves.toBeDefined();
+  });
+
+  it('rejects resource files and resource directories that symlink outside the skill', async () => {
+    const skillRoot = join(testRoot, 'external-skill');
+    const outside = join(testRoot, 'outside');
+    await mkdir(join(skillRoot, 'references'), { recursive: true });
+    await mkdir(outside);
+    await writeFile(join(outside, 'private.txt'), 'outside');
+    await symlink(join(outside, 'private.txt'), join(skillRoot, 'references', 'linked.md'));
+    await symlink(outside, join(skillRoot, 'assets'));
+    const [read] = createCheckoutFileTools(checkoutPath, ['read'], skillRoot);
+
+    for (const path of [join(skillRoot, 'references', 'linked.md'), join(skillRoot, 'assets', 'private.txt')]) {
+      await expect(read!.execute('escape', { path }, undefined, undefined, undefined as never)).rejects.toThrow('outside');
+    }
   });
 
   it('rejects searches from the filesystem root with checkout guidance', async () => {
