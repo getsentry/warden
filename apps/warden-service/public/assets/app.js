@@ -16,6 +16,37 @@ let dimensionsPromise;
 let filterTimer;
 let renderVersion = 0;
 
+const themeToggle = document.querySelector('#theme-toggle');
+const systemTheme = window.matchMedia('(prefers-color-scheme: dark)');
+let preferredTheme;
+try {
+  const saved = localStorage.getItem('warden.theme');
+  if (saved === 'light' || saved === 'dark') preferredTheme = saved;
+} catch {
+  // Theme switching remains available when browser storage is disabled.
+}
+
+function setTheme(theme) {
+  document.documentElement.dataset.theme = theme;
+  const label = theme === 'dark' ? 'Use light theme' : 'Use dark theme';
+  themeToggle.setAttribute('aria-label', label);
+  themeToggle.title = label;
+}
+
+setTheme(preferredTheme ?? (systemTheme.matches ? 'dark' : 'light'));
+themeToggle.addEventListener('click', () => {
+  preferredTheme = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+  setTheme(preferredTheme);
+  try {
+    localStorage.setItem('warden.theme', preferredTheme);
+  } catch {
+    // The selected theme still applies for the current page.
+  }
+});
+systemTheme.addEventListener('change', (event) => {
+  if (!preferredTheme) setTheme(event.matches ? 'dark' : 'light');
+});
+
 function element(tag, text, className) {
   const node = document.createElement(tag);
   if (text !== undefined) node.textContent = String(text);
@@ -81,7 +112,7 @@ function findingOutcomeDescription(finding) {
 function setPage(title, description) {
   pageTitle.textContent = title;
   pageDescription.textContent = description;
-  document.title = title === 'Explore' ? 'Warden Service' : `${title} · Warden`;
+  document.title = `${title} · Warden`;
 }
 
 function setAccountMenuOpen(open) {
@@ -335,22 +366,52 @@ function ensureDefaultRange() {
 
 function applyFilters(form) {
   const next = new URLSearchParams();
+  if (new URLSearchParams(location.search).get('view') === 'usage') next.set('view', 'usage');
   for (const [name, value] of new FormData(form)) {
     const normalized = String(value).trim();
     if (normalized) next.set(name, normalized);
   }
   const query = next.toString();
   history.replaceState({}, '', `/${query ? `?${query}` : ''}`);
+  updateFilterSummary(form);
   render();
+}
+
+function updateFilterSummary(form) {
+  const summary = form.querySelector('.advanced-filters > summary');
+  if (!summary) return;
+  const fields = ['skill', 'severity'];
+  const count = fields.filter((name) => form.elements.namedItem(name).value).length;
+  summary.textContent = count ? `Filters · ${count}` : 'Filters';
+  const chips = form.querySelector('.active-filters');
+  chips.replaceChildren();
+  for (const name of fields) {
+    const control = form.elements.namedItem(name);
+    if (!control.value) continue;
+    const label = control.selectedOptions[0]?.textContent ?? control.value;
+    const clear = element('button', `${label} ×`, 'filter-chip');
+    clear.type = 'button';
+    clear.setAttribute('aria-label', `Clear ${name} filter`);
+    clear.addEventListener('click', () => {
+      control.value = '';
+      applyFilters(form);
+      summary.focus();
+    });
+    chips.append(clear);
+  }
+  chips.hidden = !chips.children.length;
 }
 
 function renderFilters() {
   const params = new URLSearchParams(location.search);
+  const usage = params.get('view') === 'usage';
   const form = element('form', undefined, 'filter-bar');
-  form.append(field(params, {
+  form.setAttribute('aria-label', usage ? 'Usage filters' : 'Finding filters');
+  if (usage) form.classList.add('usage-filters');
+  if (!usage) form.append(field(params, {
     name: 'query',
     label: 'Search findings',
-    placeholder: 'Title, description, or path',
+    placeholder: 'Search findings, files, or descriptions…',
     className: 'search-field',
   }));
   form.append(
@@ -382,7 +443,7 @@ function renderFilters() {
       ],
     }),
   );
-  form.append(
+  if (!usage) form.append(
     field(params, {
       name: 'severity',
       label: 'Severity',
@@ -419,10 +480,26 @@ function renderFilters() {
       applyFilters(form);
     }
   });
-  form.querySelector('[name="query"]').addEventListener('input', () => {
+  form.querySelector('[name="query"]')?.addEventListener('input', () => {
     clearTimeout(filterTimer);
     filterTimer = setTimeout(() => applyFilters(form), 250);
   });
+  const primary = element('div', undefined, 'filter-main');
+  for (const name of usage ? ['repositoryId', 'skill', 'range'] : ['query', 'repositoryId', 'range']) {
+    primary.append(form.elements.namedItem(name).closest('label'));
+  }
+  if (!usage) {
+    const advanced = element('details', undefined, 'advanced-filters');
+    advanced.append(element('summary', 'Filters'));
+    const controls = element('div', undefined, 'advanced-filter-controls');
+    controls.append(...form.children);
+    advanced.append(controls);
+    primary.append(advanced);
+  }
+  const chips = element('div', undefined, 'active-filters');
+  chips.hidden = true;
+  form.append(primary, chips);
+  updateFilterSummary(form);
   filterHost.replaceChildren(form);
   filterHost.hidden = false;
   listenForFilterDimensions(form);
@@ -493,6 +570,9 @@ function dailyChart(data) {
   for (const group of groups) {
     const column = element('div', undefined, 'daily-column');
     column.title = `${group.dimensions.day}: ${formatCost(group.costUsd)}`;
+    column.tabIndex = 0;
+    column.setAttribute('role', 'img');
+    column.setAttribute('aria-label', column.title);
     const bar = element('div', undefined, 'daily-bar');
     bar.style.height = `${Math.max(2, ((group.costUsd ?? 0) / max) * 100)}%`;
     column.append(bar);
@@ -572,130 +652,215 @@ function unavailableSourceContext(finding) {
   return context;
 }
 
-function findingRows(finding) {
-  const row = document.createElement('tr');
-  row.className = 'finding-row';
-  row.tabIndex = 0;
-  row.setAttribute('aria-expanded', 'false');
-
-  const severity = element('td', undefined, 'finding-severity');
-  severity.append(element('span', finding.severity, `severity ${finding.severity}`));
-
-  const summary = element('td', undefined, 'finding-summary');
-  const summaryLayout = element('div', undefined, 'finding-summary-layout');
-  const disclosure = element('span', undefined, 'finding-disclosure');
-  disclosure.setAttribute('aria-hidden', 'true');
-  const summaryText = element('div', undefined, 'finding-summary-text');
-  summaryText.append(
-    element('div', finding.displayId, 'finding-display-id'),
-    element('div', finding.title, 'finding-title'),
-    element('div', finding.description, 'finding-description'),
+function findingItem(finding) {
+  const item = element('li');
+  const button = element('button', undefined, 'finding-item');
+  button.type = 'button';
+  button.dataset.findingId = finding.id;
+  button.setAttribute('aria-pressed', 'false');
+  button.setAttribute('aria-controls', 'finding-inspector');
+  const priority = element('span', undefined, 'finding-priority');
+  priority.append(
+    element('span', finding.severity, `severity ${finding.severity}`),
+    element('span', finding.displayId, 'finding-display-id'),
   );
-  summaryLayout.append(disclosure, summaryText);
-  summary.append(summaryLayout);
-
-  const context = element('td', undefined, 'finding-context');
+  const summary = element('span', undefined, 'finding-summary');
+  summary.append(element('span', finding.title, 'finding-title'));
+  const context = element('span', undefined, 'finding-context');
   context.append(
-    element('div', finding.repository.fullName),
-    element('div', finding.skill, 'finding-skill'),
+    element('span', finding.repository.fullName, 'finding-repository'),
+    element('span', finding.skill, 'finding-skill'),
   );
-
-  const locationText = findingLocation(finding);
-  const location = element('td', locationText, 'finding-location');
-  location.title = locationText;
-
-  const status = element('td', findingOutcomeLabel(finding), `finding-status ${finding.outcome ?? ''}`);
-  const firstObserved = document.createElement('td');
-  firstObserved.append(dateTime(finding.firstObservedAt, '—'));
-  const lastObserved = document.createElement('td');
-  lastObserved.append(dateTime(finding.lastObservedAt, '—'));
-
-  row.append(severity, summary, context, location, status, firstObserved, lastObserved);
-
-  const detailRow = document.createElement('tr');
-  detailRow.id = `finding-detail-${finding.id}`;
-  detailRow.className = 'finding-detail-row';
-  detailRow.hidden = true;
-  const detailCell = document.createElement('td');
-  detailCell.colSpan = 7;
-  const detailContent = element('div', undefined, 'finding-detail-content');
-  const description = element('div', undefined, 'finding-detail-copy');
-  description.append(
-    element('div', 'Description', 'finding-detail-label'),
-    element('p', finding.description, 'finding-detail-description'),
-    link('View finding', `/findings/${encodeURIComponent(finding.id)}`),
-  );
-  const metadata = element('dl', undefined, 'finding-detail-metadata');
-  metadata.append(
-    findingDetail('ID', finding.displayId),
-    findingDetail('Repository', finding.repository.fullName),
-    findingDetail('Skill', finding.skill),
-    findingDetail('Location', locationText),
-    findingDetail('Confidence', finding.confidence ?? 'Not reported'),
-    findingDetail('Primary model', finding.primaryModel ?? 'Not reported'),
-    findingDetail('Reporting outcome', findingOutcomeDescription(finding)),
-    findingDetail('First observed', dateTime(finding.firstObservedAt)),
-    findingDetail('Last observed', dateTime(finding.lastObservedAt)),
-  );
-  detailContent.append(description, metadata);
-  detailCell.append(detailContent);
-  detailRow.append(detailCell);
-
-  row.setAttribute('aria-controls', detailRow.id);
-  function toggleFinding() {
-    const expanded = row.getAttribute('aria-expanded') !== 'true';
-    row.setAttribute('aria-expanded', String(expanded));
-    detailRow.hidden = !expanded;
+  summary.append(context, element('span', findingLocation(finding), 'finding-location'));
+  const observation = element('span', undefined, 'finding-observation');
+  const observed = dateTime(finding.lastObservedAt, 'Not reported');
+  if (finding.lastObservedAt) {
+    const minutes = Math.round((new Date(finding.lastObservedAt).getTime() - Date.now()) / 60_000);
+    const unit = Math.abs(minutes) < 60 ? 'minute' : Math.abs(minutes) < 1440 ? 'hour' : 'day';
+    const amount = Math.round(minutes / (unit === 'minute' ? 1 : unit === 'hour' ? 60 : 1440));
+    observed.textContent = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' }).format(amount, unit);
   }
-  row.addEventListener('click', toggleFinding);
-  row.addEventListener('keydown', (event) => {
-    if (event.key !== 'Enter' && event.key !== ' ') return;
-    event.preventDefault();
-    toggleFinding();
-  });
+  observation.append(
+    element('span', findingOutcomeLabel(finding), `finding-status ${finding.outcome ?? ''}`),
+    observed,
+  );
+  button.append(priority, summary, observation);
+  button.addEventListener('click', () => inspectFinding(finding, button));
+  item.append(button);
+  return item;
+}
 
-  return [row, detailRow];
+function statusNavigation(params) {
+  const navigation = element('nav', undefined, 'status-navigation');
+  navigation.setAttribute('aria-label', 'Finding status shortcuts');
+  const current = params.get('findingOutcome') ?? '';
+  const statuses = [['', 'All findings'], ['posted', 'Posted'], ['resolved', 'Resolved'], ['rejected', 'Rejected']];
+  if (current && !statuses.some(([value]) => value === current)) {
+    statuses.push([current, current.charAt(0).toUpperCase() + current.slice(1)]);
+  }
+  for (const [value, label] of statuses) {
+    const button = element('button', label, 'status-tab');
+    button.type = 'button';
+    button.setAttribute('aria-pressed', String(current === value));
+    button.addEventListener('click', () => {
+      const form = filterHost.querySelector('form');
+      form.elements.namedItem('findingOutcome').value = value;
+      applyFilters(form);
+    });
+    navigation.append(button);
+  }
+  return navigation;
 }
 
 function findingsSection(data, params) {
-  const section = element('section', undefined, 'section');
-  section.append(sectionHeader('Findings', `${data.items.length} shown, newest runs first`));
+  const section = element('section', undefined, 'findings-section');
+  const toolbar = element('div', undefined, 'findings-toolbar');
+  toolbar.append(statusNavigation(params), element('span', `${formatNumber(data.items.length)} on this page`, 'feed-count'));
+  section.append(toolbar);
   if (!data.items.length) {
-    section.append(empty('No findings match these filters.'));
+    const message = element('div', undefined, 'empty-findings');
+    message.append(element('h2', 'Nothing matches these filters'), element('p', 'Try a wider date range or clear the finding filters.'));
+    const clear = element('button', 'Clear finding filters', 'quiet-button');
+    clear.type = 'button';
+    clear.addEventListener('click', () => {
+      const form = filterHost.querySelector('form');
+      for (const name of ['query', 'severity', 'skill', 'findingOutcome']) form.elements.namedItem(name).value = '';
+      applyFilters(form);
+    });
+    message.append(clear);
+    section.append(message);
     return section;
   }
-  const tableShell = element('div', undefined, 'finding-table-shell');
-  const table = document.createElement('table');
-  table.className = 'finding-table';
-  const head = document.createElement('thead');
-  const headings = document.createElement('tr');
-  for (const label of ['Severity', 'Finding', 'Repository / skill', 'Location', 'Status', 'First observed', 'Last observed']) {
-    const heading = element('th', label);
-    heading.scope = 'col';
-    headings.append(heading);
-  }
-  head.append(headings);
-  const body = document.createElement('tbody');
-  for (const finding of data.items) body.append(...findingRows(finding));
-  table.append(head, body);
-  tableShell.append(table);
-  section.append(tableShell);
+  const workspace = element('div', undefined, 'review-workspace');
+  const feed = element('div', undefined, 'review-feed');
+  const heading = element('div', undefined, 'feed-heading');
+  heading.append(element('h2', 'Latest Findings'), element('span', 'Newest runs first'));
+  const list = element('ul', undefined, 'finding-list');
+  list.setAttribute('aria-label', 'Findings');
+  for (const finding of data.items) list.append(findingItem(finding));
+  feed.append(heading, list);
   if (data.nextCursor) {
     const next = new URLSearchParams(params);
     next.set('cursor', data.nextCursor);
     const pagination = element('div', undefined, 'pagination');
     pagination.append(link('Next page', `/?${next}`, 'text-link'));
-    section.append(pagination);
+    feed.append(pagination);
   }
+  const inspector = element('aside', undefined, 'finding-inspector');
+  inspector.id = 'finding-inspector';
+  inspector.hidden = true;
+  inspector.setAttribute('aria-labelledby', 'inspector-title');
+  workspace.append(feed, inspector);
+  section.append(workspace);
   return section;
 }
 
+let inspectorVersion = 0;
+
+async function inspectFinding(finding, trigger) {
+  const version = ++inspectorVersion;
+  const pageVersion = renderVersion;
+  const workspace = content.querySelector('.review-workspace');
+  const inspector = workspace.querySelector('.finding-inspector');
+  for (const button of workspace.querySelectorAll('.finding-item')) {
+    button.setAttribute('aria-pressed', String(button === trigger));
+  }
+  workspace.classList.add('has-inspector');
+  inspector.hidden = false;
+  const header = element('header', undefined, 'inspector-header');
+  const actions = element('div', undefined, 'inspector-actions');
+  const close = element('button', 'Close', 'quiet-button inspector-close');
+  close.type = 'button';
+  close.setAttribute('aria-label', 'Close finding');
+  const closeInspector = () => {
+    ++inspectorVersion;
+    inspector.hidden = true;
+    workspace.classList.remove('has-inspector');
+    trigger.setAttribute('aria-pressed', 'false');
+    trigger.focus();
+  };
+  close.addEventListener('click', closeInspector);
+  actions.append(
+    element('span', finding.displayId, 'inspector-id'),
+    link('Open full page', `/findings/${encodeURIComponent(finding.id)}${location.search}`),
+    close,
+  );
+  const title = element('h2', finding.title);
+  title.id = 'inspector-title';
+  title.tabIndex = -1;
+  header.append(actions, title, element('p', `${finding.repository.fullName} · ${finding.skill}`));
+  const body = element('div', undefined, 'inspector-body');
+  body.setAttribute('aria-live', 'polite');
+  body.setAttribute('aria-busy', 'true');
+  body.append(empty('Loading evidence…'));
+  inspector.replaceChildren(header, body);
+  inspector.onkeydown = (event) => {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      closeInspector();
+    }
+  };
+  const narrowScreen = window.matchMedia('(max-width: 720px)').matches;
+  if (!narrowScreen) trigger.scrollIntoView({ block: 'nearest' });
+  title.focus({ preventScroll: !narrowScreen });
+  try {
+    const detail = await api(`/api/v1/findings/${encodeURIComponent(finding.id)}`);
+    // Selection and navigation can both change while evidence is loading.
+    if (version !== inspectorVersion || pageVersion !== renderVersion || !inspector.isConnected) return;
+    body.replaceChildren(findingArticle(detail));
+  } catch (error) {
+    if (version !== inspectorVersion || pageVersion !== renderVersion || !inspector.isConnected) return;
+    if (error.status === 401) {
+      window.location.assign(`/api/auth/login?returnTo=${encodeURIComponent(location.pathname + location.search)}`);
+      return;
+    }
+    const message = element('div', undefined, 'inspector-error');
+    message.append(element('p', 'Could not load the evidence. Try again.'));
+    const retry = element('button', 'Try again', 'quiet-button');
+    retry.type = 'button';
+    retry.addEventListener('click', () => inspectFinding(finding, trigger));
+    message.append(retry);
+    body.replaceChildren(message);
+  } finally {
+    if (version === inspectorVersion && inspector.isConnected) body.setAttribute('aria-busy', 'false');
+  }
+}
+
 async function renderExplore(version) {
-  setPage('Explore', 'Filter findings and understand where Warden spends time and money.');
+  const params = new URLSearchParams(location.search);
+  const usage = params.get('view') === 'usage';
+  setPage(usage ? 'Usage' : 'Findings', usage
+    ? 'The cost of keeping watch.'
+    : 'Review findings and the evidence behind them.');
   filterHost.hidden = false;
   const filterForm = filterHost.querySelector('form') ?? renderFilters();
-  const params = new URLSearchParams(location.search);
   const common = commonApiParams(params);
+  if (usage) {
+    const summary = await api(apiPath('/api/v1/dashboard/summary', common));
+    if (version !== renderVersion) return;
+    const breakdown = (dimension) => summary.breakdowns.find((item) => item.dimension === dimension) ?? { groups: [] };
+    const totals = summary.totals;
+    const section = document.createDocumentFragment();
+    section.append(metrics([
+      ['Known cost', formatCost(totals.costUsd)],
+      ['Runs', formatNumber(totals.runs)],
+      ['Findings', formatNumber(totals.findings)],
+      ['Failed runs', formatNumber(totals.failed)],
+    ]));
+    const analytics = element('section', undefined, 'section');
+    analytics.append(sectionHeader('Cost Breakdown', 'Reported and estimated usage'));
+    const grid = element('div', undefined, 'analytics-grid');
+    grid.append(
+      dailyChart(breakdown('day')),
+      barBreakdown('By repository', breakdown('repository'), 'repository'),
+      barBreakdown('By skill', breakdown('skill'), 'skill'),
+    );
+    analytics.append(grid);
+    section.append(analytics);
+    content.replaceChildren(section);
+    scheduleFilterDimensions(filterForm);
+    return;
+  }
   const findings = new URLSearchParams(common);
   for (const name of ['query', 'severity']) {
     const value = params.get(name);
@@ -704,31 +869,9 @@ async function renderExplore(version) {
   if (params.get('findingOutcome')) findings.set('outcome', params.get('findingOutcome'));
   if (params.get('cursor')) findings.set('cursor', params.get('cursor'));
   findings.set('limit', '30');
-
-  const [summary, feed] = await Promise.all([
-    api(apiPath('/api/v1/dashboard/summary', common)),
-    api(apiPath('/api/v1/findings', findings)),
-  ]);
+  const feed = await api(apiPath('/api/v1/findings', findings));
   if (version !== renderVersion) return;
-  const breakdown = (dimension) => summary.breakdowns.find((item) => item.dimension === dimension) ?? { groups: [] };
-  const totals = summary.totals;
-  const section = document.createDocumentFragment();
-  section.append(metrics([
-    ['Runs', formatNumber(totals.runs)],
-    ['Findings', formatNumber(totals.findings)],
-    ['Known cost', formatCost(totals.costUsd)],
-    ['Failed runs', formatNumber(totals.failed)],
-  ]));
-  const analytics = element('section', undefined, 'section');
-  analytics.append(sectionHeader('Cost', 'Reported and estimated usage'));
-  const grid = element('div', undefined, 'analytics-grid');
-  grid.append(
-    dailyChart(breakdown('day')),
-    barBreakdown('By repository', breakdown('repository'), 'repository'),
-    barBreakdown('By skill', breakdown('skill'), 'skill'),
-  );
-  analytics.append(grid);
-  section.append(analytics, findingsSection(feed, params));
+  const section = findingsSection(feed, params);
   content.replaceChildren(section);
   scheduleFilterDimensions(filterForm);
 }
@@ -740,10 +883,16 @@ async function renderFinding(version, findingId) {
   const detail = await api(`/api/v1/findings/${encodeURIComponent(findingId)}`);
   const { finding } = detail;
   if (version !== renderVersion) return;
-  setPage(finding.displayId, finding.title);
+  setPage(finding.title, `${finding.displayId} · ${finding.repository.fullName} · ${finding.skill}`);
 
   const section = element('section', undefined, 'finding-page');
-  section.append(link('Back to findings', '/'));
+  section.append(link('Back to findings', `/${location.search}`));
+  section.append(findingArticle(detail));
+  content.replaceChildren(section);
+}
+
+function findingArticle(detail) {
+  const { finding } = detail;
   const article = element('article', undefined, 'finding-page-card');
   const heading = element('div', undefined, 'finding-page-heading');
   heading.append(
@@ -775,7 +924,8 @@ async function renderFinding(version, findingId) {
     ? sourceContext(detail.sourceEvidence)
     : unavailableSourceContext(finding));
 
-  const details = findingPageSection('Finding Details');
+  const details = element('details', undefined, 'finding-page-section finding-metadata-disclosure');
+  details.append(element('summary', 'Finding Details'));
   const metadata = element('dl', undefined, 'finding-page-metadata');
   metadata.append(
     findingDetail('ID', finding.displayId),
@@ -795,12 +945,25 @@ async function renderFinding(version, findingId) {
   article.append(heading);
   if (reportingNote) article.append(reportingNote);
   article.append(explanation, codeContext, details);
-  section.append(article);
-  content.replaceChildren(section);
+  return article;
 }
 
 async function render() {
   const version = ++renderVersion;
+  clearTimeout(filterTimer);
+  const current = new URLSearchParams(location.search);
+  const activeView = location.pathname.startsWith('/findings/') ? 'findings' : current.get('view') ?? 'findings';
+  for (const view of ['findings', 'usage']) {
+    const navigation = document.querySelector(`#nav-${view}`);
+    const params = new URLSearchParams(current);
+    params.delete('cursor');
+    if (view === 'usage') params.set('view', 'usage');
+    else params.delete('view');
+    navigation.href = `/?${params}`;
+    if (view === activeView) navigation.setAttribute('aria-current', 'page');
+    else navigation.removeAttribute('aria-current');
+  }
+  content.setAttribute('aria-busy', 'true');
   if (!content.children.length || content.querySelector('.login-panel, .empty')) {
     content.replaceChildren(empty('Loading data'));
   }
@@ -827,6 +990,8 @@ async function render() {
     content.replaceChildren(element('div', error instanceof Error
       ? error.message
       : 'Could not load service data. Try again.', 'error'));
+  } finally {
+    if (version === renderVersion) content.setAttribute('aria-busy', 'false');
   }
 }
 
@@ -851,9 +1016,12 @@ apiDialogClose.addEventListener('click', () => apiDialog.close());
 document.addEventListener('click', (event) => {
   const target = event.target;
   if (!(target instanceof Element)) return;
+  const advanced = filterHost.querySelector('.advanced-filters[open]');
+  if (advanced && !advanced.contains(target)) advanced.open = false;
   if (!accountMenu.contains(target)) setAccountMenuOpen(false);
   const anchor = target.closest('a');
-  if (!anchor || anchor.origin !== location.origin || anchor.target) return;
+  if (!anchor || anchor.origin !== location.origin || anchor.target || anchor.hash
+    || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
   event.preventDefault();
   history.pushState({}, '', anchor.href);
   filterHost.replaceChildren();
@@ -861,6 +1029,12 @@ document.addEventListener('click', (event) => {
 });
 
 document.addEventListener('keydown', (event) => {
+  const advanced = filterHost.querySelector('.advanced-filters[open]');
+  if (event.key === 'Escape' && advanced) {
+    advanced.open = false;
+    advanced.querySelector('summary').focus();
+    return;
+  }
   if (event.key !== 'Escape' || accountMenuPopover.hidden) return;
   setAccountMenuOpen(false);
   accountMenuTrigger.focus();

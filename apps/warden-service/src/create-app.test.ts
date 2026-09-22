@@ -49,11 +49,12 @@ describe('Vercel service app', () => {
       .toBeLessThan(manifest.scripts.build.indexOf('tsc --noEmit'));
   });
 
-  it('ships one Explore workspace without embedding credentials', async () => {
+  it('ships findings and usage navigation without embedding credentials', async () => {
     const html = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
     const script = await readFile(new URL('../public/assets/app.js', import.meta.url), 'utf8');
 
-    expect(html).toContain('Explore');
+    expect(html).toContain('id="nav-findings"');
+    expect(html).toContain('id="nav-usage"');
     expect(html).toContain('API Access');
     expect(html).toContain('class="brand-mark" viewBox="0 0 64 64"');
     expect(html).not.toContain('<span class="brand-mark" aria-hidden="true">W</span>');
@@ -64,10 +65,9 @@ describe('Vercel service app', () => {
     expect(script).not.toContain('renderMemory');
     expect(script).toContain("'/api/v1/findings'");
     expect(script).toContain("`/api/v1/findings/${encodeURIComponent(findingId)}`");
-    expect(script).toContain("`/findings/${encodeURIComponent(finding.id)}`");
+    expect(script).toContain("`/findings/${encodeURIComponent(finding.id)}${location.search}`");
     expect(script).toContain('finding.displayId');
     expect(script).toContain("api('/api/v1/history/dimensions')");
-    expect(script).toContain('const [summary, feed] = await Promise.all([');
     expect(script).toContain("api(apiPath('/api/v1/dashboard/summary', common))");
     expect(script).toContain('function renderFilters()');
     expect(script).not.toContain('async function renderFilters');
@@ -83,25 +83,21 @@ describe('Vercel service app', () => {
     expect(script).not.toContain('filtersReady');
     expect(script).not.toContain("api('/api/v1/repositories')");
     expect(script).not.toContain("api('/api/v1/skills')");
-    expect(script).toContain("document.createElement('table')");
-    expect(script).toContain("['Severity', 'Finding', 'Repository / skill', 'Location', 'Status', 'First observed', 'Last observed']");
     expect(script).not.toContain('finding-card');
     expect(script).not.toContain('badge');
     expect(`${html}\n${script}`).not.toContain('WARDEN_SERVICE_TOKEN');
-    expect(`${html}\n${script}`).not.toContain('localStorage');
+    expect(script.match(/localStorage\.setItem\([^)]+\)/g)).toEqual([
+      "localStorage.setItem('warden.theme', preferredTheme)",
+    ]);
     expect(script).toContain("'/api/v1/personal-tokens'");
     expect(script).toContain(
       'window.location.assign(`/api/auth/login?returnTo=${encodeURIComponent(returnTo)}`)',
     );
     expect(script).toContain("fetch('/api/auth/sign-out'");
-    expect(script).toContain("row.setAttribute('aria-expanded', 'false')");
-    expect(script).toContain("event.key !== 'Enter' && event.key !== ' '");
-    expect(script).toContain('detailRow.hidden = !expanded');
     expect(script).toContain("link('Open on GitHub'");
     expect(script).toContain("element('span', lineNumber, 'source-line-number')");
     expect(script).toContain("findingPageSection('Why Warden Flagged This')");
     expect(script).toContain("element('h2', 'Code Context')");
-    expect(script).toContain("findingPageSection('Finding Details')");
     expect(script).toContain("findingDetail('Primary model', finding.primaryModel ?? 'Not reported')");
     expect(script).toContain("'No source snippet was retained for this finding.'");
     expect(script).toContain("'Not posted: PR changed'");
@@ -113,8 +109,6 @@ describe('Vercel service app', () => {
       "'Warden did not record how this finding was delivered. Scheduled scans and older runs may omit this data.'",
     );
     expect(script).not.toContain('This older run retained the finding');
-    expect(script).toContain("element('td', findingOutcomeLabel(finding), `finding-status");
-    expect(script).toContain("findingDetail('Reporting outcome', findingOutcomeDescription(finding))");
     expect(script).toContain("findingDetail('First observed'");
     expect(script).toContain("findingDetail('Last observed'");
     expect(script).not.toContain('protected-session');
@@ -138,7 +132,7 @@ describe('Vercel service app', () => {
     expect(script).toContain("findings.set('limit', '30')");
   });
 
-  it('defaults Explore to findings from the last 30 days', async () => {
+  it('defaults the workspace to findings from the last 30 days', async () => {
     const script = await readFile(new URL('../public/assets/app.js', import.meta.url), 'utf8');
 
     expect(script).toContain("const DEFAULT_RANGE_DAYS = '30';");
@@ -178,11 +172,16 @@ describe('Vercel service app', () => {
       const page = await fetch(`http://127.0.0.1:${port}/`);
       expect(page.status).toBe(200);
       expect(page.headers.get('content-type')).toContain('text/html');
-      expect(await page.text()).toContain('<title>Warden Service</title>');
+      expect(page.headers.get('cache-control')).toBe('no-store');
+      expect(await page.text()).toBe(await readFile(new URL('../public/index.html', import.meta.url), 'utf8'));
 
-      const asset = await fetch(`http://127.0.0.1:${port}/assets/app.js`);
-      expect(asset.status).toBe(200);
-      expect(asset.headers.get('content-type')).toContain('text/javascript');
+      for (const [filename, contentType] of [['app.js', 'text/javascript'], ['styles.css', 'text/css']]) {
+        const asset = await fetch(`http://127.0.0.1:${port}/assets/${filename}`);
+        expect(asset.status).toBe(200);
+        expect(asset.headers.get('content-type')).toContain(contentType);
+        expect(asset.headers.get('cache-control')).toBe('no-store');
+        expect(await asset.text()).toBe(await readFile(new URL(`../public/assets/${filename}`, import.meta.url), 'utf8'));
+      }
     } finally {
       await new Promise<void>((resolve, reject) => server.close((error) => {
         if (error) reject(error);
