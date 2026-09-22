@@ -291,7 +291,7 @@ export function emitRunMetric(): void {
 
 /** Emit the final outcome of a GitHub Action invocation, including startup failures. */
 export function emitActionRunMetric(
-  outcome: 'success' | 'failure',
+  outcome: 'success' | 'failure' | 'cancelled',
   stage: 'input' | 'environment' | 'dispatch',
   errorCode?: ErrorCode
 ): void {

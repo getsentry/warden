@@ -62,6 +62,7 @@ export interface TriggerCheckRun {
   url?: string;
   checkRunId?: number;
   complete(report: SkillReport, options: TriggerCheckCompleteOptions): Promise<void>;
+  cancel(report: SkillReport): Promise<void>;
   fail(error: unknown): Promise<void>;
 }
 
@@ -104,6 +105,8 @@ export interface TriggerExecutorDeps {
   analysisQueue?: AsyncWorkQueue;
   /** Shared controller for stopping the whole action run */
   abortController?: AbortController;
+  /** User-requested Action cancellation, distinct from provider circuit-breaker aborts. */
+  cancellationSignal?: AbortSignal;
   /** Shared circuit breaker for auth/provider failures */
   circuitBreaker?: ProviderFailureCircuitBreaker;
   /** Optional context-bound check writer. Omit for analyze mode. */
@@ -134,6 +137,8 @@ export interface TriggerResult {
   auxiliaryModel?: string;
   synthesisModel?: string;
   error?: unknown;
+  /** The trigger matched but cancellation stopped it before dispatch. */
+  pending?: boolean;
   /** Verification/merge events captured during post-processing, for provenance export. */
   findingProcessingEvents?: FindingProcessingEvent[];
   /**
@@ -263,12 +268,16 @@ export async function executeTrigger(
         // Update skill check with results
         if (skillCheck && context.pullRequest) {
           try {
-            await skillCheck.complete(report, {
-              failOn,
-              reportOn,
-              minConfidence,
-              failCheck,
-            });
+            if (deps.cancellationSignal?.aborted) {
+              await skillCheck.cancel(report);
+            } else {
+              await skillCheck.complete(report, {
+                failOn,
+                reportOn,
+                minConfidence,
+                failCheck,
+              });
+            }
           } catch (error) {
             console.error(`::warning::Failed to update skill check for ${trigger.skill}: ${error}`);
           }

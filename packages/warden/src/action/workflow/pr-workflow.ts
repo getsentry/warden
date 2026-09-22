@@ -36,7 +36,7 @@ import { evaluateFixAttempts, postThreadReply } from '../fix-evaluation/index.js
 import type { EvaluateFixAttemptsResult, FixEvaluation } from '../fix-evaluation/index.js';
 import { aggregateUsage } from '../../sdk/usage.js';
 import { logAction, warnAction } from '../../cli/output/tty.js';
-import { formatCost, formatTokens, formatDuration } from '../../cli/output/formatters.js';
+import { formatCost, formatTokens, formatDuration, totalUsageStats } from '../../cli/output/formatters.js';
 import { findBotReviewState } from '../review-state.js';
 import type { BotReviewInfo } from '../review-state.js';
 import type { ActionInputs } from '../inputs.js';
@@ -105,6 +105,7 @@ import {
   type SkillExecutionMeta,
   type BuildFindingsOutputOptions,
 } from '../../reporting/output.js';
+import { ActionCancellation } from '../cancellation.js';
 
 // -----------------------------------------------------------------------------
 // Phase Result Types
@@ -238,23 +239,19 @@ function toSkippedTriggers(
 }
 
 /**
- * A trigger that threw before producing a report has no `report`, so
- * `toSkillExecutions`'s filter (which requires one) can never include it —
- * without this, an errored trigger vanishes from the export entirely aside
- * from a console warning and (in analyze/report mode) a `triggerResults`
- * row. Surfacing it here instead keeps it visible in the same place a
- * schedule-mode trigger error is now surfaced.
+ * Reportless results cannot appear in `skillExecutions`, so preserve them in
+ * `skippedTriggers`: failures as errors and cancellation-before-dispatch as pending.
  */
-function toErroredSkippedTriggers(
+function toUnfinishedSkippedTriggers(
   results: TriggerResult[]
 ): NonNullable<BuildFindingsOutputOptions['skippedTriggers']> {
   return results
-    .filter((r) => r.error && !r.report)
+    .filter((r) => (r.pending || r.error) && !r.report)
     .map((r) => ({
       skillName: r.skillName,
       triggerId: r.triggerId,
       triggerName: r.triggerName,
-      reason: 'error' as const,
+      reason: r.pending ? 'pending' as const : 'error' as const,
     }));
 }
 
@@ -613,6 +610,12 @@ function createTriggerCheckReporter(
             ...checkOptions,
             ...options,
           }),
+        cancel: (report) =>
+          updateSkillCheck(octokit, check.checkRunId, report, {
+            ...checkOptions,
+            conclusion: 'cancelled',
+            title: 'Analysis cancelled',
+          }),
         fail: (error) => failSkillCheck(octokit, check.checkRunId, error, checkOptions),
       };
     },
@@ -627,6 +630,7 @@ async function executeAllTriggers(
   options: {
     checks?: TriggerCheckReporter;
     memoryRecall?: ActionMemoryRecall;
+    cancellation?: ActionCancellation;
     /** Fired after each trigger settles, with every result settled so far (completion order, not input order). */
     onTriggerComplete?: (completedSoFar: TriggerResult[]) => void;
   } = {}
@@ -639,32 +643,47 @@ async function executeAllTriggers(
   const circuitBreaker = new ProviderFailureCircuitBreaker({ abortController });
   const completedSoFar: TriggerResult[] = [];
 
-  // Limit trigger dispatch too; the analysis queue only gates work after a trigger starts.
-  const results = await runPool(
-    matchedTriggers,
-    concurrency,
-    async (trigger) => {
-      const result = await executeTrigger(trigger, {
-        context,
-        anthropicApiKey: inputs.anthropicApiKey,
-        claudePath: runtimeEnv.pathToClaudeCodeExecutable,
-        globalFailOn: inputs.failOn,
-        globalReportOn: inputs.reportOn,
-        globalMaxFindings: inputs.maxFindings,
-        globalRequestChanges: inputs.requestChanges,
-        globalFailCheck: inputs.failCheck,
-        analysisQueue,
-        abortController,
-        circuitBreaker,
-        checks: options.checks,
-        historicalEvidence: options.memoryRecall?.historicalEvidence,
-      });
-      completedSoFar.push(result);
-      options.onTriggerComplete?.([...completedSoFar]);
-      return result;
-    },
-    { shouldAbort: () => abortController.signal.aborted },
+  const cancelAnalysis = (): void => abortController.abort(
+    options.cancellation?.abortController.signal.reason,
   );
+  if (options.cancellation?.requested) {
+    cancelAnalysis();
+  } else {
+    options.cancellation?.abortController.signal.addEventListener('abort', cancelAnalysis, { once: true });
+  }
+
+  // Limit trigger dispatch too; the analysis queue only gates work after a trigger starts.
+  let results: TriggerResult[];
+  try {
+    results = await runPool(
+      matchedTriggers,
+      concurrency,
+      async (trigger) => {
+        const result = await executeTrigger(trigger, {
+          context,
+          anthropicApiKey: inputs.anthropicApiKey,
+          claudePath: runtimeEnv.pathToClaudeCodeExecutable,
+          globalFailOn: inputs.failOn,
+          globalReportOn: inputs.reportOn,
+          globalMaxFindings: inputs.maxFindings,
+          globalRequestChanges: inputs.requestChanges,
+          globalFailCheck: inputs.failCheck,
+          analysisQueue,
+          abortController,
+          cancellationSignal: options.cancellation?.abortController.signal,
+          circuitBreaker,
+          checks: options.checks,
+          historicalEvidence: options.memoryRecall?.historicalEvidence,
+        });
+        completedSoFar.push(result);
+        options.onTriggerComplete?.([...completedSoFar]);
+        return result;
+      },
+      { shouldAbort: () => abortController.signal.aborted },
+    );
+  } finally {
+    options.cancellation?.abortController.signal.removeEventListener('abort', cancelAnalysis);
+  }
 
   // `runPool` never dispatches work items past an abort, so a matched trigger
   // the circuit breaker aborted before it started doesn't appear in `results`
@@ -682,7 +701,9 @@ async function executeAllTriggers(
     skillExecutionId: trigger.skillExecutionId,
     triggerName: trigger.name,
     skillName: trigger.skill,
-    error: new Error('Trigger execution aborted before dispatch (circuit breaker tripped)'),
+    ...(options.cancellation?.requested
+      ? { pending: true }
+      : { error: new Error('Trigger execution aborted before dispatch (circuit breaker tripped)') }),
   }));
   completedSoFar.push(...abortedResults);
   options.onTriggerComplete?.([...completedSoFar]);
@@ -1203,7 +1224,7 @@ async function finalizeWorkflow(
     triggerResults: toReplayTriggerResults(results),
     ...buildBaseOutputOptions(inputs, [
       ...toSkippedTriggers(skippedTriggers, context),
-      ...toErroredSkippedTriggers(results),
+      ...toUnfinishedSkippedTriggers(results),
     ]),
     skillExecutions: toSkillExecutions(results),
     recalledMemories: memoryRecall?.memories.map(({ id, version }) => ({ id, version })),
@@ -1394,6 +1415,38 @@ async function failCoreCheck(
   }
 }
 
+/** Mark an in-progress core check as cancelled while preserving partial results. */
+async function cancelCoreCheck(
+  octokit: Octokit,
+  context: EventContext,
+  coreCheckId: number | undefined,
+  results: TriggerResult[],
+  postChecks: boolean,
+): Promise<void> {
+  const options = checkOptionsForPullRequest(context, postChecks);
+  if (!coreCheckId || !options) {
+    return;
+  }
+
+  const reports = results.flatMap((result) => (result.report ? [result.report] : []));
+  try {
+    await updateCoreCheck(
+      octokit,
+      coreCheckId,
+      {
+        ...buildCoreSummaryData(results, reports),
+        title: 'Warden cancelled',
+        message: 'Analysis was cancelled. Partial results are shown below.',
+      },
+      'cancelled',
+      options,
+    );
+  } catch (error) {
+    Sentry.captureException(error, { tags: { operation: 'cancel_core_check' } });
+    warnAction(`Failed to mark core check as cancelled: ${error}`);
+  }
+}
+
 async function runOrFailCore<T>(
   octokit: Octokit,
   context: EventContext,
@@ -1499,6 +1552,7 @@ function toReplayTriggerResults(results: TriggerResult[]): ReplayTriggerResult[]
     skillName: result.skillName,
     report: result.report,
     error: result.error,
+    pending: result.pending,
     findingProcessingEvents: result.findingProcessingEvents,
     auxiliaryModel: result.auxiliaryModel,
     synthesisModel: result.synthesisModel,
@@ -1610,6 +1664,13 @@ function buildReportModeResults(
       return {
         ...baseResult,
         error: new Error(`Findings file has no result for trigger ${trigger.name} (${trigger.skill})`),
+      };
+    }
+
+    if (outputResult.status === 'pending') {
+      return {
+        ...baseResult,
+        pending: true,
       };
     }
 
@@ -1852,7 +1913,7 @@ async function finalizeReportWorkflow(
     triggerResults: toReplayTriggerResults(results),
     ...buildBaseOutputOptions(options.inputs, [
       ...toSkippedTriggers(options.skippedTriggers ?? [], context),
-      ...toErroredSkippedTriggers(results),
+      ...toUnfinishedSkippedTriggers(results),
     ]),
     skillExecutions: toSkillExecutions(results),
     recalledMemories: options.recalledMemories,
@@ -1979,6 +2040,92 @@ async function cleanupOrphanedComments(
   return findingObservations;
 }
 
+interface CancelledPRFinalizationOptions {
+  inputs: ActionInputs;
+  context: EventContext;
+  results: TriggerResult[];
+  skippedTriggers: ResolvedTrigger[];
+  resolvedTriggers: ResolvedTrigger[];
+  matchedTriggers: ResolvedTrigger[];
+  findingObservations?: FindingObservation[];
+  recalledMemories?: readonly { id: string; version: number }[];
+  memoryRecallId?: string;
+  service?: ResolvedServiceOptions;
+  publish: boolean;
+  failOnWriteError?: boolean;
+}
+
+function buildCancelledPRFinalizationBase(inputs: ActionInputs, initResult: InitResult) {
+  return {
+    inputs,
+    context: initResult.context,
+    skippedTriggers: initResult.skippedTriggers,
+    resolvedTriggers: initResult.resolvedTriggers,
+    matchedTriggers: initResult.matchedTriggers,
+    recalledMemories: initResult.memoryRecall?.memories.map(({ id, version }) => ({ id, version })),
+    memoryRecallId: initResult.memoryRecall?.clientRecallId,
+    service: initResult.service,
+  };
+}
+
+/** Finalize a cancelled PR run without performing any GitHub reporting writes. */
+async function finalizeCancelledPRRun(
+  options: CancelledPRFinalizationOptions,
+): Promise<{ findingsCount: number; highCount: number; summary: string }> {
+  const reports = options.results.flatMap((result) => (result.report ? [result.report] : []));
+  const outputs = computeWorkflowOutputs(reports);
+  setWorkflowOutputs(outputs);
+  const findingsOptions: BuildFindingsOutputOptions = {
+    outcome: 'cancelled',
+    triggerResults: toReplayTriggerResults(options.results),
+    ...buildBaseOutputOptions(options.inputs, [
+      ...toSkippedTriggers(options.skippedTriggers, options.context),
+      ...toUnfinishedSkippedTriggers(options.results),
+    ]),
+    skillExecutions: toSkillExecutions(options.results),
+    recalledMemories: options.recalledMemories,
+    memoryRecallId: options.memoryRecallId,
+    configuredSkills: buildConfiguredSkillsList({
+      allTriggers: options.resolvedTriggers,
+      matchedTriggers: options.matchedTriggers,
+    }),
+  };
+  const findingObservations = options.findingObservations ?? [];
+  try {
+    const findingsPath = writeFindingsOutput(
+      reports,
+      options.context,
+      findingObservations,
+      findingsOptions,
+    );
+    logAction(`Findings written to ${findingsPath}`);
+  } catch (error) {
+    const message = `Failed to write cancelled findings output: ${error}`;
+    if (options.failOnWriteError) {
+      setFailed(message);
+    }
+    warnAction(message);
+  }
+
+  if (options.publish) {
+    await publishActionRunFailOpen(
+      options.service,
+      () => buildFindingsOutput(reports, options.context, findingObservations, findingsOptions),
+    );
+  }
+  return outputs;
+}
+
+function formatCancelledPreservation(findingsCount: number, results: TriggerResult[]): string {
+  const usages = results.flatMap((result) => {
+    const usage = totalUsageStats(result.report?.usage, result.report?.auxiliaryUsage);
+    return usage ? [usage] : [];
+  });
+  const cost = aggregateUsage(usages).costUSD;
+  const executionLabel = results.length === 1 ? 'execution' : 'executions';
+  return `${findingsCount} findings and ${formatCost(cost)} of usage from ${results.length} skill ${executionLabel}`;
+}
+
 /**
  * Run the analysis phase without GitHub reporting writes.
  * It executes matched triggers and writes the replay artifact for report mode.
@@ -1986,7 +2133,8 @@ async function cleanupOrphanedComments(
 async function runAnalyzeMode(
   inputs: ActionInputs,
   initResult: InitResult,
-  span: { setAttribute: (name: string, value: number) => void }
+  span: { setAttribute: (name: string, value: number) => void },
+  cancellation: ActionCancellation,
 ): Promise<void> {
   const {
     context,
@@ -2024,12 +2172,13 @@ async function runAnalyzeMode(
     },
     () => executeAllTriggers(matchedTriggers, context, runnerConcurrency, inputs, {
       memoryRecall,
+      cancellation,
       onTriggerComplete: (completedSoFar) => {
         const reportsSoFar = completedSoFar.flatMap((r) => (r.report ? [r.report] : []));
         writeFindingsOutputLive(reportsSoFar, context, [], {
           ...buildBaseOutputOptions(inputs, [
             ...toSkippedTriggers(skippedTriggers, context),
-            ...toErroredSkippedTriggers(completedSoFar),
+            ...toUnfinishedSkippedTriggers(completedSoFar),
           ]),
           skillExecutions: toSkillExecutions(completedSoFar),
           configuredSkills: buildConfiguredSkillsList({ allTriggers: resolvedTriggers, matchedTriggers }),
@@ -2040,15 +2189,26 @@ async function runAnalyzeMode(
 
   const reports = results.flatMap((result) => (result.report ? [result.report] : []));
   const outputs = computeWorkflowOutputs(reports);
-  setWorkflowOutputs(outputs);
   span.setAttribute('warden.finding.count', reports.flatMap((r) => r.findings).length);
 
+  if (cancellation.requested) {
+    await finalizeCancelledPRRun({
+      ...buildCancelledPRFinalizationBase(inputs, initResult),
+      results,
+      publish: false,
+      failOnWriteError: true,
+    });
+    logAction(`Analysis cancelled: preserved ${formatCancelledPreservation(outputs.findingsCount, results)}`);
+    return;
+  }
+
+  setWorkflowOutputs(outputs);
   try {
     const findingsPath = writeFindingsOutput(reports, context, [], {
       triggerResults: toReplayTriggerResults(results),
       ...buildBaseOutputOptions(inputs, [
         ...toSkippedTriggers(skippedTriggers, context),
-        ...toErroredSkippedTriggers(results),
+        ...toUnfinishedSkippedTriggers(results),
       ]),
       skillExecutions: toSkillExecutions(results),
       recalledMemories: memoryRecall?.memories.map(({ id, version }) => ({ id, version })),
@@ -2073,7 +2233,8 @@ async function runReportMode(
   inputs: ActionInputs,
   initResult: InitResult,
   repoPath: string,
-  span: { setAttribute: (name: string, value: number) => void }
+  span: { setAttribute: (name: string, value: number) => void },
+  cancellation: ActionCancellation,
 ): Promise<void> {
   const {
     context,
@@ -2092,6 +2253,26 @@ async function runReportMode(
     memoryRecallId: findingsOutput.memoryRecallId,
   };
 
+  const finalizeCancelledReport = async (
+    cancelledResults: TriggerResult[],
+    findingObservations: FindingObservation[] = findingsOutput.findingObservations,
+  ): Promise<void> => {
+    const outputs = await finalizeCancelledPRRun({
+      inputs,
+      context,
+      results: cancelledResults,
+      skippedTriggers,
+      resolvedTriggers,
+      matchedTriggers,
+      findingObservations,
+      ...replayMemoryOptions,
+      service,
+      publish: true,
+    });
+    span.setAttribute('warden.finding.count', outputs.findingsCount);
+    logAction(`Reporting cancelled: preserved ${formatCancelledPreservation(outputs.findingsCount, cancelledResults)}`);
+  };
+
   let results: TriggerResult[] = [];
   let previousReviewInfo: BotReviewInfo | null = null;
   let reviewPhase!: ReviewPhaseResult;
@@ -2099,8 +2280,23 @@ async function runReportMode(
   let canResolveStale!: boolean;
 
   try {
+    if (findingsOutput.outcome === 'cancelled') {
+      const cancelledResults = findingsOutput.triggerResults?.length
+        ? buildReportModeResults(findingsOutput, matchedTriggers, inputs)
+        : [];
+      await finalizeCancelledReport(cancelledResults);
+      return;
+    }
     results = buildReportModeResults(findingsOutput, matchedTriggers, inputs);
+    if (cancellation.requested) {
+      await finalizeCancelledReport(results);
+      return;
+    }
     await createCompletedSkippedSkillChecks(octokit, context, skippedTriggers, postChecks);
+    if (cancellation.requested) {
+      await finalizeCancelledReport(results);
+      return;
+    }
 
     if (skipCoreCheck) {
       const outputs = { findingsCount: 0, highCount: 0, summary: skipCoreCheck.title };
@@ -2131,6 +2327,10 @@ async function runReportMode(
         },
         'neutral'
       );
+      if (cancellation.requested) {
+        await finalizeCancelledReport(results);
+        return;
+      }
       await publishActionRunFailOpen(service, () => buildFindingsOutput([], context, [], findingsOptions));
       logAction('Analysis complete: 0 total findings');
       return;
@@ -2144,6 +2344,10 @@ async function runReportMode(
         auxiliaryOptions,
         { failOnWriteError: true }
       );
+      if (cancellation.requested) {
+        await finalizeCancelledReport(results, cleanupFindingObservations);
+        return;
+      }
       const outputs = { findingsCount: 0, highCount: 0, summary: 'No triggers matched' };
       setWorkflowOutputs(outputs);
       const findingsOptions = {
@@ -2172,6 +2376,10 @@ async function runReportMode(
         },
         'neutral'
       );
+      if (cancellation.requested) {
+        await finalizeCancelledReport(results, cleanupFindingObservations);
+        return;
+      }
       await publishActionRunFailOpen(
         service,
         () => buildFindingsOutput([], context, cleanupFindingObservations, findingsOptions),
@@ -2181,8 +2389,16 @@ async function runReportMode(
     }
 
     results = await createCompletedSkillChecksForReport(octokit, context, results, postChecks);
+    if (cancellation.requested) {
+      await finalizeCancelledReport(results);
+      return;
+    }
 
     previousReviewInfo = await fetchPreviousReviewInfo(octokit, context);
+    if (cancellation.requested) {
+      await finalizeCancelledReport(results);
+      return;
+    }
     if (previousReviewInfo) {
       logAction(`Previous Warden review state: ${previousReviewInfo.state}`);
     }
@@ -2194,6 +2410,10 @@ async function runReportMode(
         failOnPostError: true,
       }),
     );
+    if (cancellation.requested) {
+      await finalizeCancelledReport(results, reviewPhase.findingObservations);
+      return;
+    }
 
     triggerErrors = collectTriggerErrors(results);
     canResolveStale = shouldResolveStaleComments(results);
@@ -2221,6 +2441,10 @@ async function runReportMode(
         reviewPhase.findingObservations.push(...resolutionResult.findingObservations);
       },
     );
+    if (cancellation.requested) {
+      await finalizeCancelledReport(results, reviewPhase.findingObservations);
+      return;
+    }
 
     await finalizeReportWorkflow(
       octokit, context, previousReviewInfo,
@@ -2264,7 +2488,8 @@ export async function runPRWorkflow(
   inputs: ActionInputs,
   eventName: string,
   eventPath: string,
-  repoPath: string
+  repoPath: string,
+  cancellation = new ActionCancellation(),
 ): Promise<void> {
   const reportInputPath = inputs.mode === 'report' && inputs.findingsFile
     ? resolveFindingsFilePath(inputs.findingsFile, repoPath)
@@ -2319,12 +2544,23 @@ export async function runPRWorkflow(
         'trace.id': traceId,
       });
 
+      if (cancellation.requested && inputs.mode !== 'report') {
+        await finalizeCancelledPRRun({
+          ...buildCancelledPRFinalizationBase(inputs, initResult),
+          results: [],
+          publish: inputs.mode === 'run',
+          failOnWriteError: inputs.mode === 'analyze',
+        });
+        span.setAttribute('warden.finding.count', 0);
+        return;
+      }
+
       if (inputs.mode === 'analyze') {
-        return runAnalyzeMode(inputs, initResult, span);
+        return runAnalyzeMode(inputs, initResult, span, cancellation);
       }
 
       if (inputs.mode === 'report') {
-        return runReportMode(octokit, inputs, initResult, repoPath, span);
+        return runReportMode(octokit, inputs, initResult, repoPath, span, cancellation);
       }
 
       const { coreCheckId, previousReviewInfo } = await Sentry.startSpan(
@@ -2332,7 +2568,33 @@ export async function runPRWorkflow(
         () => setupGitHubState(octokit, context, postChecks),
       );
 
+      const finalizeCancelledRun = async (
+        results: TriggerResult[] = [],
+        findingObservations: FindingObservation[] = [],
+      ): Promise<boolean> => {
+        if (!cancellation.requested) {
+          return false;
+        }
+        await cancelCoreCheck(octokit, context, coreCheckId, results, postChecks);
+        const outputs = await finalizeCancelledPRRun({
+          ...buildCancelledPRFinalizationBase(inputs, initResult),
+          results,
+          findingObservations,
+          publish: true,
+        });
+        span.setAttribute('warden.finding.count', outputs.findingsCount);
+        logAction(`Analysis cancelled: preserved ${formatCancelledPreservation(outputs.findingsCount, results)}`);
+        return true;
+      };
+
+      if (await finalizeCancelledRun()) {
+        return;
+      }
+
       await completeSkippedSkillChecks(octokit, context, skippedTriggers, postChecks);
+      if (await finalizeCancelledRun()) {
+        return;
+      }
 
       if (skipCoreCheck) {
         setOutput('findings-count', 0);
@@ -2348,6 +2610,9 @@ export async function runPRWorkflow(
           warnAction(`Failed to write findings output: ${error}`);
         }
         await completeSkippedCoreCheck(octokit, context, coreCheckId, skipCoreCheck, postChecks);
+        if (await finalizeCancelledRun()) {
+          return;
+        }
         await publishActionRunFailOpen(service, () => buildFindingsOutput([], context, [], findingsOptions));
         return;
       }
@@ -2360,6 +2625,9 @@ export async function runPRWorkflow(
             inputs,
             auxiliaryOptions
           );
+          if (await finalizeCancelledRun([], cleanupFindingObservations)) {
+            return;
+          }
           setOutput('findings-count', 0);
           setOutput('high-count', 0);
           setOutput('summary', 'No triggers matched');
@@ -2376,6 +2644,9 @@ export async function runPRWorkflow(
             title: 'No triggers matched',
             message: 'No triggers matched for this event.',
           }, postChecks);
+          if (await finalizeCancelledRun([], cleanupFindingObservations)) {
+            return;
+          }
           await publishActionRunFailOpen(
             service,
             () => buildFindingsOutput([], context, cleanupFindingObservations, findingsOptions),
@@ -2395,12 +2666,13 @@ export async function runPRWorkflow(
           () => executeAllTriggers(matchedTriggers, context, runnerConcurrency, inputs, {
             checks: createTriggerCheckReporter(octokit, context, postChecks),
             memoryRecall,
+            cancellation,
             onTriggerComplete: (completedSoFar) => {
               const reportsSoFar = completedSoFar.flatMap((r) => (r.report ? [r.report] : []));
               writeFindingsOutputLive(reportsSoFar, context, [], {
                 ...buildBaseOutputOptions(inputs, [
                   ...toSkippedTriggers(skippedTriggers, context),
-                  ...toErroredSkippedTriggers(completedSoFar),
+                  ...toUnfinishedSkippedTriggers(completedSoFar),
                 ]),
                 skillExecutions: toSkillExecutions(completedSoFar),
                 configuredSkills: buildConfiguredSkillsList({ allTriggers: resolvedTriggers, matchedTriggers }),
@@ -2442,6 +2714,10 @@ export async function runPRWorkflow(
         throw error;
       }
 
+      if (await finalizeCancelledRun(results)) {
+        return;
+      }
+
       const gate = new ReviewFeedbackGate(octokit, context);
       const reviewPhase = await runOrFailCore(
         octokit,
@@ -2453,6 +2729,9 @@ export async function runPRWorkflow(
           () => postReviewsAndTrackFailures(octokit, context, results, inputs, auxiliaryOptions, gate),
         ),
       );
+      if (await finalizeCancelledRun(results, reviewPhase.findingObservations)) {
+        return;
+      }
 
       const triggerErrors = collectTriggerErrors(results);
       const canResolveStale = shouldResolveStaleComments(results);
@@ -2485,6 +2764,9 @@ export async function runPRWorkflow(
           },
         ),
       );
+      if (await finalizeCancelledRun(results, reviewPhase.findingObservations)) {
+        return;
+      }
 
       await finalizeWorkflow(
         octokit, context, previousReviewInfo, coreCheckId,

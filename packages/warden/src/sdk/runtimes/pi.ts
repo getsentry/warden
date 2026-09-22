@@ -901,6 +901,7 @@ async function runStructured<T>(
     tools?: AuxiliaryTool[];
     executeTool?: (name: string, input: Record<string, unknown>) => Promise<string>;
     maxIterations?: number;
+    abortController?: AbortController;
   }
 ): Promise<AuxiliaryRunResult<T>> {
   const customTools = toPiCustomTools(request.tools, request.executeTool);
@@ -941,6 +942,7 @@ async function runStructured<T>(
           maxTokens: request.maxTokens,
           maxRetries: request.maxRetries,
           timeout: request.timeout,
+          abortController: request.abortController,
           parentSpan: span,
         });
         const result = normalizePiResult(run);

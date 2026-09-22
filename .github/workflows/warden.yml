@@ -11,6 +11,10 @@ on:
   pull_request:
     types: [opened, synchronize, reopened]
 
+concurrency:
+  group: warden-${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
 jobs:
   review:
     runs-on: ubuntu-latest
@@ -39,13 +43,48 @@ jobs:
         with:
           mode: analyze
 
+      - name: Verify cancelled findings
+        if: ${{ cancelled() }}
+        env:
+          FINDINGS_FILE: ${{ steps.warden-analyze.outputs.findings-file }}
+        run: |
+          if [ -z "$FINDINGS_FILE" ]; then
+            echo "Analyze was cancelled without producing a findings file" >&2
+            exit 1
+          fi
+
+          FINDINGS_FILE="$FINDINGS_FILE" node --input-type=module -e '
+            const fs = await import("node:fs");
+            const path = process.env.FINDINGS_FILE;
+            const findings = JSON.parse(fs.readFileSync(path, "utf8"));
+            if (findings.outcome !== "cancelled") {
+              throw new Error(`Expected cancelled outcome, received ${findings.outcome}`);
+            }
+            if (!fs.existsSync(`${path}.done`)) {
+              throw new Error(`Missing finalization marker: ${path}.done`);
+            }
+            console.log(`Preserved ${findings.summary.totalFindings} finding(s)`);
+          '
+
+      - name: Upload cancelled findings
+        if: ${{ cancelled() && steps.warden-analyze.outputs.findings-file != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: cancelled-findings-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ steps.warden-analyze.outputs.findings-file }}
+            ${{ steps.warden-analyze.outputs.findings-file }}.done
+          if-no-files-found: error
+
       - uses: actions/create-github-app-token@v1
         id: app-token
+        if: ${{ always() && steps.warden-analyze.outputs.findings-file != '' }}
         with:
           app-id: ${{ secrets.WARDEN_APP_ID }}
           private-key: ${{ secrets.WARDEN_PRIVATE_KEY }}
 
       - name: Report
+        if: ${{ always() && steps.warden-analyze.outputs.findings-file != '' && steps.app-token.outcome == 'success' }}
         uses: ./
         with:
           mode: report

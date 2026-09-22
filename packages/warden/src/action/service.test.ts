@@ -74,6 +74,24 @@ afterEach(() => {
 });
 
 describe('Action service integration', () => {
+  it('preserves a cancelled findings outcome in the service envelope', () => {
+    const output = buildFindingsOutput([report], context, [], {
+      runId: 'cancelled-action-run',
+      timestamp: '2026-08-12T12:00:01.000Z',
+      outcome: 'cancelled',
+    });
+
+    const envelope = buildFindingsServiceRunEnvelope(output, {
+      url: 'https://warden.example.com',
+      token: 'service-token',
+      data: 'findings',
+      memory: false,
+      timeoutMs: 2_000,
+    }, 'action');
+
+    expect(envelope.outcome).toBe('cancelled');
+  });
+
   it('defaults a URL-and-token-only Action setup to findings and memory', () => {
     expect(resolveActionServiceOptions(inputs({
       serviceUrl: 'https://warden.example.com',

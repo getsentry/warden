@@ -162,7 +162,7 @@ export function buildFindingsServiceRunEnvelope(
     wardenVersion: output.harness?.version ?? getVersion(),
     startedAt: new Date(completedAt.getTime() - durationMs),
     completedAt,
-    outcome: reports.some((item) => item.report.error) ? 'failure' : 'success',
+    outcome: output.outcome ?? (reports.some((item) => item.report.error) ? 'failure' : 'success'),
     repository: {
       provider: 'github',
       owner: output.repository.owner,
