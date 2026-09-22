@@ -45,7 +45,12 @@ async function workspace(query = '?view=findings', savedTheme?: string, systemTh
         data = { repositories: [{ id: 'repo-1', repository: finding.repository }], skills: [finding.skill] };
         break;
       case '/api/v1/dashboard/summary':
-        data = { totals: { runs: 12, findings: 5, costUsd: 2.31, failed: 0 }, breakdowns: [] };
+        data = {
+          totals: { runs: 12, findings: 5, costUsd: 2.31, failed: 0 },
+          breakdowns: Object.entries({
+            day: '2026-08-12', repository: finding.repository.fullName, skill: finding.skill,
+          }).map(([dimension, value]) => ({ dimension, groups: [{ dimensions: { [dimension]: value }, costUsd: 2.31 }] })),
+        };
         break;
       case '/api/v1/findings':
         data = { items: url.searchParams.get('query') === 'no-match' ? [] : [finding], nextCursor: 'page-2' };
@@ -120,6 +125,46 @@ it('loads findings without waiting for account controls and reuses the account l
   await settled(window);
   expect(document.title).toBe('Usage · Warden');
   expect(requests.filter((url) => url.pathname === '/api/v1/auth/context')).toHaveLength(1);
+});
+
+it('switches tabs immediately while data is pending and ignores a late response from the previous tab', async () => {
+  const { window, document } = await workspace('');
+  const fetch = window.fetch;
+  const pending = new Map<string, () => void>();
+  window.fetch = async (input, options) => {
+    const path = new URL(String(input), window.location.origin).pathname;
+    if (path === '/api/v1/findings' || path === '/api/v1/dashboard/summary') {
+      await new Promise<void>((resolve) => { pending.set(path, resolve); });
+    }
+    return fetch(input, options);
+  };
+  try {
+    document.querySelector<HTMLAnchorElement>('#nav-findings')!.click();
+    expect(document.querySelector('#nav-findings')?.getAttribute('aria-current')).toBe('page');
+    expect(document.title).toBe('Findings · Warden');
+    expect(document.querySelector('[name="query"]')).not.toBeNull();
+    expect(document.querySelector('.metrics')).toBeNull();
+    expect(document.querySelector('[role="status"]')?.textContent).toBe('Loading findings…');
+
+    document.querySelector<HTMLAnchorElement>('#nav-usage')!.click();
+    expect(document.querySelector('#nav-usage')?.getAttribute('aria-current')).toBe('page');
+    expect(document.title).toBe('Usage · Warden');
+    expect(document.querySelector('[name="query"]')).toBeNull();
+    expect(document.querySelector('[role="status"]')?.textContent).toBe('Loading usage…');
+    pending.get('/api/v1/findings')!();
+    // Let the obsolete response finish while the current tab is still loading.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(document.querySelector('.finding-list')).toBeNull();
+    expect(document.querySelector('[role="status"]')?.textContent).toBe('Loading usage…');
+    expect(document.querySelector('#content')?.getAttribute('aria-busy')).toBe('true');
+
+    pending.get('/api/v1/dashboard/summary')!();
+    await settled(window);
+    expect(document.querySelector('.metrics')).not.toBeNull();
+    expect(document.querySelector('[role="status"]')).toBeNull();
+  } finally {
+    for (const resolve of pending.values()) resolve();
+  }
 });
 
 it('preserves finding filters when changing shared filters in Usage', async () => {

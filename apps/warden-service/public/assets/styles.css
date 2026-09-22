@@ -259,6 +259,10 @@ button:disabled { opacity: .5; cursor: not-allowed; }
 .text-link { color: var(--accent-strong); text-decoration: underline; text-decoration-color: var(--link-underline); text-underline-offset: 3px; }
 .pagination { display: flex; justify-content: center; margin-top: 16px; }
 
+.page-loading { display: flex; align-items: center; justify-content: center; gap: 10px; min-height: 240px; color: var(--muted); font-size: 13px; }
+.page-loading::before { content: ''; width: 16px; height: 16px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: loading-spin .8s linear infinite; }
+@keyframes loading-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .page-loading::before { animation: none; } }
 .empty, .error { padding: 24px; border: 1px dashed var(--border-strong); border-radius: 4px; color: var(--muted); background: var(--surface); text-align: center; }
 .error { border-style: solid; border-color: var(--error-border); color: var(--error); }
 .login-panel { max-width: 460px; margin-top: 40px; padding: 26px; border: 1px solid var(--border); border-radius: 4px; background: var(--surface); }

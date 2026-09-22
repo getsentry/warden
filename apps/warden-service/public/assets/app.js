@@ -389,7 +389,7 @@ function applyFilters(form) {
   const query = next.toString();
   history.replaceState({}, '', `/${query ? `?${query}` : ''}`);
   updateFilterSummary(form);
-  render();
+  render({ preserveContent: true });
 }
 
 function updateFilterSummary(form) {
@@ -958,7 +958,7 @@ function findingArticle(detail) {
   return article;
 }
 
-async function render() {
+async function render({ preserveContent = false } = {}) {
   const version = ++renderVersion;
   clearTimeout(filterTimer);
   const current = new URLSearchParams(location.search);
@@ -974,8 +974,11 @@ async function render() {
     else navigation.removeAttribute('aria-current');
   }
   content.setAttribute('aria-busy', 'true');
-  if (!content.children.length || content.querySelector('.login-panel, .empty')) {
-    content.replaceChildren(empty('Loading data'));
+  if (!preserveContent) {
+    const message = findingPath ? 'Loading finding…' : `Loading ${activeView}…`;
+    const loading = element('div', message, 'page-loading');
+    loading.setAttribute('role', 'status');
+    content.replaceChildren(loading);
   }
   try {
     const findingId = findingPath ? decodeURIComponent(findingPath[1]) : undefined;
