@@ -1,4 +1,31 @@
 # Changelog
+## 0.49.0
+
+### New Features ✨
+
+- (config) Add postChecks toggle to disable GitHub Check-run posting by @CalebKAston in [#458](https://github.com/getsentry/warden/pull/458)
+- (reporting) Add configuredSkills roster to findings output by @CalebKAston in [#473](https://github.com/getsentry/warden/pull/473)
+
+### Bug Fixes 🐛
+
+- Correct finding merging, skill access, and runtime limits by @gricha in [#531](https://github.com/getsentry/warden/pull/531)
+
+### Documentation 📚
+
+#### Benchmarks
+
+- Remove duplicate row and metadata labels by @gricha in [#532](https://github.com/getsentry/warden/pull/532)
+- Publish Gemini 3.8 Flash result by @gricha in [#527](https://github.com/getsentry/warden/pull/527)
+
+### Internal Changes 🔧
+
+#### Deps
+
+- Bump hono from 4.13.1 to 4.13.5 by @dependabot in [#529](https://github.com/getsentry/warden/pull/529)
+- Bump qs from 6.15.3 to 6.16.0 by @dependabot in [#528](https://github.com/getsentry/warden/pull/528)
+- Patch Dependabot vulnerabilities by @gricha in [#522](https://github.com/getsentry/warden/pull/522)
+- Bump smol-toml from 1.6.1 to 1.7.0 by @dependabot in [#252](https://github.com/getsentry/warden/pull/252)
+
 ## 0.48.0
 
 ### New Features ✨
