@@ -405,27 +405,12 @@ interface ApplyGroupsResult {
   absorbedToWinner: Map<Finding, Finding>;
 }
 
-function splitMergeGroupByClaim(findings: Finding[], indices: number[]): number[][] {
-  const claims = new Map<string, number[]>();
-  for (const index of indices) {
-    const finding = findings[index - 1];
-    if (!finding || !finding.title.trim() || !finding.description.trim()) continue;
-    // Location-only merging cannot preserve a different title, claim, or
-    // evidence trace. Keep those reports independent even if synthesis groups them.
-    const key = JSON.stringify([finding.title.trim(), finding.description.trim(), finding.verification?.trim() ?? '']);
-    const group = claims.get(key) ?? [];
-    group.push(index);
-    claims.set(key, group);
-  }
-  return [...claims.values()];
-}
-
 /**
  * Apply LLM-returned merge groups to a list of findings.
  *
  * For each group, the highest-priority finding becomes the winner, and all
- * other findings' locations are folded into its additionalLocations only when
- * their titles, descriptions, and evidence agree. Distinct claims survive.
+ * other findings' locations are folded into its additionalLocations. The model
+ * decides semantic equivalence; paraphrased titles or evidence do not veto a group.
  * Handles overlapping groups by substituting prior replacements and tracking
  * absorbed findings by their original identity.
  *
@@ -440,7 +425,7 @@ export function applyMergeGroups(
   const replacements = new Map<Finding, Finding>();
   const absorbedToWinner = new Map<Finding, Finding>();
 
-  for (const group of groups.flatMap((indices) => splitMergeGroupByClaim(indexedFindings, indices))) {
+  for (const group of groups) {
     const uniqueIndices = [...new Set(group)];
     if (uniqueIndices.length < 2) continue;
 
@@ -538,10 +523,8 @@ function readSnippet(repoPath: string, filePath: string, startLine: number, cont
  * Merge findings that describe the same issue across different code locations.
  *
  * Uses the configured auxiliary runtime to identify groups of findings about
- * the same root cause at different locations. Only findings with identical
- * trimmed titles, descriptions, and verification text are merged: the
+ * the same root cause at different locations, regardless of wording. The
  * highest-priority finding keeps the other locations in `additionalLocations`.
- * Differing claims or evidence remain independent.
  *
  * Skips entirely (no LLM call) when:
  * - Fewer than 2 findings have locations
@@ -574,8 +557,9 @@ export async function mergeCrossLocationFindings(
 
   const prompt = joinPromptSections([
     `<task>
-Identify which of these code review findings describe the SAME underlying issue appearing at different locations. Group them by shared root cause.
-Sharing a category such as missing authorization is not enough: independent endpoints requiring separate fixes are separate findings. Keep uncertain matches separate.
+Identify which of these code review findings describe the SAME underlying bug. Group by semantic meaning, not exact wording of titles, descriptions, or evidence.
+Reports of the same defect may point to different lines, files, callers, or tests. For example, repeated reports that both sync and async wrappers omit the same output-collection guard are one finding, even when anchored in different tests.
+Sharing a category such as missing authorization is not enough: independent endpoints requiring separate fixes are separate findings. Keep uncertain matches separate, and keep a broader finding separate if it contains an additional independent bug.
 </task>`,
     `<findings>
 ${findingDescriptions}

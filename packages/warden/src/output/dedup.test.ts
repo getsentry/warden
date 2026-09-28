@@ -19,6 +19,7 @@ import {
 } from './dedup.js';
 import type { Finding } from '../types/index.js';
 import type { ExistingComment } from './dedup.js';
+import * as runtimes from '../sdk/runtimes/index.js';
 
 describe('generateContentHash', () => {
   it('generates consistent 8-char hex hash', () => {
@@ -322,6 +323,10 @@ Use \`Number.isFinite\` before saving [the value](https://example.com).`,
 });
 
 describe('deduplicateFindings', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   const baseFinding: Finding = {
     id: 'f1',
     severity: 'high',
@@ -464,6 +469,39 @@ describe('deduplicateFindings', () => {
     expect(result.duplicateActions[0]!.type).toBe('update_warden');
     // Second should be react_external (isWarden: false)
     expect(result.duplicateActions[1]!.type).toBe('react_external');
+  });
+
+  it('matches a paraphrase anchored in a test to an existing implementation comment', async () => {
+    const existing: ExistingComment = {
+      id: 1, path: 'src/typesafe.py', line: 294,
+      title: 'Output answers bypass the collection gate',
+      description: 'Both system_one wrappers record answers with gen_ai.outputs disabled.',
+      contentHash: 'existing-hash', isWarden: true, findingId: 'OUT-GATE',
+    };
+    const duplicate: Finding = {
+      id: 'test-output', severity: 'high',
+      title: 'Evaluation answers ignore the output opt-out',
+      description: 'Gate output messages in the sync and async wrappers on collection policy.',
+      location: { path: 'tests/test_typesafe.py', startLine: 639 },
+    };
+    const runAuxiliary = vi.fn().mockResolvedValue({
+      success: true, data: [{ findingIndex: 1, existingIndex: 1 }],
+    });
+    vi.spyOn(runtimes, 'getRuntime').mockReturnValue({
+      name: 'pi', runAuxiliary,
+    } as unknown as ReturnType<typeof runtimes.getRuntime>);
+
+    const result = await deduplicateFindings([duplicate, baseFinding], [existing], { runtime: 'pi' });
+
+    expect(result.newFindings).toEqual([baseFinding]);
+    expect(result.duplicateActions).toEqual([expect.objectContaining({
+      type: 'update_warden', matchType: 'semantic', originalFindingId: duplicate.id,
+      existingComment: existing,
+      finding: { ...duplicate, id: 'OUT-GATE', reportedId: 'OUT-GATE' },
+    })]);
+    expect(runAuxiliary).toHaveBeenCalledWith(expect.objectContaining({
+      prompt: expect.stringContaining('even if wording, evidence, or the reported file and line differ'),
+    }));
   });
 
   it('works without API key (hash-only mode)', async () => {
@@ -803,7 +841,7 @@ describe('consolidateBatchFindings', () => {
     expect(result.removedCount).toBe(0);
   });
 
-  it('does not group findings more than 5 lines apart', async () => {
+  it('keeps findings more than 5 lines apart in hashOnly mode', async () => {
     const finding1: Finding = {
       id: 'f1',
       severity: 'high',
@@ -826,7 +864,7 @@ describe('consolidateBatchFindings', () => {
     expect(result.removedCount).toBe(0);
   });
 
-  it('does not group findings in different files', async () => {
+  it('keeps findings in different files in hashOnly mode', async () => {
     const finding1: Finding = {
       id: 'f1',
       severity: 'high',
@@ -848,32 +886,68 @@ describe('consolidateBatchFindings', () => {
     expect(result.removedCount).toBe(0);
   });
 
-  it('skips LLM when no proximity clusters exist', async () => {
+  it('merges semantic duplicates across distant lines and files but retains unrelated findings', async () => {
     const finding1: Finding = {
       id: 'f1',
       severity: 'high',
-      title: 'Bug A',
-      description: 'Description A',
+      title: 'Outputs bypass the privacy gate',
+      description: 'Both wrappers serialize answers even when output collection is disabled.',
       location: { path: 'src/file.ts', startLine: 10 },
     };
 
     const finding2: Finding = {
       id: 'f2',
       severity: 'medium',
-      title: 'Bug B',
-      description: 'Description B',
+      title: 'Output collection opt-out is ignored',
+      description: 'Check the output setting before writing answers in both wrappers.',
       location: { path: 'src/file.ts', startLine: 100 },
     };
 
-    // Even with an API key, no LLM call should be made since findings are far apart
-    const result = await consolidateBatchFindings([finding1, finding2], { apiKey: 'test-key' });
-    expect(result.findings).toHaveLength(2);
-    expect(result.removedCount).toBe(0);
-    expect(result.usage).toBeUndefined();
+    const finding3: Finding = {
+      ...finding2, id: 'f3', title: 'Evaluation answers recorded without consent',
+      location: { path: 'tests/file.test.ts', startLine: 200 },
+    };
+    const unrelated: Finding = {
+      ...finding1, id: 'f4', title: 'Score probabilities and legend can misalign',
+      description: 'Independent dictionary iteration can pair probabilities with the wrong labels.',
+    };
+    const runAuxiliary = vi.fn().mockResolvedValue({
+      success: true, data: [[1, 2, 3]],
+      usage: { inputTokens: 100, outputTokens: 10, costUSD: 0.001 },
+    });
+    vi.spyOn(runtimes, 'getRuntime').mockReturnValue({
+      name: 'pi', runAuxiliary,
+    } as unknown as ReturnType<typeof runtimes.getRuntime>);
+
+    const result = await consolidateBatchFindings([finding1, finding2, finding3, unrelated], { runtime: 'pi' });
+    expect(result.findings).toEqual([
+      { ...finding1, additionalLocations: [finding2.location, finding3.location] },
+      unrelated,
+    ]);
+    expect(result.removedCount).toBe(2);
+    expect(result.removedFindings).toEqual([finding2, finding3]);
+    expect(runAuxiliary).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
+      prompt: expect.stringContaining('tests/file.test.ts:200'),
+    }));
   });
 
-  it('groups findings within 5 lines of each other for proximity check', async () => {
-    // This tests the proximity grouping logic (without LLM since no API key)
+  it('keeps findings when semantic consolidation fails', async () => {
+    const findings: Finding[] = [
+      { id: 'f1', severity: 'high', title: 'Output gate missing', description: 'Outputs recorded without consent' },
+      { id: 'f2', severity: 'medium', title: 'Output opt-out ignored', description: 'Gate output recording' },
+    ];
+    vi.spyOn(runtimes, 'getRuntime').mockReturnValue({
+      name: 'pi', runAuxiliary: vi.fn().mockResolvedValue({ success: false, error: 'provider_error' }),
+    } as unknown as ReturnType<typeof runtimes.getRuntime>);
+
+    const result = await consolidateBatchFindings(findings, { runtime: 'pi' });
+
+    expect(result.findings).toEqual(findings);
+    expect(result.removedFindings).toEqual([]);
+    expect(console.warn).toHaveBeenCalledWith('LLM batch consolidation failed, keeping all findings: provider_error');
+  });
+
+  it('keeps nearby findings when runtime authentication is unavailable', async () => {
     const finding1: Finding = {
       id: 'f1',
       severity: 'high',

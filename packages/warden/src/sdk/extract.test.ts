@@ -250,7 +250,7 @@ describe('mergeCrossLocationFindings', () => {
     }));
   });
 
-  it('preserves independent authorization bugs even when synthesis groups them together', async () => {
+  it('preserves independent authorization bugs left ungrouped by synthesis', async () => {
     // Sanitized from the Sentry corpus: one broad authorization category, three fixes.
     const findings = [
       makeFinding({
@@ -276,7 +276,7 @@ describe('mergeCrossLocationFindings', () => {
       }),
     ];
     mockCallHaiku.mockResolvedValue({
-      success: true, data: [[1, 2, 3]],
+      success: true, data: [],
       usage: { inputTokens: 100, outputTokens: 10, costUSD: 0.001 },
     });
     const onFindingProcessing = vi.fn();
@@ -288,22 +288,47 @@ describe('mergeCrossLocationFindings', () => {
     expect(onFindingProcessing).not.toHaveBeenCalled();
   });
 
-  it('keeps distinct evidence while merging identical claims within an overbroad group', async () => {
-    const first = makeFinding({ id: 'first', verification: 'The create handler omits the tenant guard.', location: { path: 'src/a.ts', startLine: 1 } });
-    const duplicate = { ...first, id: 'duplicate', location: { path: 'src/b.ts', startLine: 2 } };
-    const distinct = { ...first, id: 'distinct', verification: 'The delete handler checks the wrong tenant.', location: { path: 'src/a.ts', startLine: 5 } };
+  it('merges paraphrases of the same output privacy bug across source and tests', async () => {
+    // Based on sentry-python#7720: different hunks rediscovered the same missing gate.
+    const first = makeFinding({
+      id: 'output-gate', severity: 'high',
+      title: 'GenAI output answers bypass the output-collection gate',
+      description: 'Both system_one wrappers record answers even when output collection is disabled.',
+      verification: 'The sync and async wrappers serialize response.answers without checking gen_ai.outputs.',
+      location: { path: 'src/typesafe.py', startLine: 294 },
+    });
+    const duplicate = makeFinding({
+      id: 'output-opt-out',
+      title: 'TypeSafe outputs ignore GenAI output-collection settings',
+      description: 'Gate GEN_AI_OUTPUT_MESSAGES in both wrappers on the output setting or legacy PII policy.',
+      verification: 'The test asserts recorded evaluation answers without opting in to output collection.',
+      location: { path: 'tests/test_typesafe.py', startLine: 639 },
+    });
+    const distinct = makeFinding({
+      id: 'score-order',
+      title: 'Score probabilities and legend can misalign',
+      description: 'Independent dictionary iteration can pair probabilities with the wrong labels.',
+      location: { path: 'src/typesafe.py', startLine: 212 },
+    });
     mockCallHaiku.mockResolvedValue({
-      success: true, data: [[1, 2, 3]],
+      success: true, data: [[1, 2]],
       usage: { inputTokens: 100, outputTokens: 10, costUSD: 0.001 },
     });
+    const onFindingProcessing = vi.fn();
 
-    const result = await mergeCrossLocationFindings([first, duplicate, distinct], { apiKey: 'test-key', repoPath: tempDir });
+    const result = await mergeCrossLocationFindings([first, duplicate, distinct], {
+      apiKey: 'test-key', repoPath: tempDir, onFindingProcessing,
+    });
 
     expect(result.findings).toEqual([
       { ...first, additionalLocations: [duplicate.location] },
       distinct,
     ]);
     expect(result.mergedCount).toBe(1);
+    expect(onFindingProcessing).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
+      stage: 'merge', action: 'merged', finding: duplicate,
+      replacement: result.findings[0],
+    }));
   });
 
   it('still attributes the absorbed finding to its winner when both share the exact same location', async () => {

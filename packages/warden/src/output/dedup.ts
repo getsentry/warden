@@ -521,8 +521,9 @@ ${findingsList}
 </new_findings>`,
     `<deduplication_rules>
 Return a JSON array of objects identifying which findings are DUPLICATES of which existing comments.
-Only mark as duplicate if they describe the SAME issue at the SAME location (within a few lines).
-Different issues at the same location are NOT duplicates.
+Mark as duplicate when the finding describes the SAME underlying bug as an existing comment, even if wording, evidence, or the reported file and line differ.
+A report anchored in a caller or test can duplicate one anchored in the implementation. Compare the actual defect and affected behavior, not just the location or issue category.
+Independent bugs requiring separate fixes are NOT duplicates, even at the same location. Keep uncertain matches and findings with additional independent bugs separate.
 </deduplication_rules>`,
     buildJsonOutputSection(`[{"findingIndex": 1, "existingIndex": 2}]
 where findingIndex is the 1-based index of the new finding and existingIndex is the 1-based index of the matching existing comment.
@@ -694,8 +695,6 @@ export function findingToExistingComment(finding: Finding, skill?: string): Exis
 // Intra-batch consolidation
 // -----------------------------------------------------------------------------
 
-const PROXIMITY_THRESHOLD = 5;
-
 /**
  * Result from consolidating findings within a single batch.
  */
@@ -712,61 +711,11 @@ const ConsolidationGroupsSchema = z.array(
 );
 
 /**
- * Group findings by file path, then identify clusters where findings are within
- * PROXIMITY_THRESHOLD lines of each other. Returns only clusters with 2+ findings.
- */
-function findProximityClusters(findings: Finding[]): Finding[][] {
-  // Group by file path
-  const byPath = new Map<string, Finding[]>();
-  for (const f of findings) {
-    const path = f.location?.path ?? '';
-    const existing = byPath.get(path);
-    if (existing) {
-      existing.push(f);
-    } else {
-      byPath.set(path, [f]);
-    }
-  }
-
-  const clusters: Finding[][] = [];
-
-  for (const group of byPath.values()) {
-    if (group.length < 2) continue;
-
-    // Sort by line number
-    const sorted = [...group].sort((a, b) => findingLine(a) - findingLine(b));
-
-    // Single-linkage clustering: consecutive findings within PROXIMITY_THRESHOLD
-    // lines of each other are grouped together.
-    const first = sorted[0];
-    if (!first) continue;
-    let current: Finding[] = [first];
-
-    for (let i = 1; i < sorted.length; i++) {
-      const prev = sorted[i - 1];
-      const curr = sorted[i];
-      if (!prev || !curr) continue;
-
-      if (findingLine(curr) - findingLine(prev) <= PROXIMITY_THRESHOLD) {
-        current.push(curr);
-      } else {
-        if (current.length >= 2) clusters.push(current);
-        current = [curr];
-      }
-    }
-    if (current.length >= 2) clusters.push(current);
-  }
-
-  return clusters;
-}
-
-/**
  * Consolidate findings within a single batch to remove duplicates that describe
- * the same root cause. Three-phase approach:
+ * the same root cause, regardless of wording or location.
  *
  * 1. Hash dedup: remove exact duplicates (same path:line:contentHash)
- * 2. Proximity grouping: identify clusters of findings within 5 lines of each other
- * 3. LLM consolidation: ask the auxiliary runtime to group findings by root cause (only when proximity matches exist)
+ * 2. LLM consolidation: group remaining findings by semantic issue identity
  *
  * For each group, keeps the highest-severity finding.
  */
@@ -803,19 +752,14 @@ export async function consolidateBatchFindings(
     console.log(`Consolidate: ${hashRemovedCount} exact duplicate findings removed within batch`);
   }
 
-  // Phase 2: Proximity grouping
-  const clusters = findProximityClusters(hashDeduped);
-
-  // If no proximity clusters, hash-only mode, or no runtime auth, return hash-deduped results.
-  if (clusters.length === 0 || options.hashOnly || !canUseRuntimeAuth(options)) {
+  if (hashDeduped.length <= 1 || options.hashOnly || !canUseRuntimeAuth(options)) {
     return { findings: hashDeduped, removedCount: hashRemovedCount, removedFindings: hashRemovedFindings };
   }
 
-  // Phase 3: LLM consolidation for proximity clusters
-  // Only send clustered findings to the LLM (deduplicated across clusters)
-  const clusteredList = [...new Set(clusters.flat())];
-  const findingsList = formatIndexedFindingsForPrompt(clusteredList, {
+  // Compare the full batch: the same defect may be anchored in distant hunks or tests.
+  const findingsList = formatIndexedFindingsForPrompt(hashDeduped, {
     includeSeverity: true,
+    includeVerification: true,
   });
 
   const prompt = joinPromptSections([
@@ -827,7 +771,8 @@ ${findingsList}
 </findings>`,
     `<deduplication_rules>
 Return a JSON array of arrays, where each inner array contains the 1-based indices of findings that describe the same root cause.
-Only group findings that are truly about the same underlying issue. Findings about different issues should NOT be grouped even if they're nearby.
+Group by semantic meaning, not exact wording of titles, descriptions, or evidence. Reports of the same defect may point to different lines, files, callers, or tests.
+Sharing an issue category is not enough: independent bugs requiring separate fixes are separate findings, even if nearby. Keep uncertain matches and findings with additional independent bugs separate.
 Singletons (findings with no duplicates) should not appear in any group.
 </deduplication_rules>`,
     buildJsonOutputSection('Return the JSON array. Return [] if no findings share a root cause.'),
@@ -850,7 +795,7 @@ Singletons (findings with no duplicates) should not appear in any group.
     return { findings: hashDeduped, removedCount: hashRemovedCount, removedFindings: hashRemovedFindings, usage: result.usage };
   }
 
-  const { absorbed, replacements } = applyMergeGroups(clusteredList, result.data);
+  const { absorbed, replacements } = applyMergeGroups(hashDeduped, result.data);
 
   if (absorbed.size === 0) {
     return { findings: hashDeduped, removedCount: hashRemovedCount, removedFindings: hashRemovedFindings, usage: result.usage };
