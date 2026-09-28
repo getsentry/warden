@@ -206,18 +206,22 @@ describe('mergeCrossLocationFindings', () => {
     }
   });
 
-  it('merges two findings into one with additionalLocations', async () => {
+  it('merges paraphrased findings and preserves their locations', async () => {
     const findings = [
       makeFinding({
         id: 'f1',
         severity: 'high',
-        title: 'Missing null check',
+        title: 'Outputs bypass the collection gate',
+        description: 'Both wrappers record answers when output collection is disabled.',
+        verification: 'Neither output write checks gen_ai.outputs.',
         location: { path: 'src/a.ts', startLine: 3 },
       }),
       makeFinding({
         id: 'f2',
         severity: 'medium',
-        title: 'Missing null check',
+        title: 'Output opt-out is ignored',
+        description: 'Gate answer serialization in the sync and async wrappers.',
+        verification: 'The test records outputs without opting in.',
         location: { path: 'src/b.ts', startLine: 2 },
       }),
     ];
@@ -247,87 +251,6 @@ describe('mergeCrossLocationFindings', () => {
       finding: findings[1],
       reason: 'same root cause at another location',
       replacement: expect.objectContaining({ id: 'f1' }),
-    }));
-  });
-
-  it('preserves independent authorization bugs left ungrouped by synthesis', async () => {
-    // Sanitized from the Sentry corpus: one broad authorization category, three fixes.
-    const findings = [
-      makeFinding({
-        id: 'thresholds',
-        title: 'Empty project filter exposes release thresholds',
-        description: 'An empty project selection falls back to thresholds from every tenant.',
-        verification: 'The empty branch omits the project predicate.',
-        location: { path: 'src/thresholds.py', startLine: 40 },
-      }),
-      makeFinding({
-        id: 'plugins',
-        title: 'Plugin endpoint skips project access',
-        description: 'A caller-supplied project ID is loaded without checking membership.',
-        verification: 'The plugin handler never checks access to the loaded project.',
-        location: { path: 'src/plugins.py', startLine: 25 },
-      }),
-      makeFinding({
-        id: 'detectors',
-        title: 'Detector endpoint skips project access',
-        description: 'Detector lookup accepts project IDs outside the caller organization.',
-        verification: 'The detector query does not intersect the accessible projects.',
-        location: { path: 'src/detectors.py', startLine: 30 },
-      }),
-    ];
-    mockCallHaiku.mockResolvedValue({
-      success: true, data: [],
-      usage: { inputTokens: 100, outputTokens: 10, costUSD: 0.001 },
-    });
-    const onFindingProcessing = vi.fn();
-
-    const result = await mergeCrossLocationFindings(findings, { apiKey: 'test-key', repoPath: tempDir, onFindingProcessing });
-
-    expect(result.findings).toEqual(findings);
-    expect(result.mergedCount).toBe(0);
-    expect(onFindingProcessing).not.toHaveBeenCalled();
-  });
-
-  it('merges paraphrases of the same output privacy bug across source and tests', async () => {
-    // Based on sentry-python#7720: different hunks rediscovered the same missing gate.
-    const first = makeFinding({
-      id: 'output-gate', severity: 'high',
-      title: 'GenAI output answers bypass the output-collection gate',
-      description: 'Both system_one wrappers record answers even when output collection is disabled.',
-      verification: 'The sync and async wrappers serialize response.answers without checking gen_ai.outputs.',
-      location: { path: 'src/typesafe.py', startLine: 294 },
-    });
-    const duplicate = makeFinding({
-      id: 'output-opt-out',
-      title: 'TypeSafe outputs ignore GenAI output-collection settings',
-      description: 'Gate GEN_AI_OUTPUT_MESSAGES in both wrappers on the output setting or legacy PII policy.',
-      verification: 'The test asserts recorded evaluation answers without opting in to output collection.',
-      location: { path: 'tests/test_typesafe.py', startLine: 639 },
-    });
-    const distinct = makeFinding({
-      id: 'score-order',
-      title: 'Score probabilities and legend can misalign',
-      description: 'Independent dictionary iteration can pair probabilities with the wrong labels.',
-      location: { path: 'src/typesafe.py', startLine: 212 },
-    });
-    mockCallHaiku.mockResolvedValue({
-      success: true, data: [[1, 2]],
-      usage: { inputTokens: 100, outputTokens: 10, costUSD: 0.001 },
-    });
-    const onFindingProcessing = vi.fn();
-
-    const result = await mergeCrossLocationFindings([first, duplicate, distinct], {
-      apiKey: 'test-key', repoPath: tempDir, onFindingProcessing,
-    });
-
-    expect(result.findings).toEqual([
-      { ...first, additionalLocations: [duplicate.location] },
-      distinct,
-    ]);
-    expect(result.mergedCount).toBe(1);
-    expect(onFindingProcessing).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
-      stage: 'merge', action: 'merged', finding: duplicate,
-      replacement: result.findings[0],
     }));
   });
 

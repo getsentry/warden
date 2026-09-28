@@ -752,12 +752,14 @@ export async function consolidateBatchFindings(
     console.log(`Consolidate: ${hashRemovedCount} exact duplicate findings removed within batch`);
   }
 
-  if (hashDeduped.length <= 1 || options.hashOnly || !canUseRuntimeAuth(options)) {
+  // A locationless winner would suppress an otherwise postable inline comment.
+  const withLocations = hashDeduped.filter((finding) => finding.location);
+  if (withLocations.length <= 1 || options.hashOnly || !canUseRuntimeAuth(options)) {
     return { findings: hashDeduped, removedCount: hashRemovedCount, removedFindings: hashRemovedFindings };
   }
 
-  // Compare the full batch: the same defect may be anchored in distant hunks or tests.
-  const findingsList = formatIndexedFindingsForPrompt(hashDeduped, {
+  // Compare across files: the same defect may be anchored in distant hunks or tests.
+  const findingsList = formatIndexedFindingsForPrompt(withLocations, {
     includeSeverity: true,
     includeVerification: true,
   });
@@ -795,7 +797,7 @@ Singletons (findings with no duplicates) should not appear in any group.
     return { findings: hashDeduped, removedCount: hashRemovedCount, removedFindings: hashRemovedFindings, usage: result.usage };
   }
 
-  const { absorbed, replacements } = applyMergeGroups(hashDeduped, result.data);
+  const { absorbed, replacements } = applyMergeGroups(withLocations, result.data);
 
   if (absorbed.size === 0) {
     return { findings: hashDeduped, removedCount: hashRemovedCount, removedFindings: hashRemovedFindings, usage: result.usage };
