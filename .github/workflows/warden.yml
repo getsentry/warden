@@ -23,6 +23,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Checkout org Warden config
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/.github
+          path: .warden-org
+
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
@@ -38,6 +44,7 @@ jobs:
         uses: ./
         with:
           mode: analyze
+          base-config-path: .warden-org/warden.toml
 
       - uses: actions/create-github-app-token@v1
         id: app-token
@@ -49,5 +56,6 @@ jobs:
         uses: ./
         with:
           mode: report
+          base-config-path: .warden-org/warden.toml
           findings-file: ${{ steps.warden-analyze.outputs.findings-file }}
           github-token: ${{ steps.app-token.outputs.token }}
