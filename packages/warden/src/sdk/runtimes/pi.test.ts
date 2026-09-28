@@ -282,6 +282,32 @@ describe('piRuntime.runSkill', () => {
     }
   });
 
+  it('exposes callable memory tools alongside the read-only checkout tools', async () => {
+    const execute = vi.fn(async () => '{"status":"saved"}');
+    await piRuntime.runSkill({ ...baseSkillRequest(), runtimeTools: [
+      { name: 'update_memory', description: 'Correct a note', schema: z.object({ content: z.string() }), execute },
+    ] });
+    const tools = piMocks.customTools as { name: string; execute: (id: string, input: unknown) => Promise<unknown> }[];
+    expect(tools.some((tool) => tool.name === 'read')).toBe(true);
+    expect(tools.some((tool) => tool.name === 'write')).toBe(false);
+    expect(await tools.find((tool) => tool.name === 'update_memory')?.execute('call-1', { content: 'Corrected' }))
+      .toMatchObject({ content: [{ text: '{"status":"saved"}' }] });
+    expect(execute).toHaveBeenCalledWith({ content: 'Corrected' });
+  });
+
+  it('advertises tool input schemas and applies transforms when executing', async () => {
+    const execute = vi.fn(async () => 'saved');
+    await piRuntime.runSkill({ ...baseSkillRequest(), runtimeTools: [
+      { name: 'save_note', description: 'Save a note',
+        schema: z.object({ content: z.string().transform((value) => value.length) }), execute },
+    ] });
+    const tools = piMocks.customTools as { name: string; parameters: unknown; execute: (id: string, input: unknown) => Promise<unknown> }[];
+    const tool = tools.find((tool) => tool.name === 'save_note')!;
+    expect(tool.parameters).toMatchObject({ properties: { content: { type: 'string' } } });
+    await tool.execute('call-1', { content: 'hello' });
+    expect(execute).toHaveBeenCalledWith({ content: 5 });
+  });
+
   it('passes read-only Pi tools and normalizes the result', async () => {
     const result = await piRuntime.runSkill(baseSkillRequest());
 

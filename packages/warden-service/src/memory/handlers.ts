@@ -1,3 +1,6 @@
+import { and, desc, eq, inArray, sql } from 'drizzle-orm';
+import { getQueryDatabase } from '../db/query.js';
+import { findings, findingObservations, findingLocations, runs, repositories, skillExecutions, memories, jobs } from '../db/schema.js';
 import type { JobHandlers } from '../jobs/runner.js';
 import type { WardenDatabase } from '../db/database.js';
 import { applyTenantRetention } from '../administration/store.js';
@@ -31,17 +34,6 @@ export interface MemoryJobHandlerOptions {
   promotionPolicy?: PassivePromotionPolicy;
 }
 
-interface EvidenceRow extends Record<string, unknown> {
-  finding_id: string;
-  observation_id: string;
-  run_id: string;
-  skill: string;
-  title: string;
-  description: string;
-  outcome: PassiveEvidence['outcome'];
-  observed_at: Date | string;
-}
-
 function iso(value: Date | string): string {
   return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
 }
@@ -54,34 +46,25 @@ function isVectorUnavailable(error: unknown): boolean {
 }
 
 async function loadEvidence(database: WardenDatabase, tenantId: string, repositoryId: string, runId: string) {
-  const result = await database.query<EvidenceRow>(`
-    SELECT finding_id, observation_id, run_id, skill, title, description, outcome, observed_at
-    FROM (
-      SELECT f.id AS finding_id, fo.id AS observation_id, r.id AS run_id,
-        se.skill, f.title, f.description, fo.outcome, fo.observed_at
-      FROM finding_observations fo
-      JOIN findings f ON f.id = fo.finding_id AND f.tenant_id = fo.tenant_id
-      JOIN runs r ON r.id = fo.run_id AND r.tenant_id = fo.tenant_id
-      JOIN repositories repo ON repo.id = r.repository_id AND repo.tenant_id = r.tenant_id
-      JOIN skill_executions se ON se.id = f.skill_execution_id AND se.tenant_id = f.tenant_id
-      WHERE fo.tenant_id = $1 AND r.repository_id = $2 AND repo.memory_enabled = true
-        AND r.data_profile IN ('findings', 'code')
-        AND fo.outcome IN ('posted', 'resolved', 'rejected', 'revised')
-      ORDER BY (r.id = $3) DESC, fo.observed_at DESC, fo.id DESC
-      LIMIT 100
-    ) evidence
-    ORDER BY observed_at, observation_id
-  `, [tenantId, repositoryId, runId]);
-  return result.rows.map((row): PassiveEvidence => ({
-    findingId: row.finding_id,
-    observationId: row.observation_id,
-    runId: row.run_id,
-    skill: row.skill,
-    title: row.title,
-    description: row.description.slice(0, 2_000),
-    outcome: row.outcome,
-    observedAt: iso(row.observed_at),
-  }));
+  const rows = await getQueryDatabase(database).select({
+    findingId: sql<string>`${findings.id}`.as('finding_id'), observationId: sql<string>`${findingObservations.id}`.as('observation_id'), runId: sql<string>`${runs.id}`.as('run_id'),
+    skill: skillExecutions.skill, title: findings.title, description: findings.description,
+    outcome: findingObservations.outcome, observedAt: findingObservations.observedAt,
+    verification: findings.verification, reason: findingObservations.reason, headSha: runs.headSha,
+    path: findingLocations.path,
+  }).from(findingObservations)
+    .innerJoin(findings, and(eq(findings.id, findingObservations.findingId), eq(findings.tenantId, findingObservations.tenantId)))
+    .innerJoin(runs, and(eq(runs.id, findingObservations.runId), eq(runs.tenantId, findingObservations.tenantId)))
+    .innerJoin(repositories, and(eq(repositories.id, runs.repositoryId), eq(repositories.tenantId, runs.tenantId)))
+    .innerJoin(skillExecutions, and(eq(skillExecutions.id, findings.skillExecutionId), eq(skillExecutions.tenantId, findings.tenantId)))
+    .leftJoin(findingLocations, and(eq(findingLocations.findingId, findings.id), eq(findingLocations.tenantId, findings.tenantId), eq(findingLocations.ordinal, 0)))
+    .where(and(eq(findingObservations.tenantId, tenantId), eq(runs.repositoryId, repositoryId), eq(repositories.memoryEnabled, true),
+      inArray(runs.dataProfile, ['findings', 'code']), inArray(findingObservations.outcome, ['posted', 'resolved', 'rejected', 'revised'])))
+    .orderBy(desc(sql`${runs.id} = ${runId}`), desc(findingObservations.observedAt), desc(findingObservations.id)).limit(100);
+  return rows.sort((a, b) => iso(a.observedAt).localeCompare(iso(b.observedAt)) || a.observationId.localeCompare(b.observationId))
+    .map((row) => ({ ...row, outcome: row.outcome as PassiveEvidence['outcome'], observedAt: iso(row.observedAt),
+      verification: row.verification ?? undefined, reason: row.reason ?? undefined,
+      headSha: row.headSha ?? undefined, path: row.path ?? undefined }));
 }
 
 function deterministicProposals(evidence: readonly PassiveEvidence[]): PassiveMemoryProposal[] {
@@ -156,19 +139,17 @@ export function createMemoryJobHandlers(database: WardenDatabase, options: Memor
           policy: options.promotionPolicy ?? defaultPassivePromotionPolicy,
         });
         if (persisted?.lifecycle === 'active' && options.embedding) {
-          await database.query(`
-            INSERT INTO jobs (
-              tenant_id, repository_id, type, entity_id, input_version,
-              idempotency_key, payload_ref
-            ) VALUES ($1, $2, 'memory_embed', $3, 1, $4, $5)
-            ON CONFLICT (tenant_id, idempotency_key) DO NOTHING
-          `, [
-            job.tenantId,
-            job.repositoryId,
-            persisted.id,
-            `memory_embed:${persisted.id}:v1:${options.embedding.provider}:${options.embedding.model}`,
-            JSON.stringify({ memoryId: persisted.id }),
-          ]);
+          const db = getQueryDatabase(database);
+          const [current] = await db.select({ version: memories.version }).from(memories).where(and(
+            eq(memories.tenantId, job.tenantId), eq(memories.repositoryId, job.repositoryId),
+            eq(memories.id, persisted.id), eq(memories.lifecycle, 'active'),
+          )).limit(1);
+          if (current) await db.insert(jobs).values({
+            tenantId: job.tenantId, repositoryId: job.repositoryId, type: 'memory_embed',
+            entityId: persisted.id, inputVersion: current.version,
+            idempotencyKey: `memory_embed:${persisted.id}:v${current.version}:${options.embedding.provider}:${options.embedding.model}`,
+            payloadRef: JSON.stringify({ memoryId: persisted.id }),
+          }).onConflictDoNothing();
         }
       }
       return { complete: true };
@@ -186,7 +167,8 @@ export function createMemoryJobHandlers(database: WardenDatabase, options: Memor
         WHERE tenant_id = $1 AND id = $2 AND lifecycle IN ('candidate', 'active') LIMIT 1
       `, [job.tenantId, job.entityId]);
       const memory = loaded.rows[0];
-      if (!memory) return { complete: true };
+      // A newer revision already has its own job; do not pay to embed it twice.
+      if (!memory || memory.version !== job.inputVersion) return { complete: true };
       const embedded = await options.embedding.embed(memory.content);
       if (embedded.vector.length !== options.embedding.dimensions || embedded.vector.some((value) => !Number.isFinite(value))) {
         throw new TypeError('invalid_memory_embedding');

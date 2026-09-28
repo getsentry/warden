@@ -210,7 +210,7 @@ export function buildServiceRunProjection(input: BuildServiceRunProjectionInput)
     findings,
     observations,
     ...(input.recalledMemories?.length
-      ? { recalledMemories: input.recalledMemories.slice(0, MAX_RECALLED_MEMORIES) }
+      ? { recalledMemories: input.recalledMemories.slice(0, MAX_RECALLED_MEMORIES).map(({ id, version }) => ({ id, version })) }
       : {}),
     ...(input.memoryRecallId ? { memoryRecallId: input.memoryRecallId } : {}),
   };

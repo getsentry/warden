@@ -22,7 +22,9 @@
     "docs": "pnpm --filter warden-docs dev",
     "docs:check": "pnpm -C packages/docs check",
     "prepare": "simple-git-hooks",
-    "pack:warden": "pnpm --filter @sentry/warden pack"
+    "pack:warden": "pnpm --filter @sentry/warden pack",
+    "memory:local": "pnpm --filter @sentry/warden-service-api build && pnpm --filter @sentry/warden-service build && pnpm --filter warden-service-app local",
+    "memory:test": "pnpm --filter @sentry/warden-service-api build && pnpm --filter @sentry/warden-service build && node apps/warden-service/scripts/test-local-memory.mjs"
   },
   "simple-git-hooks": {
     "pre-commit": "pnpm lint-staged && pnpm typecheck"

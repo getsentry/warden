@@ -1,12 +1,16 @@
 import { describe, it, expect, vi, beforeEach, beforeAll, afterAll, afterEach } from 'vitest';
-import { query, type SDKMessage, type SDKResultError, type SDKResultSuccess } from '@anthropic-ai/claude-agent-sdk';
+import { query, createSdkMcpServer, type SDKMessage, type SDKResultError, type SDKResultSuccess } from '@anthropic-ai/claude-agent-sdk';
+import { z } from 'zod';
+import type * as ClaudeSdk from '@anthropic-ai/claude-agent-sdk';
 import { claudeRuntime } from './claude.js';
 import { Sentry } from '../../sentry.js';
 import { startTraceRecorder } from '../../sentry-trace.js';
 import type { TraceSpan } from '../../types/index.js';
 
-vi.mock('@anthropic-ai/claude-agent-sdk', () => ({
+vi.mock('@anthropic-ai/claude-agent-sdk', async (importOriginal) => ({
+  ...await importOriginal<typeof ClaudeSdk>(),
   query: vi.fn(),
+  createSdkMcpServer: vi.fn(() => ({ type: 'sdk', name: 'warden', instance: {} })),
 }));
 
 const mockQuery = vi.mocked(query);
@@ -130,6 +134,24 @@ function failingStream(error: unknown): ReturnType<typeof query> {
 }
 
 describe('claudeRuntime.runSkill', () => {
+  it('exposes memory tools through an SDK server with streaming input', async () => {
+    mockQuery.mockReturnValue(mockStream([successResult()]));
+    const execute = vi.fn(async () => '{"status":"saved"}');
+    await claudeRuntime.runSkill({
+      systemPrompt: 'system', userPrompt: 'review', repoPath: '/repo', skillName: 'security', options: {},
+      runtimeTools: [{ name: 'update_memory', description: 'Correct a note', schema: z.object({ content: z.string() }), execute }],
+    });
+    const call = mockQuery.mock.calls[0]?.[0];
+    expect(call?.options?.allowedTools).toContain('mcp__warden__update_memory');
+    expect(call?.options?.disallowedTools).toContain('Write');
+    expect(call?.options?.mcpServers).toHaveProperty('warden');
+    const messages = [];
+    if (call && typeof call.prompt !== 'string') for await (const message of call.prompt) messages.push(message);
+    expect(messages).toMatchObject([{ message: { role: 'user', content: 'review' } }]);
+    const definition = vi.mocked(createSdkMcpServer).mock.calls.at(-1)?.[0].tools?.[0];
+    await expect(definition?.handler({ content: 'Corrected claim' }, {})).resolves.toMatchObject({ content: [{ text: '{"status":"saved"}' }] });
+    expect(execute).toHaveBeenCalledWith({ content: 'Corrected claim' });
+  });
   beforeEach(() => {
     mockQuery.mockReset();
   });

@@ -6,9 +6,11 @@ import { runLocalSkill } from '@sentry/warden';
 import { evalFixtureRepoPath, singleEvalFixtureSourceRepository } from './fixtures.js';
 import { formatEvalId } from './names.js';
 import type { EvalMeta } from './types.js';
-import type { Finding, FindingProcessingEvent, RuntimeName, SkillReport } from '@sentry/warden';
+import type { Finding, FindingProcessingEvent, RuntimeName, SkillReport, LocalSkillServiceOptions } from '@sentry/warden';
 
 export interface RunEvalOptions {
+  /** Explicit isolated service for memory evals; ambient production configuration is ignored. */
+  service?: LocalSkillServiceOptions;
   /** Anthropic API key */
   apiKey: string;
   /** Override the model from the YAML spec */
@@ -189,6 +191,7 @@ export async function runEvalSkill(
           base: 'main',
           head: 'eval',
           cwd: repoDir,
+          service: options.service ?? { disabled: true },
           defaultBranch: 'main',
           apiKey: options.apiKey,
           model,

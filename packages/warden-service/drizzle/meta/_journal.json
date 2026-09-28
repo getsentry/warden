@@ -50,6 +50,27 @@
       "when": 1786823438457,
       "tag": "0006_tiny_garia",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1790290853002,
+      "tag": "0007_review_memory_revisions",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1790367600960,
+      "tag": "0008_chubby_sentinel",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1790368161862,
+      "tag": "0009_memory_recall_groups",
+      "breakpoints": true
     }
   ]
 }

@@ -1,5 +1,6 @@
 export { publishRunFailOpen, recallMemoryFailOpen } from './client.js';
 export { renderHistoricalMemory } from './memory.js';
+export { createServiceReviewMemory } from './review-memory.js';
 export { buildFindingsServiceRunEnvelope } from './findings.js';
 export { resolveServiceOptions, ServiceDataProfileSchema } from './options.js';
 export type {

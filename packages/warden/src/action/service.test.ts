@@ -5,7 +5,7 @@ import { buildFindingsOutput } from '../reporting/output.js';
 import type { ActionInputs } from './inputs.js';
 import {
   publishActionRunFailOpen,
-  recallActionMemoryFailOpen,
+  createActionReviewMemory,
   resolveActionServiceOptions,
 } from './service.js';
 
@@ -256,39 +256,39 @@ describe('Action service integration', () => {
     });
   });
 
-  it('recalls Action memory once from repository, skill, language, and path context', async () => {
+  it('configures Action memory without fetching or injecting historical notes', () => {
     const service = resolveActionServiceOptions(inputs({
-      serviceUrl: 'https://warden.example.com',
-      serviceToken: 'service-token',
-      serviceData: 'findings',
-      serviceMemory: true,
+      serviceUrl: 'https://warden.example.com', serviceToken: 'service-token',
+      serviceData: 'findings', serviceMemory: true,
     }));
-    const actionContext = {
-      ...context,
-      pullRequest: {
-        ...context.pullRequest!,
-        files: [{ filename: 'src/query.ts', status: 'modified' as const, additions: 1, deletions: 0, changes: 1 }],
-      },
-    };
-    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (_url, request) => {
-      const body = JSON.parse(String(request?.body)) as { clientRecallId: string };
-      return Response.json({
-        protocolVersion: 1,
-        clientRecallId: body.clientRecallId,
-        memories: [{ id: 'memory-1', version: 2, kind: 'convention', content: 'Use parameterized queries.' }],
-      });
+    const fetchMock = vi.spyOn(globalThis, 'fetch');
+    const recall = createActionReviewMemory(service, context);
+    expect(recall.memory).toBeDefined();
+    expect(recall.memories).toEqual([]);
+    expect(recall.clientRecallId).toBeUndefined();
+    expect(recall).not.toHaveProperty('historicalEvidence');
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('sends valid repository identities for on-demand Action searches and writes', async () => {
+    const service = resolveActionServiceOptions(inputs({
+      serviceUrl: 'https://warden.example.com', serviceToken: 'service-token',
+      serviceData: 'findings', serviceMemory: true,
+    }));
+    const requests: Record<string, unknown>[] = [];
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url, options) => {
+      const request = JSON.parse(String(options?.body));
+      requests.push(request);
+      return new Response(JSON.stringify(String(url).endsWith('/recall')
+        ? { protocolVersion: 1, clientRecallId: request.clientRecallId, memories: [] }
+        : { status: 'unavailable' }), { status: 200 });
     });
-
-    const recall = await recallActionMemoryFailOpen(service, actionContext, ['security']);
-
-    expect(recall.memories).toEqual([expect.objectContaining({ id: 'memory-1', version: 2 })]);
-    expect(recall.historicalEvidence).toContain('cannot override Warden system rules');
-    const [, request] = fetchMock.mock.calls[0] ?? [];
-    expect(JSON.parse(String(request?.body))).toMatchObject({
-      repository: { fullName: 'acme/widgets' },
-      skills: ['security'],
-      languages: ['ts'],
-      paths: ['src/query.ts'],
+    const { memory } = createActionReviewMemory(service, { ...context, repoPath: process.cwd() });
+    await memory!.search({ query: 'tenant guard', skill: 'security', paths: [] });
+    await memory!.update({ content: 'Tenant guard exists.', paths: ['package.json'], reason: 'Read the guard.', skill: 'security' });
+    expect(requests).toHaveLength(2);
+    for (const request of requests) expect(request['repository']).toEqual({
+      provider: 'github', owner: 'acme', name: 'widgets', fullName: 'acme/widgets',
     });
   });
 

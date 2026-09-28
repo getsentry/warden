@@ -102,3 +102,40 @@ eval slice.
 Eval suites use `skipIf` when `ANTHROPIC_API_KEY` is missing. Full-pipeline
 evals should always register the Warden judge, and verifier-only evals should
 always register the verifier verdict judge.
+
+## Memory Replay Benchmark
+
+Run the shipped Sentry corpus twice with the same model and skill:
+
+```bash
+pnpm exec tsx packages/evals/scripts/benchmark-memory.ts \
+  --repo /path/to/dedicated-sentry-checkout \
+  --root /path/to/new-results-directory \
+  --model openrouter/x-ai/grok-4.5
+```
+
+Set `WARDEN_OPENROUTER_API_KEY`, or use `--env-file /path/to/.env.local`.
+The checkout must be clean and dedicated to this run. The script changes its
+commit between shards. There is no spending limit.
+
+Pass one starts with empty memory for each corpus commit. Pass two copies that
+commit's saved notes. Both passes may save or correct notes during review and
+verification. This measures repeat-review cost, including memory overhead.
+It does not show that remembered conclusions remain safe after code changes.
+
+The runner freezes model catalog data, preserves individual primary traces,
+records finding revisions and memory operations, and audits inference bytes
+and provider billing. It stops on failed coverage or unresolved billing;
+inspect those artifacts before repairing only failed work. It never reruns an
+attempted shard automatically. Add a `STOP` file to stop before the next shard.
+
+Score both passes against corpus IDs at the matching commit before comparing
+cost. Report missed findings alongside savings, and include failed-call costs.
+The JSON-backed runner above reproduces the original historical experiment only.
+Its frozen results and source remain separate from the current memory design.
+For new experiments, start `pnpm memory:local` and pass its explicit URL and token
+through `RunEvalOptions.service`. The ordinary runner ignores ambient service
+configuration, so an eval must opt into an isolated service. Include service
+extraction, embedding, relevance, and inference costs when comparing results.
+Run `pnpm memory:test` for deterministic regressions against real Postgres and
+pgvector with external inference mocked.

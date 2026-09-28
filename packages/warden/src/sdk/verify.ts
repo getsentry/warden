@@ -19,6 +19,9 @@ import {
 } from './runtimes/index.js';
 import type { FindingProcessingEvent } from './types.js';
 import { runPool } from '../utils/index.js';
+import { createMemoryTools, MEMORY_GUIDANCE } from './memory.js';
+import type { ReviewMemory, ReviewMemoryAccess } from './memory.js';
+import type { ReviewMemoryJudgment } from '@sentry/warden-service-api';
 import {
   buildChangedFilesSection,
   buildJsonOutputSection,
@@ -39,6 +42,8 @@ export interface VerifyFindingsOptions {
   abortController?: AbortController;
   pathToClaudeCodeExecutable?: string;
   prContext?: PromptPRContext;
+  memory?: ReviewMemoryAccess;
+  historicalEvidence?: string;
   onFindingProcessing?: (event: FindingProcessingEvent) => void;
 }
 
@@ -52,6 +57,7 @@ const VerificationVerdictSchema = z.object({
   verdict: z.enum(['keep', 'revise', 'reject']),
   finding: FindingSchema.nullish(),
   reason: z.string().optional(),
+  supersedes: z.array(z.object({ id: z.string().min(1).max(128), version: z.number().int().positive() })).max(5).optional(),
 });
 
 type VerificationVerdict = z.infer<typeof VerificationVerdictSchema>;
@@ -70,7 +76,7 @@ function isAbortRequested(error: unknown, abortController?: AbortController): bo
   return (abortController?.signal.aborted ?? false) || classifyError(error).code === 'aborted';
 }
 
-function buildVerificationSystemPrompt(skill: SkillDefinition): string {
+function buildVerificationSystemPrompt(skill: SkillDefinition, memoryEnabled = false): string {
   return `<role>
 You are Warden's finding verifier. You validate one candidate finding at a time.
 Your job is to deeply trace the code, look for mitigations and intent, then keep, revise, or reject the candidate.
@@ -97,6 +103,7 @@ ${buildSkillResourcesSection(skill) ?? ''}
 </verification_stance>
 
 <evidence>
+For every verdict, give a concise evidence-based reason naming the concrete code path, guard, or missing mitigation. This judgment will be retained as historical evidence.
 For revised findings, write the "verification" field as evidence for the public Evidence block: 2-5 short Markdown bullets tracing the concrete code path, guard, condition, or behavior that makes the finding real. Use function/file names when useful. Do not use checklist labels, generic reasoning, or restate the description.
 </evidence>
 
@@ -104,6 +111,7 @@ ${buildJsonOutputSection(`
 {"verdict":"keep|revise|reject","finding":{...},"reason":"short reason"}
 
 Use "finding" only for verdict "revise". For revised findings, return the complete Warden finding object and keep the original id.
+${memoryEnabled ? 'If this verdict replaces a provisional note returned by find_memories during this verification, include "supersedes":[{"id":"returned note id","version":1}]. Link only notes about this exact concern and applicability whose evidence you checked. A shared file is not enough. Omit supersedes for unrelated notes, uncertain relationships, or existing verifier judgments.' : ''}
 `)}`;
 }
 
@@ -228,6 +236,12 @@ function notifyVerdict(
   }
 }
 
+function memoryFinding(finding: Finding): ReviewMemoryJudgment['candidate'] {
+  return { id: finding.id, title: finding.title, description: finding.description,
+    severity: finding.severity, confidence: finding.confidence, verification: finding.verification,
+    location: finding.location, additionalLocations: finding.additionalLocations };
+}
+
 function keepFindingAfterInterruptedVerification(finding: Finding): VerificationTaskResult {
   // An abort is inconclusive, not a verifier rejection. Preserve candidates so
   // interrupted runs report the partial findings already collected.
@@ -247,7 +261,7 @@ export async function verifyFindings(
 
   const runtimeName = options.runtime ?? 'pi';
   const runtime = getRuntime(runtimeName);
-  const systemPrompt = buildVerificationSystemPrompt(options.skill);
+  const systemPrompt = buildVerificationSystemPrompt(options.skill, Boolean(options.memory));
 
   const results = await runPool<Finding, VerificationTaskResult>(
     findings,
@@ -258,9 +272,11 @@ export async function verifyFindings(
       }
 
       try {
+        const recalledNotes = new Map<string, ReviewMemory>();
+        const memoryContext = { skill: options.skill.name, paths: finding.location ? [finding.location.path] : [] };
         const { result, authError } = await runtime.runSkill({
           apiKey: options.apiKey,
-          systemPrompt,
+          systemPrompt: [systemPrompt, options.historicalEvidence, options.memory ? MEMORY_GUIDANCE : undefined].filter(Boolean).join('\n\n'),
           userPrompt: buildVerificationUserPrompt(finding, options.prContext),
           repoPath: options.repoPath,
           skillName: `${options.skill.name}:verification`,
@@ -272,6 +288,9 @@ export async function verifyFindings(
             abortController: options.abortController,
           },
           tools: options.skill.tools,
+          runtimeTools: createMemoryTools(options.memory, memoryContext, (notes) => {
+            for (const note of notes) recalledNotes.set(note.id, note);
+          }),
           providerOptions: getRuntimeProviderOptions(runtimeName, {
             pathToClaudeCodeExecutable: options.pathToClaudeCodeExecutable,
           }),
@@ -284,6 +303,22 @@ export async function verifyFindings(
           : null;
         const next = applyVerdict(finding, verdict);
         notifyVerdict(options, finding, verdict, next);
+        if (verdict && (verdict.verdict !== 'revise' || verdict.finding)) {
+          try {
+            const supersedes = verdict.supersedes?.filter(({ id, version }) => {
+              const note = recalledNotes.get(id);
+              return note?.version === version && !note.judgment && !note.verdict;
+            });
+            await options.memory?.recordJudgment?.({ skill: options.skill.name,
+              ...(supersedes?.length ? { supersedes } : {}), judgment: {
+              verdict: verdict.verdict, candidate: memoryFinding(finding),
+              ...(verdict.verdict === 'revise' && next ? { revised: memoryFinding(next) } : {}),
+              reason: verdict.reason, observedAt: new Date().toISOString(),
+            } });
+          } catch {
+            // Storage failure must not turn a rejected finding back into a reported one.
+          }
+        }
         const rejectionReason = verdict?.verdict === 'reject'
           ? (verdict.reason ?? 'No reason provided').slice(0, MAX_REJECTION_REASON_LENGTH)
           : undefined;

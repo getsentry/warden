@@ -6,6 +6,7 @@ import type { PromptPRContext } from './prompt-sections.js';
 import type { RuntimeName } from './runtimes/index.js';
 import type { AuxiliaryUsageEntry, FindingProcessingEvent } from './types.js';
 import { verifyFindings } from './verify.js';
+import type { ReviewMemoryAccess } from './memory.js';
 
 export interface PostProcessFindingsOptions {
   skill: SkillDefinition;
@@ -21,6 +22,8 @@ export interface PostProcessFindingsOptions {
   abortController?: AbortController;
   pathToClaudeCodeExecutable?: string;
   prContext?: PromptPRContext;
+  memory?: ReviewMemoryAccess;
+  historicalEvidence?: string;
   onFindingProcessing?: (event: FindingProcessingEvent) => void;
 }
 
@@ -56,6 +59,8 @@ export async function postProcessFindings(
       abortController: options.abortController,
       pathToClaudeCodeExecutable: options.pathToClaudeCodeExecutable,
       prContext: options.prContext,
+      memory: options.memory,
+      historicalEvidence: options.historicalEvidence,
       onFindingProcessing: options.onFindingProcessing,
     });
     currentFindings = verification.findings;

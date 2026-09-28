@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { RunEnvelopeV1Schema } from '@sentry/warden-service-api';
 import type { SkillReport } from '../types/index.js';
 import { publishRunFailOpen, recallMemoryFailOpen } from './client.js';
 import type { BuildServiceRunProjectionInput } from './projection.js';
@@ -51,6 +52,12 @@ function input(data: 'metrics' | 'findings' | 'code'): BuildServiceRunProjection
 }
 
 describe('buildServiceRunEnvelope', () => {
+  it('projects full recalled records to wire references before publishing', () => {
+    const recalled = [{ id: 'memory-1', version: 1, kind: 'review_guidance', content: 'Historical evidence.', skill: 'security' }];
+    const envelope = buildServiceRunEnvelope({ ...input('findings'), recalledMemories: recalled });
+    expect(RunEnvelopeV1Schema.parse(envelope)).toMatchObject({ recalledMemories: [{ id: 'memory-1', version: 1 }] });
+  });
+
   it('maps scan and auxiliary usage to independently attributed lanes', () => {
     const envelope = buildServiceRunEnvelope(input('metrics'));
 

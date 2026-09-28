@@ -13,6 +13,7 @@ import { buildHunkSystemPrompt, buildHunkUserPrompt, type PRPromptContext } from
 import { extractFindingsJson, extractFindingsWithLLM, validateFindings } from './extract.js';
 import type { ExtractFindingsResult } from './extract.js';
 import { postProcessFindings } from './post-process.js';
+import { createMemoryTools, MEMORY_GUIDANCE } from './memory.js';
 import { buildFileReports } from './report-files.js';
 import { getRuntime, getRuntimeProviderOptions } from './runtimes/index.js';
 import type { SkillRunResult } from './runtimes/index.js';
@@ -349,7 +350,8 @@ async function analyzeHunk(
       const runtimeName = options.runtime ?? 'pi';
       const traceRecorder = options.captureTraces ? startTraceRecorder(span) : undefined;
 
-      const systemPrompt = buildHunkSystemPrompt(skill, options.historicalEvidence);
+      const memoryContext = { skill: skill.name, paths: [hunkCtx.filename] };
+      const systemPrompt = buildHunkSystemPrompt(skill, [options.historicalEvidence, options.memory ? MEMORY_GUIDANCE : undefined].filter(Boolean).join('\n\n') || undefined);
       const userPrompt = buildHunkUserPrompt(skill, hunkCtx, prContext);
 
       // Report prompt size information
@@ -428,6 +430,7 @@ async function analyzeHunk(
             skillName: skill.name,
             skillRoot: skill.rootDir,
             tools: skill.tools,
+            runtimeTools: createMemoryTools(options.memory, memoryContext),
             parentSpan: span,
             traceRecorder,
             options: {
@@ -1116,6 +1119,7 @@ async function runSkillAnalysis(
     let fileStartTime: number | undefined;
 
     const fileCallbacks: FileAnalysisCallbacks = {
+      onChunkComplete: callbacks?.onChunkComplete,
       skillStartTime: callbacks?.skillStartTime,
       onHunkStart: (hunkNum, totalHunks, lineRange) => {
         if (fileStartTime === undefined) {
@@ -1294,6 +1298,8 @@ async function runSkillAnalysis(
       synthesisModel: options.synthesisModel,
       auxiliaryMaxRetries: options.auxiliaryMaxRetries,
       verifyFindings: options.verifyFindings,
+      memory: options.memory,
+      historicalEvidence: options.historicalEvidence,
       maxTurns: options.maxTurns,
       abortController: options.abortController,
       pathToClaudeCodeExecutable: options.pathToClaudeCodeExecutable,

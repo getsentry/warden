@@ -1,5 +1,3 @@
-import { randomUUID } from 'node:crypto';
-import { extname } from 'node:path';
 import type { MemoryRecallResponse } from '@sentry/warden-service-api';
 import type { FindingsOutput } from '../reporting/output.js';
 import type { ActionInputs } from './inputs.js';
@@ -9,44 +7,30 @@ import { warnAction } from '../cli/output/tty.js';
 import {
   buildFindingsServiceRunEnvelope,
   publishRunFailOpen,
-  recallMemoryFailOpen,
-  renderHistoricalMemory,
+  createServiceReviewMemory,
   resolveServiceOptions,
 } from '../service/index.js';
 import type { ResolvedServiceOptions } from '../service/index.js';
+import type { ReviewMemoryAccess } from '../sdk/memory.js';
 
-export interface ActionMemoryRecall {
-  historicalEvidence?: string;
+export interface ActionReviewMemory {
   memories: MemoryRecallResponse['memories'];
   clientRecallId?: string;
+  memory?: ReviewMemoryAccess;
 }
 
-/** Recall repository memory once after Action paths and selected skills are known. */
-export async function recallActionMemoryFailOpen(
+/** Configure on-demand memory and expose recall accounting only after a tool search. */
+export function createActionReviewMemory(
   service: ResolvedServiceOptions | undefined,
   context: EventContext,
-  skills: readonly string[],
-): Promise<ActionMemoryRecall> {
-  if (!service?.memory) return { memories: [] };
-  const paths = context.pullRequest?.files.map((file) => file.filename) ?? [];
-  const response = await recallMemoryFailOpen(service, {
-    protocolVersion: 1,
-    clientRecallId: randomUUID(),
-    repository: {
-      provider: 'github',
-      owner: context.repository.owner,
-      name: context.repository.name,
-      fullName: context.repository.fullName,
-    },
-    skills: [...new Set(skills)],
-    languages: [...new Set(paths.map((path) => extname(path).slice(1)).filter(Boolean))],
-    paths,
-  });
-  const memories = response?.memories ?? [];
+): ActionReviewMemory {
+  const memory = createServiceReviewMemory(service, {
+    provider: 'github', owner: context.repository.owner, name: context.repository.name, fullName: context.repository.fullName,
+  }, context.repoPath);
   return {
-    memories,
-    historicalEvidence: renderHistoricalMemory(memories),
-    ...(response ? { clientRecallId: response.clientRecallId } : {}),
+    memory,
+    get memories() { return memory?.recall?.memories ?? []; },
+    get clientRecallId() { return memory?.recall?.clientRecallId; },
   };
 }
 

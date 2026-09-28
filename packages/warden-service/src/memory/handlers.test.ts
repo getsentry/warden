@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { DatabaseClient, QueryResult, WardenDatabase } from '../db/database.js';
 import type { ClaimedJob } from '../jobs/runner.js';
 import { createMemoryJobHandlers } from './handlers.js';
@@ -12,12 +12,13 @@ function databaseFixture() {
     run_id: `run-${index}`,
     skill: 'security', title: 'Unsafe sink', description: 'Unsafe input.',
     outcome: 'resolved', observed_at: new Date(`2026-08-0${index}T10:00:00.000Z`),
+    verification: 'Concrete path through executeQuery.', reason: 'Confirmed missing escaping.', head_sha: 'abcdef123', path: 'src/query.ts',
   }));
   const client: DatabaseClient = {
     async query<TRow extends Record<string, unknown>>(sql: string, values: readonly unknown[] = []): Promise<QueryResult<TRow>> {
       statements.push(sql.replace(/\s+/g, ' ').trim());
       statementValues.push(values);
-      if (sql.includes('FROM finding_observations fo')) return { rows: evidence as unknown as TRow[], rowCount: 2 };
+      if (sql.includes('from "finding_observations"') || sql.includes('FROM finding_observations fo')) return { rows: evidence as unknown as TRow[], rowCount: 2 };
       return { rows: [], rowCount: 0 };
     },
   };
@@ -46,8 +47,8 @@ describe('memory job handlers', () => {
     }).memory_extract;
 
     await expect(handler?.(job, { deadline: Date.now() + 5_000 })).rejects.toThrow();
-    expect(statements[0]).toContain('ORDER BY (r.id = $3) DESC, fo.observed_at DESC, fo.id DESC');
-    expect(statementValues[0]).toEqual([job.tenantId, job.repositoryId, job.entityId]);
+    expect(statements[0]).toContain('order by "runs"."id" =');
+    expect(statementValues[0]).toEqual(expect.arrayContaining([job.tenantId, job.repositoryId, job.entityId]));
     expect(statements.some((sql) => sql.includes('INSERT INTO memories'))).toBe(false);
   });
 
@@ -68,6 +69,7 @@ describe('memory job handlers', () => {
     const handler = createMemoryJobHandlers(database, {
       extractor: {
         async extract(input) {
+          expect(input.evidence[0]).toMatchObject({ verification: 'Concrete path through executeQuery.', reason: 'Confirmed missing escaping.', headSha: 'abcdef123', path: 'src/query.ts' });
           return {
             proposals: ['Use parameterized queries.', 'Validate query identifiers.'].map((content) => ({
               kind: 'confirmed_pattern' as const,
@@ -131,6 +133,41 @@ describe('memory job handlers', () => {
       .resolves.toEqual({ complete: true });
     expect(statements.some((sql) => sql.startsWith('DELETE FROM memory_embeddings'))).toBe(true);
     expect(statements.some((sql) => sql.includes("'retention_expired'"))).toBe(true);
+  });
+
+  it('embeds the current version when passive evidence promotes an existing candidate', async () => {
+    const { database, statements, statementValues } = databaseFixture();
+    const baseQuery = database.query.bind(database);
+    const query: DatabaseClient['query'] = async (sql, values) => {
+      const result = await baseQuery(sql, values);
+      if (sql.includes('SELECT id, lifecycle FROM memories')) return { rows: [{ id: 'memory-1', lifecycle: 'candidate' }], rowCount: 1 } as never;
+      if (sql.includes('AS independent_runs')) return { rows: [{ support_count: 3, contradiction_count: 0, independent_runs: 3 }], rowCount: 1 } as never;
+      if (sql.includes('from "memories"')) return { rows: [{ version: 2 }], rowCount: 1 } as never;
+      if (sql.includes('SELECT id, repository_id, version, content, content_hash')) return { rows: [{ id: 'memory-1', version: 2, content: 'Confirmed pattern.', content_hash: 'hash-1' }], rowCount: 1 } as never;
+      return result;
+    };
+    database.query = query;
+    database.transaction = async (operation) => operation({ query });
+    const embed = vi.fn().mockResolvedValue({ vector: [0.1, 0.2] });
+    const handlers = createMemoryJobHandlers(database, {
+      promotionPolicy: { autoPromote: true, minimumIndependentEvidence: 3, version: 'test' },
+      embedding: { provider: 'test', model: 'test', dimensions: 2, embed },
+    });
+    await handlers.memory_extract!(job, { deadline: Date.now() + 5_000 });
+    const enqueued = statements.findIndex((sql) => sql.startsWith('insert into "jobs"'));
+    expect(enqueued).toBeGreaterThanOrEqual(0);
+    expect(statementValues[enqueued]).toEqual(expect.arrayContaining([2, 'memory_embed:memory-1:v2:test:test']));
+    await handlers.memory_embed!({ ...job, type: 'memory_embed', entityId: 'memory-1', inputVersion: 2 }, { deadline: Date.now() + 5_000 });
+    expect(embed).toHaveBeenCalledExactlyOnceWith('Confirmed pattern.');
+  });
+
+  it('skips an obsolete embedding job after the note was revised', async () => {
+    const { database } = databaseFixture();
+    database.query = async () => ({ rows: [{ id: 'memory-1', version: 2, content: 'Revised evidence.', content_hash: 'v2' }], rowCount: 1 }) as never;
+    const embed = vi.fn();
+    const handler = createMemoryJobHandlers(database, { embedding: { provider: 'test', model: 'test', dimensions: 1536, embed } }).memory_embed;
+    expect(await handler?.({ ...job, type: 'memory_embed', entityId: 'memory-1', inputVersion: 1 }, { deadline: Date.now() + 5_000 })).toEqual({ complete: true });
+    expect(embed).not.toHaveBeenCalled();
   });
 
   it('does not hide non-vector database failures while storing embeddings', async () => {

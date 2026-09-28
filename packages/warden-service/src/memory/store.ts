@@ -1,3 +1,7 @@
+import { and, asc, desc, eq } from 'drizzle-orm';
+import { MemoryRecordSchema } from '@sentry/warden-service-api';
+import { getQueryDatabase } from '../db/query.js';
+import { memoryEvidence, findings, findingObservations, runs, reviewMemoryRevisions, repositories, memoryRecallBatches } from '../db/schema.js';
 import { createHash } from 'node:crypto';
 import type {
   MemoryRecallRequest,
@@ -6,7 +10,7 @@ import type {
   MemoryRecord,
   RepositoryIdentity,
 } from '@sentry/warden-service-api';
-import { canAccessRepository, requireServiceContext } from '../context.js';
+import { canAccessRepository, hasRole, requireServiceContext } from '../context.js';
 import type { ServiceContext } from '../context.js';
 import type { DatabaseClient, WardenDatabase } from '../db/database.js';
 import { z } from 'zod';
@@ -47,7 +51,10 @@ interface MemoryRow extends Record<string, unknown> {
   owner: string;
   name: string;
   full_name: string;
+  judgment?: MemoryRecord['judgment'] | null;
   content_hash?: string;
+  recalled_version?: number;
+  recalled_snapshot?: { memory: MemoryRecord } | null;
 }
 
 export interface MemoryOperationUsage {
@@ -78,6 +85,7 @@ export interface MemoryRelevanceCandidate {
 
 export interface MemoryRelevanceClassifier {
   classify(input: {
+    query?: string;
     skills: readonly string[];
     languages: readonly string[];
     paths: readonly string[];
@@ -117,6 +125,7 @@ function mapMemory(row: MemoryRow): MemoryRecord {
     kind: row.kind,
     lifecycle: row.lifecycle,
     content: row.content,
+    ...(row.judgment ? { judgment: row.judgment } : {}),
     ...(row.skill ? { skill: row.skill } : {}),
     ...(row.language ? { language: row.language } : {}),
     ...(row.path_family ? { pathFamily: row.path_family } : {}),
@@ -132,6 +141,7 @@ function mapRecalledMemory(row: MemoryRow): MemoryRecallResponse['memories'][num
     version: row.version,
     kind: row.kind,
     content: row.content,
+    ...(row.judgment ? { verdict: row.judgment.verdict, headSha: row.judgment.headSha } : {}),
     ...(row.skill ? { skill: row.skill } : {}),
     ...(row.language ? { language: row.language } : {}),
     ...(row.path_family ? { pathFamily: row.path_family } : {}),
@@ -152,17 +162,30 @@ async function loadRecallBatch(
   const batchId = batch.rows[0]?.id;
   if (!batchId) return null;
   const recalled = await client.query<MemoryRow>(`
-    SELECT m.*, repo.provider, repo.owner, repo.name, repo.full_name
+    SELECT m.*, repo.provider, repo.owner, repo.name, repo.full_name,
+      mr.lifecycle_version AS recalled_version, revision.snapshot AS recalled_snapshot
     FROM memory_recalls mr
     JOIN memories m ON m.id = mr.memory_id AND m.tenant_id = mr.tenant_id
     JOIN repositories repo ON repo.id = m.repository_id AND repo.tenant_id = m.tenant_id
+    LEFT JOIN LATERAL (
+      SELECT snapshot FROM review_memory_revisions
+      WHERE tenant_id = mr.tenant_id AND memory_id = mr.memory_id AND version >= mr.lifecycle_version
+      ORDER BY version LIMIT 1
+    ) revision ON true
     WHERE mr.tenant_id = $1 AND mr.batch_id = $2
     ORDER BY mr.rank, mr.id
   `, [context.tenantId, batchId]);
   return {
     protocolVersion: 1,
     clientRecallId,
-    memories: recalled.rows.map(mapRecalledMemory),
+    memories: recalled.rows.map((row) => {
+      const snapshot = row.recalled_snapshot?.memory;
+      return snapshot ? {
+        id: snapshot.id, version: row.recalled_version ?? snapshot.version, kind: snapshot.kind, content: snapshot.content,
+        ...(snapshot.skill ? { skill: snapshot.skill } : {}), ...(snapshot.language ? { language: snapshot.language } : {}),
+        ...(snapshot.pathFamily ? { pathFamily: snapshot.pathFamily } : {}),
+      } : { ...mapRecalledMemory(row), version: row.recalled_version ?? row.version };
+    }),
   };
 }
 
@@ -298,18 +321,21 @@ export async function getMemoryDetail(
   const context = requireServiceContext(contextInput);
   const memory = await getMemory(database, context, memoryId);
   if (!memory) return null;
-  const [evidence, lifecycle] = await Promise.all([
-    database.query<{
-      evidence_kind: string;
-      finding_id: string | null;
-      observation_id: string | null;
-      created_at: Date | string;
-    }>(`
-      SELECT evidence_kind, finding_id, observation_id, created_at
-      FROM memory_evidence
-      WHERE tenant_id = $1 AND memory_id = $2
-      ORDER BY created_at, evidence_kind
-    `, [context.tenantId, memoryId]),
+  const db = getQueryDatabase(database);
+  const [evidence, history, lifecycle] = await Promise.all([
+    db.select({ kind: memoryEvidence.evidenceKind, findingId: memoryEvidence.findingId,
+      observationId: memoryEvidence.observationId, createdAt: memoryEvidence.createdAt,
+      title: findings.title, description: findings.description, verification: findings.verification,
+      reason: findingObservations.reason, headSha: runs.headSha,
+    }).from(memoryEvidence)
+      .leftJoin(findings, and(eq(findings.id, memoryEvidence.findingId), eq(findings.tenantId, memoryEvidence.tenantId)))
+      .leftJoin(findingObservations, and(eq(findingObservations.id, memoryEvidence.observationId), eq(findingObservations.tenantId, memoryEvidence.tenantId)))
+      .leftJoin(runs, and(eq(runs.id, findingObservations.runId), eq(runs.tenantId, memoryEvidence.tenantId)))
+      .where(and(eq(memoryEvidence.tenantId, context.tenantId), eq(memoryEvidence.memoryId, memoryId)))
+      .orderBy(desc(memoryEvidence.createdAt), asc(memoryEvidence.evidenceKind)),
+    db.select().from(reviewMemoryRevisions)
+      .where(and(eq(reviewMemoryRevisions.tenantId, context.tenantId), eq(reviewMemoryRevisions.memoryId, memoryId)))
+      .orderBy(desc(reviewMemoryRevisions.version)).limit(5),
     database.query<{
       from_state: MemoryRecord['lifecycle'] | null;
       to_state: MemoryRecord['lifecycle'];
@@ -324,12 +350,14 @@ export async function getMemoryDetail(
   ]);
   return {
     memory,
-    evidence: evidence.rows.map((row) => ({
-      kind: row.evidence_kind,
-      ...(row.finding_id ? { findingId: row.finding_id } : {}),
-      ...(row.observation_id ? { observationId: row.observation_id } : {}),
-      createdAt: iso(row.created_at),
+    evidence: evidence.map((row) => ({
+      kind: row.kind, createdAt: iso(row.createdAt),
+      findingId: row.findingId ?? undefined, observationId: row.observationId ?? undefined,
+      title: row.title ?? undefined, description: row.description ?? undefined,
+      verification: row.verification ?? undefined, reason: row.reason ?? undefined, headSha: row.headSha ?? undefined,
     })),
+    history: history.map((row) => ({ memory: MemoryRecordSchema.parse((row.snapshot as { memory: unknown }).memory),
+      reason: row.reason, createdAt: iso(row.createdAt) })),
     lifecycle: lifecycle.rows.map((row) => ({
       ...(row.from_state ? { from: row.from_state } : {}),
       to: row.to_state,
@@ -439,15 +467,25 @@ export async function recallMemories(
 ): Promise<MemoryRecallResponse> {
   const context = requireServiceContext(contextInput);
   return database.transaction(async (client) => {
-    const repository = await resolveRepository(client, context, request.repository);
+    let repository = await resolveRepository(client, context, request.repository);
+    if (!repository && hasRole(context, 'ingest') && context.credentialKind !== 'personal' && canAccessRepository(context, request.repository.fullName)) {
+      await getQueryDatabase(client).insert(repositories).values({ tenantId: context.tenantId, ...request.repository, memoryEnabled: true }).onConflictDoNothing();
+      repository = await resolveRepository(client, context, request.repository);
+    }
     if (!repository?.memory_enabled) {
       return { protocolVersion: 1, clientRecallId: request.clientRecallId, memories: [] };
+    }
+    if (request.parentRecallId) {
+      const [parent] = await getQueryDatabase(client).select({ id: memoryRecallBatches.id }).from(memoryRecallBatches)
+        .where(and(eq(memoryRecallBatches.tenantId, context.tenantId), eq(memoryRecallBatches.repositoryId, repository.id),
+          eq(memoryRecallBatches.clientRecallId, request.parentRecallId))).limit(1);
+      if (!parent) return { protocolVersion: 1, clientRecallId: request.clientRecallId, memories: [] };
     }
     const existing = await loadRecallBatch(client, context, repository.id, request.clientRecallId);
     if (existing) return existing;
 
     const startedAt = Date.now();
-    const query = [...request.skills, ...request.languages, ...request.paths.map((path) => path.split('/')[0] ?? path)]
+    const query = request.query ?? [...request.skills, ...request.languages, ...request.paths.map((path) => path.split('/')[0] ?? path)]
       .filter(Boolean)
       .map((term) => `"${term.replaceAll('"', '')}"`)
       .join(' OR ')
@@ -461,7 +499,8 @@ export async function recallMemories(
         AND m.lifecycle = 'active'
         AND (m.expires_at IS NULL OR m.expires_at > now())
         AND (
-          (m.skill IS NULL AND m.language IS NULL AND m.path_family IS NULL)
+          (cardinality($4::text[]) + cardinality($5::text[]) + cardinality($6::text[]) = 0)
+          OR (m.skill IS NULL AND m.language IS NULL AND m.path_family IS NULL)
           OR m.skill = ANY($4::text[])
           OR m.language = ANY($5::text[])
           OR m.path_family = ANY($6::text[])
@@ -486,25 +525,26 @@ export async function recallMemories(
           const vector = `[${embedded.vector.join(',')}]`;
           const vectorResult = await client.query<MemoryRow>(`
             SELECT m.*, repo.provider, repo.owner, repo.name, repo.full_name,
-              1 - (me.embedding_vector <=> $7::vector(1536)) AS rank
+              1 - (me.embedding_vector <=> $6::vector(1536)) AS rank
             FROM memory_embeddings me
             JOIN memories m ON m.id = me.memory_id AND m.tenant_id = me.tenant_id
             JOIN repositories repo ON repo.id = m.repository_id AND repo.tenant_id = m.tenant_id
             WHERE m.tenant_id = $1 AND m.repository_id = $2
               AND m.lifecycle = 'active' AND (m.expires_at IS NULL OR m.expires_at > now())
               AND (
-                (m.skill IS NULL AND m.language IS NULL AND m.path_family IS NULL)
-                OR m.skill = ANY($4::text[])
-                OR m.language = ANY($5::text[])
-                OR m.path_family = ANY($6::text[])
+                (cardinality($3::text[]) + cardinality($4::text[]) + cardinality($5::text[]) = 0)
+                OR (m.skill IS NULL AND m.language IS NULL AND m.path_family IS NULL)
+                OR m.skill = ANY($3::text[])
+                OR m.language = ANY($4::text[])
+                OR m.path_family = ANY($5::text[])
               )
-              AND me.provider = $8 AND me.model = $9 AND me.dimensions = $10
+              AND me.provider = $7 AND me.model = $8 AND me.dimensions = $9
               AND me.content_hash = m.content_hash
               AND me.embedding_vector IS NOT NULL
-            ORDER BY me.embedding_vector <=> $7::vector(1536), m.updated_at DESC, m.id
+            ORDER BY me.embedding_vector <=> $6::vector(1536), m.updated_at DESC, m.id
             LIMIT 20
           `, [
-            context.tenantId, repository.id, query, request.skills, request.languages,
+            context.tenantId, repository.id, request.skills, request.languages,
             pathFamilies, vector, options.embedding.provider, options.embedding.model,
             options.embedding.dimensions,
           ]);
@@ -544,6 +584,7 @@ export async function recallMemories(
     if (options.relevance && rankedRows.length > 0) {
       try {
         const classified = await options.relevance.classify({
+          query: request.query,
           skills: request.skills,
           languages: request.languages,
           paths: request.paths,
@@ -579,8 +620,8 @@ export async function recallMemories(
     const inserted = await client.query<{ id: string }>(`
       INSERT INTO memory_recall_batches (
         tenant_id, repository_id, client_recall_id, memory_count, duration_ms,
-        provider, model, runtime, input_tokens, output_tokens, cost_usd, cost_basis
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::cost_basis)
+        provider, model, runtime, input_tokens, output_tokens, cost_usd, cost_basis, parent_recall_id
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::cost_basis, $13)
       ON CONFLICT (tenant_id, client_recall_id) DO NOTHING
       RETURNING id
     `, [
@@ -594,6 +635,7 @@ export async function recallMemories(
         ? null
         : (relevanceUsage?.costUsd ?? 0) + (embeddingUsage?.costUsd ?? 0),
       relevanceUsage?.costBasis ?? embeddingUsage?.costBasis ?? null,
+      request.parentRecallId ?? null,
     ]);
     const batchId = inserted.rows[0]?.id;
     if (!batchId) {

@@ -21,6 +21,9 @@ describe('migrateDatabase', () => {
             { version: '0004_dazzling_vermin' },
             { version: '0005_large_mattie_franklin' },
             { version: '0006_tiny_garia' },
+            { version: '0007_review_memory_revisions' },
+            { version: '0008_chubby_sentinel' },
+            { version: '0009_memory_recall_groups' },
           ]) as unknown as QueryResult<TRow>;
         }
         return result();
@@ -32,7 +35,7 @@ describe('migrateDatabase', () => {
       statementTimeoutMs: 15_000,
       withClient: (operation) => operation(client),
       query: async <TRow extends Record<string, unknown>>() => (
-        result([{ version: '0006_tiny_garia' }]) as unknown as QueryResult<TRow>
+        result([{ version: '0009_memory_recall_groups' }]) as unknown as QueryResult<TRow>
       ),
       transaction: (operation) => operation(client),
       close: () => Promise.resolve(),
