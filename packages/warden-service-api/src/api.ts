@@ -294,6 +294,11 @@ export const ReviewMemoryWriteRequestSchema = z.object({
   supersedes: z.array(z.object({ id: z.string().uuid(), version: z.number().int().positive() }).strict()).max(5).optional(),
 }).strict().refine((input) => Boolean(input.id) === (input.expectedVersion !== undefined), {
   message: 'Corrections require both id and expectedVersion',
+}).refine(({ content, paths }) => {
+  const suffix = `\n\nSources: ${paths.join(', ')}`;
+  return content.endsWith(suffix) || content.length + suffix.length <= 4_000;
+}, {
+  path: ['content'], message: 'The note and source references must fit within 4,000 characters. Shorten the note or use fewer paths.',
 }).refine((input) => !input.supersedes?.length || Boolean(input.judgment && !input.id), {
   message: 'Only a new verifier judgment can supersede provisional notes',
 });

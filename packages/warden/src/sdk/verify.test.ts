@@ -137,6 +137,24 @@ describe('verifyFindings', () => {
     expect(memory.recordJudgment).not.toHaveBeenCalled();
   });
 
+  it.each([
+    { verdict: 'reject', supersedes: null },
+    { verdict: 'revise', supersedes: [{ id: 'old', version: '1' }] },
+  ])('applies $verdict even when memory supersession metadata is malformed', async ({ verdict, supersedes }) => {
+    const finding = makeFinding();
+    const revised = { ...finding, severity: 'low' as const, description: 'Only the unguarded route is affected.' };
+    const memory = { search: vi.fn(), update: vi.fn(), recordJudgment: vi.fn().mockResolvedValue(undefined) };
+    vi.mocked(getRuntime).mockReturnValue(mockRuntime(JSON.stringify({
+      verdict, supersedes, reason: 'Traced the current route guard.', ...(verdict === 'revise' ? { finding: revised } : {}),
+    })));
+    const result = await verifyFindings([finding], { repoPath: '/repo', skill: makeSkill(), memory });
+    expect(result.findings).toEqual(verdict === 'reject' ? [] : [revised]);
+    expect(memory.recordJudgment).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
+      judgment: expect.objectContaining({ verdict }),
+    }));
+    expect(memory.recordJudgment.mock.calls[0]?.[0]).not.toHaveProperty('supersedes');
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
   });

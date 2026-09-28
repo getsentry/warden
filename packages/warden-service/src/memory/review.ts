@@ -117,7 +117,8 @@ export async function updateReviewMemory(
     if (!current) return { status: 'conflict' };
     // Final judgments are immutable evidence. Later reviews save their own dated judgment.
     if (current.judgment || request.judgment) return { status: 'conflict', current: record(current, request.repository) };
-    if (!['active', 'candidate'].includes(current.lifecycle)
+    if (current.origin !== 'review' || current.kind !== 'review_guidance'
+      || !['active', 'candidate'].includes(current.lifecycle)
       || (current.skill && current.skill !== request.skill)) return { status: 'conflict', current: record(current, request.repository) };
     // A lost response may retry a correction already committed at the next version.
     if (current.content === content) return saved(record(current, request.repository));

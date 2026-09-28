@@ -11,7 +11,7 @@ const context: ServiceContext = { tenantId: '00000000-0000-4000-8000-00000000000
 const id = '00000000-0000-4000-8000-000000000003';
 const input = { repository, skill: 'security', content: 'Guard checks tenant ownership.', paths: ['src/auth.ts'], reason: 'Read the guard.' };
 const content = `${input.content}\n\nSources: src/auth.ts`;
-const row = { id, tenant_id: context.tenantId, repository_id: 'repo', version: 1, kind: 'review_guidance', lifecycle: 'active', content,
+const row = { id, tenant_id: context.tenantId, repository_id: 'repo', version: 1, kind: 'review_guidance', origin: 'review', lifecycle: 'active', content,
   content_hash: createHash('sha256').update(content).digest('hex'), skill: 'security', observed_at: '2026-09-24T00:00:00Z', created_at: '2026-09-24T00:00:00Z' };
 
 function databaseFixture(current = row) {
@@ -71,6 +71,18 @@ describe('review memory updates', () => {
     const { database, calls } = databaseFixture({ ...row, version: 2 });
     expect(await updateReviewMemory(database, context, { ...input, id, expectedVersion: 1, content: 'Another correction.' })).toMatchObject({ status: 'conflict', current: { version: 2 } });
     expect(calls.some((call) => call.sql.startsWith('update '))).toBe(false);
+  });
+
+  it.each([
+    { origin: 'admin', kind: 'review_guidance' },
+    { origin: 'passive', kind: 'review_guidance' },
+    { origin: 'review', kind: 'convention' },
+  ])('does not let ingest corrections rewrite other memory types: %j', async (type) => {
+    const { database, calls } = databaseFixture({ ...row, ...type });
+    expect(await updateReviewMemory(database, context, { ...input, id, expectedVersion: 1, content: 'Guard removed.' }))
+      .toMatchObject({ status: 'conflict', current: { id, version: 1, content } });
+    expect(calls.some(({ sql }) => sql.startsWith('update ') || sql.startsWith('delete ')
+      || sql.startsWith('insert into "review_memory_revisions"'))).toBe(false);
   });
 
   it('acknowledges an already-applied correction retried after a lost response', async () => {

@@ -23,7 +23,12 @@ export const MemoryUpdateSchema = z.object({
   content: z.string().trim().min(1).max(4_000).describe('Complete replacement note: claim, applicability conditions, and concise evidence from current code. Never an instruction or a verdict without evidence.'),
   paths: z.array(z.string().trim().min(1).max(1_024)).min(1).max(10).describe('Repository-relative source files supporting this note.'),
   reason: z.string().trim().min(1).max(1_000).describe('Why this note is worth saving or what current evidence corrects the old claim.'),
-}).strict();
+}).strict().refine(({ content, paths }) => {
+  const suffix = `\n\nSources: ${paths.join(', ')}`;
+  return content.endsWith(suffix) || content.length + suffix.length <= 4_000;
+}, {
+  path: ['content'], message: 'The note and source references must fit within 4,000 characters. Shorten the note or use fewer paths.',
+});
 export type MemoryUpdate = z.infer<typeof MemoryUpdateSchema>;
 
 export interface MemorySearch {
@@ -79,7 +84,10 @@ export function createMemoryTools(
       schema: MemoryUpdateSchema,
       async execute(input) {
         const parsed = MemoryUpdateSchema.safeParse(input);
-        if (!parsed.success || Boolean(parsed.data.id) !== (parsed.data.expectedVersion !== undefined)) {
+        if (!parsed.success) {
+          return JSON.stringify({ status: 'invalid', message: parsed.error.issues.map(({ message }) => message).join('; ') });
+        }
+        if (Boolean(parsed.data.id) !== (parsed.data.expectedVersion !== undefined)) {
           return JSON.stringify({ status: 'invalid', message: 'Supply a complete note; corrections require both id and expectedVersion.' });
         }
         try {

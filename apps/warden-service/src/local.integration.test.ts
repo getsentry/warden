@@ -195,4 +195,38 @@ describe.skipIf(!databaseUrl)('local production memory stack', () => {
     expect(recalled.memories.map(({ id }) => id)).not.toContain(linked.id);
   }, 60_000);
 
+  it('keeps admin and passive memories and their evidence immutable to ingest corrections', async () => {
+    if (!service) throw new Error('Expected local service');
+    const client = createWardenServiceClient({ baseUrl: service.url, token: service.token, timeoutMs: 30_000 });
+    const repository = { provider: 'local' as const, owner: 'acme', name: 'boundaries', fullName: 'acme/boundaries' };
+    const base = { repository, skill: 'security', paths: ['handlers/auth.ts'], reason: 'Read the current handler.' };
+    for (const [origin, kind] of [['admin', 'review_guidance'], ['passive', 'review_guidance'], ['review', 'convention']]) {
+      const saved = await client.updateMemory({ ...base, content: `Preserve this ${origin} ${kind} claim.` });
+      if (saved.status !== 'saved') throw new Error('Expected saved fixture');
+      await service.database.query('UPDATE memories SET origin = $1, kind = $2 WHERE tenant_id = $3 AND id = $4',
+        [origin, kind, service.tenantId, saved.memory.id]);
+      await service.database.query("INSERT INTO memory_evidence (tenant_id, memory_id, evidence_kind) VALUES ($1, $2, 'manual')",
+        [service.tenantId, saved.memory.id]);
+      const before = await client.getMemory(saved.memory.id);
+      expect(await client.updateMemory({ ...base, id: saved.memory.id, expectedVersion: 1, content: 'Replace another source.' }))
+        .toMatchObject({ status: 'conflict' });
+      expect(await client.getMemory(saved.memory.id)).toEqual(before);
+    }
+  }, 30_000);
+
+  it('saves a complete note at the source-inclusive limit and rejects overflow with a validation error', async () => {
+    if (!service) throw new Error('Expected local service');
+    const client = createWardenServiceClient({ baseUrl: service.url, token: service.token, timeoutMs: 30_000 });
+    const repository = { provider: 'local' as const, owner: 'acme', name: 'note-budget', fullName: 'acme/note-budget' };
+    const suffix = '\n\nSources: handlers/auth.ts';
+    const content = 'e'.repeat(4_000 - suffix.length);
+    const input = { repository, skill: 'security', paths: ['handlers/auth.ts'], content, reason: 'Full evidence at the boundary.' };
+    expect(await client.updateMemory(input)).toMatchObject({ status: 'saved', memory: { content: content + suffix } });
+    const response = await fetch(`${service.url}/api/v1/memory/update`, { method: 'POST',
+      headers: { authorization: `Bearer ${service.token}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ ...input, content: content + 'e' }) });
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({ error: { code: 'invalid_request' } });
+  }, 30_000);
+
 });

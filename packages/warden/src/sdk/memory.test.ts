@@ -40,4 +40,16 @@ describe('review memory tools', () => {
       .toMatchObject({ status: 'invalid' });
     expect(memory.update).not.toHaveBeenCalled();
   });
+
+  it('reports the source budget before saving a long note without silently truncating evidence', async () => {
+    const { memory, tool } = fixture();
+    const update = { content: 'e'.repeat(4_000), paths: ['guard.ts'], reason: 'Current evidence.' };
+    expect(JSON.parse(await tool('update_memory').execute(update))).toMatchObject({
+      status: 'invalid', message: expect.stringContaining('Shorten the note or use fewer paths'),
+    });
+    expect(memory.update).not.toHaveBeenCalled();
+    const content = 'e'.repeat(4_000 - '\n\nSources: guard.ts'.length);
+    await tool('update_memory').execute({ ...update, content });
+    expect(memory.update).toHaveBeenCalledExactlyOnceWith({ ...update, content, skill: 'security' });
+  });
 });

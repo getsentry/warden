@@ -57,7 +57,8 @@ const VerificationVerdictSchema = z.object({
   verdict: z.enum(['keep', 'revise', 'reject']),
   finding: FindingSchema.nullish(),
   reason: z.string().optional(),
-  supersedes: z.array(z.object({ id: z.string().min(1).max(128), version: z.number().int().positive() })).max(5).optional(),
+  // Optional memory bookkeeping must never invalidate the review verdict.
+  supersedes: z.array(z.object({ id: z.string().min(1).max(128), version: z.number().int().positive() })).max(5).catch([]).optional(),
 });
 
 type VerificationVerdict = z.infer<typeof VerificationVerdictSchema>;
