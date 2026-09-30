@@ -1,4 +1,10 @@
 # Changelog
+## 0.51.0
+
+### Bug Fixes 🐛
+
+- (dedup) Allow reasoning tokens and report output limits by @gricha in [#540](https://github.com/getsentry/warden/pull/540)
+
 ## 0.50.0
 
 ### New Features ✨
