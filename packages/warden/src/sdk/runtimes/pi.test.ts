@@ -8,6 +8,10 @@ import {
   createAgentSession,
 } from '@earendil-works/pi-coding-agent';
 import { piRuntime } from './pi.js';
+import { mergeCrossLocationFindings } from '../extract.js';
+import { consolidateBatchFindings, deduplicateFindings, findingToExistingComment } from '../../output/dedup.js';
+import { FindingSchema } from '../../types/index.js';
+import dedupFixture from './__fixtures__/sentry-python-7780-dedup.json' with { type: 'json' };
 import { createCheckoutFileTools } from './pi-file-tools.js';
 import {
   configureWardenOffline,
@@ -835,12 +839,88 @@ describe('piRuntime structured calls', () => {
     piMocks.listeners = [];
     piMocks.resourceLoaderOptions = [];
     piMocks.customTools = [];
+    piMocks.streamFunction.mockReset();
     piMocks.session.agent.streamFunction = piMocks.streamFunction;
     piMocks.session.prompt.mockImplementation(async () => emitSuccessfulRun(
       assistantMessage({ content: [{ type: 'text', text: '{"ok":true}' }] })
     ));
     piMocks.modelRuntime.getModel.mockReturnValue(piMocks.model);
     piMocks.modelRuntime.getModels.mockReturnValue([piMocks.model]);
+  });
+
+  it.each(['batch', 'cross-location', 'existing-comments'] as const)(
+    'deduplicates PR findings with reasoning longer than 512 tokens during %s comparison',
+    async (kind) => {
+      const findings = z.tuple([FindingSchema, FindingSchema, FindingSchema]).parse(dedupFixture.findings);
+      const [original, duplicate, independent] = findings;
+      const output = kind === 'existing-comments'
+        ? '[{"findingIndex":1,"existingIndex":1}]'
+        : '[[1,2]]';
+      // Reproduce a provider that spends the old 512-token budget before it can emit JSON.
+      piMocks.session.prompt.mockImplementation(async () => {
+        await piMocks.session.agent.streamFunction(piMocks.model, { messages: [] }, {});
+      });
+      piMocks.streamFunction.mockImplementation((_model, _context, options: { maxTokens?: number }) => {
+        const truncated = (options.maxTokens ?? 0) < 2_048;
+        emitSuccessfulRun(assistantMessage({
+          stopReason: truncated ? 'length' : 'stop',
+          content: [{ type: 'text', text: truncated ? '' : output }],
+        }));
+      });
+      const options = { runtime: 'pi' as const, model: 'openai/gpt-test', effort: 'high' as const };
+
+      if (kind === 'existing-comments') {
+        const result = await deduplicateFindings(
+          [duplicate, independent], [findingToExistingComment(original)!], options,
+        );
+        expect(result.newFindings.map((finding) => finding.id)).toEqual([independent.id]);
+        expect(result.duplicateActions).toMatchObject([{ originalFindingId: duplicate.id, matchType: 'semantic' }]);
+      } else {
+        const result = kind === 'batch'
+          ? await consolidateBatchFindings(findings, options)
+          : await mergeCrossLocationFindings(findings, options);
+        expect(result.findings.map((finding) => finding.id)).toEqual([original.id, independent.id]);
+        expect(result.findings[0]?.additionalLocations).toContainEqual(duplicate.location);
+      }
+    },
+  );
+
+  it.each(['auxiliary', 'synthesis'] as const)('reports output truncation and its budget for %s calls', async (kind) => {
+    piMocks.session.prompt.mockImplementation(async () => emitSuccessfulRun(assistantMessage({
+      stopReason: 'length',
+      content: [{ type: 'text', text: '[{"finding' }],
+      usage: { ...assistantMessage().usage, output: 512 },
+    })));
+    let spans: TraceSpan[] | undefined;
+    await Sentry.startSpan({ op: 'test', name: 'truncated comparison' }, async (span) => {
+      const recorder = startTraceRecorder(span);
+      const request = {
+        prompt: 'Compare findings', schema: z.array(z.unknown()), model: 'openai/gpt-test', maxTokens: 512,
+      };
+      const result = await withTraceRecorder(recorder, () => kind === 'auxiliary'
+        ? piRuntime.runAuxiliary({ ...request, task: 'deduplication' })
+        : piRuntime.runSynthesis({ ...request, task: 'consolidation' }));
+      expect(result).toMatchObject({
+        success: false,
+        error: expect.stringContaining('output token limit'),
+        usage: { outputTokens: 512 },
+      });
+      if (!result.success) {
+        expect(result.error).toContain('finish_reason=length');
+        expect(result.error).toContain('max_tokens=512');
+        expect(result.error).toContain('output_tokens=512');
+        expect(result.error).toContain('gpt-test-2026');
+      }
+      spans = recorder?.snapshot();
+    });
+    expect(spans).toEqual(expect.arrayContaining([expect.objectContaining({
+      op: 'gen_ai.invoke_agent',
+      attributes: expect.objectContaining({
+        'error.type': 'output_limit',
+        'gen_ai.request.max_tokens': 512,
+        'gen_ai.response.finish_reasons': ['length'],
+      }),
+    })]));
   });
 
   it.each(['auxiliary', 'synthesis'] as const)('honors the output-token limit on %s provider requests', async (kind) => {
