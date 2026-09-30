@@ -26,6 +26,7 @@ export type SkillRunStatus =
   | 'provider_error'
   | 'auth_error'
   | 'turn_limit'
+  | 'output_limit'
   | 'budget_limit'
   | 'aborted'
   | 'structured_output_error';

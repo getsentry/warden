@@ -471,6 +471,7 @@ function statusFromPiMessage(message: AssistantMessage, hitMaxTurns: boolean): S
     case 'stop':
       return 'success';
     case 'length':
+      return 'output_limit';
     case 'toolUse':
       return 'provider_error';
     case 'error':
@@ -484,15 +485,25 @@ function statusFromPiMessage(message: AssistantMessage, hitMaxTurns: boolean): S
   }
 }
 
-function normalizePiResult(run: PiPromptResult): SkillRunResult | undefined {
+function normalizePiResult(run: PiPromptResult, maxTokens?: number): SkillRunResult | undefined {
   const message = run.lastAssistant;
   if (!message) {
     return undefined;
   }
 
   const errors = message.errorMessage ? [message.errorMessage] : [];
+  const status = statusFromPiMessage(message, run.hitMaxTurns);
+  if (status === 'output_limit') {
+    const details = [
+      'finish_reason=length',
+      `model=${message.responseModel ?? message.model}`,
+      ...(maxTokens !== undefined ? [`max_tokens=${maxTokens}`] : []),
+      `output_tokens=${message.usage.output}`,
+    ];
+    errors.unshift(`Pi response reached the output token limit (${details.join(', ')}). Increase the budget to allow reasoning and a complete answer.`);
+  }
   return {
-    status: statusFromPiMessage(message, run.hitMaxTurns),
+    status,
     text: textFromAssistant(message),
     errors,
     usage: run.usage,
@@ -918,6 +929,7 @@ async function runStructured<T>(
         ...(request.agentName ? { 'gen_ai.agent.name': request.agentName } : {}),
         ...(request.task ? { 'warden.ai.task': request.task } : {}),
         ...(request.model ? { 'gen_ai.request.model': request.model } : {}),
+        ...(request.maxTokens !== undefined ? { 'gen_ai.request.max_tokens': request.maxTokens } : {}),
         'gen_ai.output.type': 'json',
       },
     },
@@ -943,7 +955,7 @@ async function runStructured<T>(
           timeout: request.timeout,
           parentSpan: span,
         });
-        const result = normalizePiResult(run);
+        const result = normalizePiResult(run, request.maxTokens);
         if (!result) {
           span.setAttribute('error.type', 'missing_response');
           return { success: false, error: 'Pi runtime returned no response', usage: run.usage };

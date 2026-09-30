@@ -17,6 +17,9 @@ import {
 
 const ExtractedFindingSchema = FindingSchema.omit({ sourceSnippet: true });
 
+// Reasoning and the JSON answer share the output budget on Pi providers.
+export const FINDING_COMPARISON_MAX_TOKENS = 8_192;
+
 /** Pattern to match the start of findings JSON (allows whitespace after brace) */
 export const FINDINGS_JSON_START = /\{\s*"findings"/;
 
@@ -576,11 +579,12 @@ Singletons should not appear. Return [] if no findings describe the same issue.`
     schema: MergeGroupsSchema,
     model: options?.model,
     effort: options?.effort,
-    maxTokens: 512,
+    maxTokens: FINDING_COMPARISON_MAX_TOKENS,
     maxRetries: options?.maxRetries,
   });
 
   if (!result.success) {
+    console.warn(`LLM cross-location consolidation failed, keeping all findings: ${result.error}`);
     return { findings, mergedCount: 0, usage: result.usage };
   }
 

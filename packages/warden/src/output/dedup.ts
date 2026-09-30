@@ -5,7 +5,7 @@ import type { Confidence, Finding, Severity, UsageStats } from '../types/index.j
 import { findingLine } from '../types/index.js';
 import { escapeHtml } from '../utils/index.js';
 import { getRuntime } from '../sdk/runtimes/index.js';
-import { applyMergeGroups, canUseRuntimeAuth } from '../sdk/extract.js';
+import { applyMergeGroups, canUseRuntimeAuth, FINDING_COMPARISON_MAX_TOKENS } from '../sdk/extract.js';
 import type { AuxiliaryCallOptions } from '../sdk/extract.js';
 import {
   buildJsonOutputSection,
@@ -538,7 +538,7 @@ Return [] if none are duplicates.`),
     schema: DuplicateMatchesSchema,
     model: options.model,
     effort: options.effort,
-    maxTokens: 512,
+    maxTokens: FINDING_COMPARISON_MAX_TOKENS,
     maxRetries: options.maxRetries,
   });
 
@@ -788,7 +788,7 @@ Singletons (findings with no duplicates) should not appear in any group.
     schema: ConsolidationGroupsSchema,
     model: options.model,
     effort: options.effort,
-    maxTokens: 512,
+    maxTokens: FINDING_COMPARISON_MAX_TOKENS,
     maxRetries: options.maxRetries,
   });
 
