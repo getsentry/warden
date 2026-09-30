@@ -51,6 +51,22 @@ function databaseFor(query: (sql: string, values: readonly unknown[]) => QueryRe
 }
 
 describe('memory store', () => {
+  it('replays the recalled content and version after a correction', async () => {
+    const database = databaseFor((sql) => {
+      if (sql.includes('FROM repositories')) return { rows: [{ id: 'repo', ...memoryRow(1), memory_enabled: true }], rowCount: 1 };
+      if (sql.includes('FROM memory_recall_batches')) return { rows: [{ id: 'batch' }], rowCount: 1 };
+      if (sql.includes('FROM memory_recalls mr')) return { rows: [{ ...memoryRow(1, 'Corrected claim'), version: 2,
+        recalled_version: 1, recalled_snapshot: { memory: { id: memoryRow(1).id, version: 1, kind: 'convention', content: 'Original claim', skill: 'security' } },
+      }], rowCount: 1 };
+      throw new Error('Replay must not perform a new recall');
+    });
+    const result = await recallMemories(database, context, {
+      protocolVersion: 1, clientRecallId: 'prior-recall', repository: { provider: 'github', owner: 'acme', name: 'widgets', fullName: 'acme/widgets' },
+      skills: ['security'], languages: [], paths: ['src/auth.ts'],
+    });
+    expect(result.memories).toMatchObject([{ version: 1, content: 'Original claim' }]);
+  });
+
   it('reuses an idempotency key only for the same repository and immutable memory', async () => {
     const statements: string[] = [];
     const database = databaseFor((sql) => {
@@ -193,7 +209,7 @@ describe('memory store', () => {
     expect(response.memories).toHaveLength(2);
     const vectorSql = statements.find((sql) => sql.includes('FROM memory_embeddings me')) ?? '';
     expect(vectorSql).toContain('me.content_hash = m.content_hash');
-    expect(vectorSql).toContain('me.dimensions = $10');
+    expect(vectorSql).toContain('me.dimensions = $9');
     expect(statements.some((sql) => sql.includes("'memory_embed'"))).toBe(true);
     expect(relevanceCandidates[0]).toMatchObject({ pathFamily: 'src' });
     expect(relevanceCandidates[0]).not.toHaveProperty('path_family');
@@ -269,12 +285,13 @@ describe('memory store', () => {
 
   it('loads authorized evidence and lifecycle history for memory detail', async () => {
     const database = databaseFor((sql) => {
-      if (sql.includes('FROM memory_evidence')) return { rows: [{
+      if (sql.includes('from "memory_evidence"')) return { rows: [{
         evidence_kind: 'finding_observation',
         finding_id: 'finding-1',
         observation_id: 'observation-1',
         created_at: new Date('2026-08-12T10:01:00.000Z'),
       }], rowCount: 1 };
+      if (sql.includes('from "review_memory_revisions"')) return { rows: [], rowCount: 0 };
       if (sql.includes('FROM memory_lifecycle_events')) return { rows: [{
         from_state: 'candidate',
         to_state: 'active',

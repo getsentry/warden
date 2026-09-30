@@ -215,12 +215,36 @@ export type DashboardSummaryResponse = z.infer<typeof DashboardSummaryResponseSc
 export const MemoryKindSchema = z.enum(['convention', 'confirmed_pattern', 'false_positive', 'review_guidance']);
 export const MemoryLifecycleSchema = z.enum(['candidate', 'active', 'superseded', 'archived', 'expired']);
 
+const MemoryFindingLocationSchema = z.object({
+  path: z.string(), startLine: z.number().int().positive(), endLine: z.number().int().positive().optional(),
+}).strict();
+
+// Historical evidence must retain the exact text accepted by the review pipeline.
+const MemoryFindingSchema = z.object({
+  id: z.string(), severity: z.enum(['high', 'medium', 'low']),
+  confidence: z.enum(['high', 'medium', 'low']).optional(),
+  title: z.string(), description: z.string(), verification: z.string().optional(),
+  location: MemoryFindingLocationSchema.optional(),
+  additionalLocations: z.array(MemoryFindingLocationSchema).optional(),
+}).strict();
+
+export const ReviewMemoryJudgmentSchema = z.object({
+  verdict: z.enum(['keep', 'revise', 'reject']),
+  candidate: MemoryFindingSchema,
+  revised: MemoryFindingSchema.optional(),
+  reason: z.string().optional(),
+  headSha: z.string().min(7).max(128).optional(),
+  observedAt: TimestampSchema,
+}).strict();
+export type ReviewMemoryJudgment = z.infer<typeof ReviewMemoryJudgmentSchema>;
+
 export const MemoryRecordSchema = z.object({
   id: IdSchema,
   version: z.number().int().positive(),
   repository: RepositoryIdentitySchema,
   kind: MemoryKindSchema,
   lifecycle: MemoryLifecycleSchema,
+  judgment: ReviewMemoryJudgmentSchema.optional(),
   content: z.string().trim().min(1).max(4_000),
   skill: z.string().trim().min(1).max(512).optional(),
   language: z.string().trim().min(1).max(64).optional(),
@@ -234,6 +258,8 @@ export type MemoryRecord = z.infer<typeof MemoryRecordSchema>;
 export const MemoryRecallRequestSchema = z.object({
   protocolVersion: z.literal(SERVICE_PROTOCOL_VERSION),
   clientRecallId: IdSchema,
+  query: z.string().trim().min(1).max(1_000).optional(),
+  parentRecallId: IdSchema.optional(),
   repository: RepositoryIdentitySchema,
   skills: z.array(z.string().trim().min(1).max(512)).max(100),
   languages: z.array(z.string().trim().min(1).max(64)).max(32),
@@ -252,9 +278,38 @@ export const MemoryRecallResponseSchema = z.object({
     skill: true,
     language: true,
     pathFamily: true,
-  })).max(5),
+  }).extend({ verdict: z.enum(['keep', 'revise', 'reject']).optional(), headSha: z.string().optional() })).max(5),
 }).strict();
 export type MemoryRecallResponse = z.infer<typeof MemoryRecallResponseSchema>;
+
+export const ReviewMemoryWriteRequestSchema = z.object({
+  repository: RepositoryIdentitySchema,
+  id: z.string().uuid().optional(),
+  expectedVersion: z.number().int().positive().optional(),
+  content: z.string().trim().min(1).max(4_000),
+  skill: z.string().trim().min(1).max(512),
+  paths: z.array(z.string().trim().min(1).max(1_024)).min(1).max(10),
+  reason: z.string().trim().min(1).max(1_000),
+  judgment: ReviewMemoryJudgmentSchema.optional(),
+  supersedes: z.array(z.object({ id: z.string().uuid(), version: z.number().int().positive() }).strict()).max(5).optional(),
+}).strict().refine((input) => Boolean(input.id) === (input.expectedVersion !== undefined), {
+  message: 'Corrections require both id and expectedVersion',
+}).refine(({ content, paths }) => {
+  const suffix = `\n\nSources: ${paths.join(', ')}`;
+  return content.endsWith(suffix) || content.length + suffix.length <= 4_000;
+}, {
+  path: ['content'], message: 'The note and source references must fit within 4,000 characters. Shorten the note or use fewer paths.',
+}).refine((input) => !input.supersedes?.length || Boolean(input.judgment && !input.id), {
+  message: 'Only a new verifier judgment can supersede provisional notes',
+});
+export type ReviewMemoryWriteRequest = z.infer<typeof ReviewMemoryWriteRequestSchema>;
+
+export const ReviewMemoryWriteResponseSchema = z.discriminatedUnion('status', [
+  z.object({ status: z.literal('saved'), memory: MemoryRecordSchema }).strict(),
+  z.object({ status: z.literal('conflict'), current: MemoryRecordSchema.optional() }).strict(),
+  z.object({ status: z.literal('unavailable') }).strict(),
+]);
+export type ReviewMemoryWriteResponse = z.infer<typeof ReviewMemoryWriteResponseSchema>;
 
 export const MemoryListResponseSchema = z.object({
   items: z.array(MemoryRecordSchema),
@@ -272,7 +327,13 @@ export const MemoryDetailResponseSchema = z.object({
     findingId: IdSchema.optional(),
     observationId: IdSchema.optional(),
     createdAt: TimestampSchema,
+    title: z.string().optional(),
+    description: z.string().optional(),
+    verification: z.string().optional(),
+    reason: z.string().optional(),
+    headSha: z.string().optional(),
   }).strict()),
+  history: z.array(z.object({ memory: MemoryRecordSchema, reason: z.string(), createdAt: TimestampSchema }).strict()).optional(),
   lifecycle: z.array(z.object({
     from: MemoryLifecycleSchema.optional(),
     to: MemoryLifecycleSchema,

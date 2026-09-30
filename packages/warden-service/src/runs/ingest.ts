@@ -1,3 +1,6 @@
+import { and, eq, isNull, or } from 'drizzle-orm';
+import { getQueryDatabase } from '../db/query.js';
+import { memoryRecallBatches, memoryRecalls } from '../db/schema.js';
 import type {
   CodeFindingRecord,
   RunEnvelopeV1,
@@ -329,6 +332,23 @@ async function linkMemoryRecall(
       costUsd: recalled.cost_usd === null ? null : Number(recalled.cost_usd),
       costBasis: recalled.cost_basis ?? 'unknown',
     });
+  }
+  const db = getQueryDatabase(client);
+  const searches = await db.update(memoryRecallBatches).set({ runId })
+    .where(and(eq(memoryRecallBatches.tenantId, context.tenantId), eq(memoryRecallBatches.repositoryId, repositoryId),
+      eq(memoryRecallBatches.parentRecallId, envelope.memoryRecallId),
+      or(isNull(memoryRecallBatches.runId), eq(memoryRecallBatches.runId, runId))))
+    .returning();
+  for (const search of searches) {
+    await db.update(memoryRecalls).set({ runId }).where(and(eq(memoryRecalls.tenantId, context.tenantId), eq(memoryRecalls.batchId, search.id)));
+    if (search.costUsd !== null || search.inputTokens !== null || search.outputTokens !== null) {
+      await insertUsage(client, context, runId, null, {
+        lane: 'service', operation: `memory_search:${search.id}`,
+        provider: search.provider ?? undefined, model: search.model ?? undefined, runtime: search.runtime ?? undefined,
+        inputTokens: search.inputTokens ?? undefined, outputTokens: search.outputTokens ?? undefined,
+        costUsd: search.costUsd === null ? null : Number(search.costUsd), costBasis: search.costBasis ?? 'unknown',
+      });
+    }
   }
 }
 

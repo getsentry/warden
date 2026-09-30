@@ -94,6 +94,7 @@ export type {
   SynthesisTask,
   SkillRunOptions,
   SkillRunRequest,
+  RuntimeTool,
   SkillRunResponse,
   SkillRunResult,
   SkillRunStatus,

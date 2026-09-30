@@ -3,6 +3,7 @@ import type { HunkWithContext } from '../diff/index.js';
 import type { ChunkingConfig, Effort, IgnoreConfig, ScanConfig } from '../config/schema.js';
 import type { RuntimeName } from './runtimes/index.js';
 import type { ProviderFailureCircuitBreaker } from './circuit-breaker.js';
+import type { ReviewMemoryAccess } from './memory.js';
 
 /** A single auxiliary usage entry, keyed by agent name (e.g. 'extraction', 'dedup'). */
 export interface AuxiliaryUsageEntry {
@@ -82,6 +83,8 @@ export interface SkillRunnerCallbacks {
   onFileStart?: (file: string, index: number, total: number) => void;
   onHunkStart?: (file: string, hunkNum: number, totalHunks: number, lineRange: string) => void;
   onHunkComplete?: (file: string, hunkNum: number, findings: Finding[], usage: UsageStats) => void;
+  /** Preserve each completed source chunk before postprocessing, including its trace. */
+  onChunkComplete?: (chunk: ChunkAnalysisResult) => void;
   onFileComplete?: (file: string, index: number, total: number) => void;
   /** Called when a prompt exceeds the large prompt threshold */
   onLargePrompt?: (file: string, lineRange: string, chars: number, estimatedTokens: number) => void;
@@ -154,6 +157,8 @@ export interface SkillRunnerOptions {
   captureTraces?: boolean;
   /** Quoted, lower-authority repository history admitted by the optional memory service. */
   historicalEvidence?: string;
+  /** Repository-scoped investigation notes, shared by discovery and verification. */
+  memory?: ReviewMemoryAccess;
 }
 
 export type AnalysisChunkingConfig = Pick<ChunkingConfig, 'filePatterns' | 'coalesce'>;

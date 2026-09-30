@@ -641,6 +641,8 @@ export async function runSkillTask(
           abortController: runnerOptions.abortController,
           pathToClaudeCodeExecutable: runnerOptions.pathToClaudeCodeExecutable,
           prContext,
+          memory: runnerOptions.memory,
+          historicalEvidence: runnerOptions.historicalEvidence,
           onFindingProcessing: (event) => {
             callbacks.onFindingProcessing?.(name, event);
           },

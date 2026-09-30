@@ -27,6 +27,7 @@ import type { ProviderFailureCircuitBreaker } from '../../sdk/circuit-breaker.js
 import { assertValidPiModelSelectors } from '../../sdk/runtimes/model-selectors.js';
 import { isWardenOffline } from '../../sdk/offline.js';
 import { captureActionTriggerError } from '../error-reporting.js';
+import type { ReviewMemoryAccess } from '../../sdk/memory.js';
 
 /** Log-mode output for CI: no TTY, no color. */
 const CI_OUTPUT_MODE: OutputMode = { isTTY: false, supportsColor: false, columns: 120 };
@@ -110,6 +111,7 @@ export interface TriggerExecutorDeps {
   checks?: TriggerCheckReporter;
   /** Lower-authority repository memory recalled once for the Action run. */
   historicalEvidence?: string;
+  memory?: ReviewMemoryAccess;
 }
 
 /**
@@ -225,6 +227,7 @@ export async function executeTrigger(
             abortController: deps.abortController,
             circuitBreaker: deps.circuitBreaker,
             historicalEvidence: deps.historicalEvidence,
+            memory: deps.memory,
           },
         };
 

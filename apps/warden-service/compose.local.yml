@@ -1,0 +1,18 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg17
+    environment:
+      POSTGRES_DB: warden_memory
+      POSTGRES_USER: warden
+      POSTGRES_PASSWORD: warden_local
+    ports:
+      - "127.0.0.1:${WARDEN_LOCAL_DATABASE_PORT:-55432}:5432"
+    volumes:
+      - memory-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U warden -d warden_memory"]
+      interval: 1s
+      timeout: 5s
+      retries: 30
+volumes:
+  memory-data:

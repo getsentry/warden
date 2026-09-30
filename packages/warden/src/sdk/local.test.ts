@@ -178,7 +178,7 @@ describe('local SDK entrypoints', () => {
     expect(warning).not.toHaveBeenCalled();
   });
 
-  it('appends recalled memory to caller-provided historical evidence', async () => {
+  it('preserves caller evidence without fetching or injecting memory', async () => {
     vi.mocked(buildLocalEventContext).mockReturnValue(context);
     vi.mocked(resolveSkillAsync).mockResolvedValue(skill);
     vi.mocked(runSkill).mockResolvedValue(report);
@@ -221,7 +221,10 @@ describe('local SDK entrypoints', () => {
 
     const runnerOptions = vi.mocked(runSkill).mock.calls[0]?.[2];
     expect(runnerOptions?.historicalEvidence).toContain('Keep public APIs stable.');
-    expect(runnerOptions?.historicalEvidence).toContain('Use the shared query builder.');
+    expect(runnerOptions?.historicalEvidence).not.toContain('Use the shared query builder.');
+    expect(runnerOptions?.memory).toBeDefined();
+    expect(fetch).toHaveBeenCalledOnce();
+    expect(vi.mocked(fetch).mock.calls[0]?.[0]).not.toContain('/memory/');
   });
 
   it('publishes a metrics-only failure before rethrowing a failed SDK run', async () => {

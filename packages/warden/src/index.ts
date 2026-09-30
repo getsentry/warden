@@ -1,4 +1,5 @@
 // =============================================================================
+export type { ReviewMemory, ReviewMemoryAccess, MemorySearch, MemoryUpdate, MemoryUpdateResult } from './sdk/memory.js';
 // Warden Public API
 // =============================================================================
 // This file exports the intentional public API for Warden consumers.
@@ -172,6 +173,7 @@ export type {
   SynthesisTask,
   SkillRunOptions,
   SkillRunRequest,
+  RuntimeTool,
   SkillRunResponse,
   SkillRunResult,
   SkillRunStatus,

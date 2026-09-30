@@ -62,3 +62,18 @@ curl --fail --silent \
 Warden follows Junior's stateless Better Auth setup. Browser sessions are encrypted cookies with an eight-hour lifetime, and only verified accounts in `WARDEN_SERVICE_GOOGLE_DOMAIN` receive read access. The normalized Google email owns personal tokens.
 
 For local or private deployments, `DISABLE_AUTH=true` bypasses browser authentication and maps anonymous requests to the configured tenant with read-only authority. It defaults to `false`. Bearer tokens are still authenticated normally, and the bypass never grants `admin` or `ingest`.
+
+## Local Memory Development
+
+Run `pnpm memory:local` from the monorepo root with Docker running and
+`AI_GATEWAY_API_KEY` configured. This starts pgvector and the same app factory,
+AI runtime, and durable job route used by the hosted deployment. In another
+terminal, run `source .warden/local-service/client.env` before using Warden.
+The service binds to localhost; the local database persists between launches.
+Stop the server with Ctrl-C. Stop its database without removing data with
+`docker compose -p warden-memory-local -f apps/warden-service/compose.local.yml down`.
+
+Run `pnpm memory:test` for an isolated database, authenticated HTTP round trips,
+semantic retrieval, judgment preservation, and background extraction tests.
+The tests mock external AI calls and remove their temporary database volume.
+No production database or AI credentials are used by this test command.

@@ -1,5 +1,5 @@
 import { existsSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
-import { extname, join, relative, resolve } from 'node:path';
+import { join, relative, resolve } from 'node:path';
 import { config as dotenvConfig } from 'dotenv';
 import { Sentry, flushSentry, setRepositoryScope, emitRunMetric, getTraceId, initSentry } from '../sentry.js';
 import { emptyToUndefined, loadWardenConfigFile, resolveSkillConfigs } from '../config/loader.js';
@@ -21,8 +21,7 @@ import { DEFAULT_CONCURRENCY, getAnthropicApiKey, getVersion } from '../utils/in
 import {
   buildServiceRunEnvelope,
   publishRunFailOpen,
-  recallMemoryFailOpen,
-  renderHistoricalMemory,
+  createServiceReviewMemory,
   resolveServiceOptions,
 } from '../service/index.js';
 import type { ResolvedServiceOptions } from '../service/index.js';
@@ -1234,28 +1233,6 @@ async function publishCliEmptyRun(args: {
   }, (message) => args.reporter.warning(message));
 }
 
-async function recallCliMemory(args: {
-  service: ResolvedServiceOptions | undefined;
-  context: Awaited<ReturnType<typeof buildLocalEventContext>>;
-  skills: readonly string[];
-}) {
-  if (!args.service?.memory) return undefined;
-  const paths = args.context.pullRequest?.files.map((file) => file.filename) ?? [];
-  return recallMemoryFailOpen(args.service, {
-    protocolVersion: 1,
-    clientRecallId: generateRunId(),
-    repository: {
-      provider: 'local',
-      owner: args.context.repository.owner,
-      name: args.context.repository.name,
-      fullName: args.context.repository.fullName,
-    },
-    skills: [...args.skills],
-    languages: [...new Set(paths.map((path) => extname(path).slice(1)).filter(Boolean))],
-    paths,
-  });
-}
-
 /** Run one or more skills against an already constructed review context. */
 export async function runSkills(
   context: Awaited<ReturnType<typeof buildLocalEventContext>>,
@@ -1372,12 +1349,7 @@ export async function runSkills(
     return 1;
   }
 
-  const recall = await recallCliMemory({
-    service,
-    context,
-    skills: skillsToRun.map((skill) => skill.skill),
-  });
-  const recalledMemories = recall?.memories ?? [];
+  const memory = createServiceReviewMemory(service, { provider: 'local', ...context.repository }, context.repoPath);
 
   // Build skill tasks
   // Model precedence: defaults.agent.model > defaults.model > CLI flag > WARDEN_MODEL env var > SDK default
@@ -1406,7 +1378,7 @@ export async function runSkills(
       config?.defaults?.auxiliaryMaxRetries,
     verifyFindings: config?.defaults?.verification?.enabled !== false,
     captureTraces: options.traces,
-    historicalEvidence: renderHistoricalMemory(recalledMemories),
+    memory,
   };
   const specs: RunSkillSpec[] = skillsToRun.map(({ skill, remote, filters, ...skillOptions }) => ({
     name: skill,
@@ -1496,8 +1468,8 @@ export async function runSkills(
     totalDuration,
     exitCode,
     reporter,
-    recalledMemories,
-    memoryRecallId: recall?.clientRecallId,
+    recalledMemories: memory?.recall?.memories,
+    memoryRecallId: memory?.recall?.clientRecallId,
   });
   return exitCode;
 }
@@ -1756,12 +1728,7 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
     return 1;
   }
 
-  const recall = await recallCliMemory({
-    service,
-    context,
-    skills: triggersToRun.map((trigger) => trigger.skill),
-  });
-  const recalledMemories = recall?.memories ?? [];
+  const memory = createServiceReviewMemory(service, { provider: 'local', ...context.repository }, context.repoPath);
 
   // Build trigger tasks
   const effectiveMinConfidence = options.minConfidence ?? config.defaults?.minConfidence ?? 'medium';
@@ -1792,7 +1759,7 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
       auxiliaryMaxRetries: trigger.auxiliaryMaxRetries,
       verifyFindings: trigger.verifyFindings,
       captureTraces: options.traces,
-      historicalEvidence: renderHistoricalMemory(recalledMemories),
+      memory,
     },
   }));
   const invalidModelSelector = findInvalidPiModelSelector(specs);
@@ -1899,8 +1866,8 @@ async function runConfigMode(options: CLIOptions, reporter: Reporter): Promise<n
     totalDuration,
     exitCode,
     reporter,
-    recalledMemories,
-    memoryRecallId: recall?.clientRecallId,
+    recalledMemories: memory?.recall?.memories,
+    memoryRecallId: memory?.recall?.clientRecallId,
   });
   return exitCode;
 }

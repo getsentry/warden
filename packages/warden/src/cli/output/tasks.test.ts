@@ -1440,11 +1440,12 @@ describe('runSkillTask model lanes', () => {
     vi.restoreAllMocks();
   });
 
-  it('passes model lanes to shared finding post-processing', async () => {
+  it('passes memory and model lanes to shared finding post-processing', async () => {
     const fakeHunk = {
       hunk: { newStart: 1, newCount: 10 },
     } as unknown as HunkWithContext;
     const finding = makeFinding();
+    const memory = { search: vi.fn(), update: vi.fn(), recordJudgment: vi.fn() };
 
     vi.spyOn(sdkRunner, 'prepareFiles').mockReturnValue({
       files: [{ filename: 'a.ts', hunks: [fakeHunk] }],
@@ -1474,6 +1475,8 @@ describe('runSkillTask model lanes', () => {
         pullRequest: { number: 1, title: 't', body: '', headSha: 'abc', baseSha: 'def', files: [] },
       } as unknown as SkillTaskOptions['context'],
       runnerOptions: {
+        memory,
+        historicalEvidence: '<caller_evidence>Explicit caller context</caller_evidence>',
         runtime: 'pi',
         auxiliaryModel: 'claude-haiku-4-5',
         auxiliaryEffort: 'high',
@@ -1485,6 +1488,8 @@ describe('runSkillTask model lanes', () => {
     expect(postProcessSpy).toHaveBeenCalledWith(
       expect.any(Array),
       expect.objectContaining({
+        memory,
+        historicalEvidence: '<caller_evidence>Explicit caller context</caller_evidence>',
         runtime: 'pi',
         auxiliaryModel: 'claude-haiku-4-5',
         auxiliaryEffort: 'high',

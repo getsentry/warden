@@ -28,8 +28,7 @@ import { Sentry, logger, setRepositoryScope, emitRunMetric } from '../../sentry.
 import type { ActionInputs } from '../inputs.js';
 import { buildBaseOutputOptions, buildFindingsOutput } from '../../reporting/output.js';
 import type { SkillExecutionMeta } from '../../reporting/output.js';
-import { publishActionRunFailOpen, recallActionMemoryFailOpen, resolveActionServiceOptions } from '../service.js';
-import type { ActionMemoryRecall } from '../service.js';
+import { publishActionRunFailOpen, createActionReviewMemory, resolveActionServiceOptions } from '../service.js';
 import {
   setOutput,
   setFailed,
@@ -207,28 +206,7 @@ async function runScheduleWorkflowInner(
     repoPath,
   };
 
-  let memoryRecall: ActionMemoryRecall | undefined;
-  if (service?.memory) {
-    try {
-      const recallContext = await buildScheduleEventContext({
-        patterns: [...new Set(scheduleTriggers.flatMap((trigger) =>
-          trigger.filters?.paths ?? ['**/*']))],
-        ignorePatterns: [FINDINGS_OUTPUT_FILENAME, FINDINGS_OUTPUT_DONE_FILENAME],
-        repoPath,
-        owner,
-        name: repo,
-        defaultBranch,
-        headSha,
-      });
-      memoryRecall = await recallActionMemoryFailOpen(
-        service,
-        recallContext,
-        scheduleTriggers.map((trigger) => trigger.skill),
-      );
-    } catch {
-      console.log('::warning::Warden service memory recall failed. Action results are unchanged.');
-    }
-  }
+  const memoryRecall = createActionReviewMemory(service, scheduleContext);
 
   const allReports: SkillReport[] = [];
   const skillExecutions: SkillExecutionMeta[] = [];
@@ -315,7 +293,7 @@ async function runScheduleWorkflowInner(
         auxiliaryMaxRetries: resolved.auxiliaryMaxRetries,
         verifyFindings: resolved.verifyFindings,
         triggerName: resolved.name,
-        historicalEvidence: memoryRecall?.historicalEvidence,
+        memory: memoryRecall?.memory,
         pathToClaudeCodeExecutable: runtimeEnv.pathToClaudeCodeExecutable,
         callbacks: {
           onFindingProcessing: (event) => findingProcessingEvents.push(event),

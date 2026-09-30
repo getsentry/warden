@@ -49,6 +49,8 @@ export interface SkillRunRequest {
   skillRoot?: string;
   options: SkillRunOptions;
   tools?: ToolConfig;
+  /** Host-bound tools such as repository memory; these cannot edit source files. */
+  runtimeTools?: RuntimeTool[];
   /**
    * Allow explicitly requested mutating tools for trusted internal writer tasks.
    * Normal skill analysis keeps this false so hunks remain read-only.
@@ -60,6 +62,13 @@ export interface SkillRunRequest {
   traceRecorder?: TraceRecorder;
   /** Provider-specific settings consumed only by the selected runtime adapter. */
   providerOptions?: unknown;
+}
+
+export interface RuntimeTool {
+  name: string;
+  description: string;
+  schema: z.ZodObject;
+  execute(input: Record<string, unknown>): Promise<string>;
 }
 
 export interface SkillRunResult {
