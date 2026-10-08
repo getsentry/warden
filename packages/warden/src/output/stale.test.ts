@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { buildAnalyzedScope, isInAnalyzedScope, findStaleComments, findingMatchesComment } from './stale.js';
+import {
+  buildAnalyzedScope,
+  isInAnalyzedScope,
+  isCommentFromRanSkill,
+  findStaleComments,
+  findingMatchesComment,
+} from './stale.js';
 import { generateContentHash } from './dedup.js';
 import type { ExistingComment } from './dedup.js';
 import type { Finding, FileChange } from '../types/index.js';
@@ -442,5 +448,36 @@ describe('findingMatchesComment with additionalLocations', () => {
     };
 
     expect(findingMatchesComment(finding, comment)).toBe(true);
+  });
+});
+
+describe('isCommentFromRanSkill', () => {
+  const comment = (skills?: string[]): ExistingComment => ({
+    id: 1,
+    path: 'src/db.ts',
+    line: 42,
+    title: 'SQL Injection',
+    description: 'User input passed to query',
+    contentHash: 'abc12345',
+    isWarden: true,
+    skills,
+  });
+  const ran = new Set(['code-review']);
+
+  it('is false when the comment skill did not run', () => {
+    expect(isCommentFromRanSkill(comment(['security-review']), ran)).toBe(false);
+  });
+
+  it('is true when the comment skill ran', () => {
+    expect(isCommentFromRanSkill(comment(['code-review']), ran)).toBe(true);
+  });
+
+  it('is true when any skill on a merged comment ran', () => {
+    expect(isCommentFromRanSkill(comment(['security-review', 'code-review']), ran)).toBe(true);
+  });
+
+  it('is true when the skill cannot be determined', () => {
+    expect(isCommentFromRanSkill(comment(undefined), ran)).toBe(true);
+    expect(isCommentFromRanSkill(comment([]), ran)).toBe(true);
   });
 });

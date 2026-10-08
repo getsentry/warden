@@ -28,6 +28,27 @@ export function isInAnalyzedScope(comment: ExistingComment, scope: AnalyzedScope
   return scope.files.has(comment.path);
 }
 
+/**
+ * Check if a Warden comment belongs to a skill that ran in the current run.
+ *
+ * Stale resolution and fix evaluation compare a comment against this run's
+ * findings, so a comment from a skill that did not run would always look
+ * fixed. Only comments attributed to at least one skill in `ranSkills` are
+ * eligible. A comment with no parseable skill (legacy markers without a
+ * footer) stays eligible, preserving the behaviour from before comments were
+ * scoped by skill. `ranSkills` must include skills that ran and reported zero
+ * findings, otherwise their fixed comments are never resolved.
+ */
+export function isCommentFromRanSkill(
+  comment: ExistingComment,
+  ranSkills: ReadonlySet<string>
+): boolean {
+  if (!comment.skills || comment.skills.length === 0) {
+    return true;
+  }
+  return comment.skills.some((skill) => ranSkills.has(skill));
+}
+
 /** Strip finding ID prefix like "[WRZ-XPL] " from a title */
 function stripFindingIdPrefix(title: string): string {
   return title.replace(/^\[[A-Z0-9]{3}-[A-Z0-9]{3}\]\s*/, '');
