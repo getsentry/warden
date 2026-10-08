@@ -1260,6 +1260,89 @@ describe('runPRWorkflow', () => {
       );
     });
 
+    describe('report mode skill scoping', () => {
+      // The fixture config runs only `test-skill`. Comment ids double as thread ids.
+      const EMPTY_FIX_EVALUATION = {
+        toResolve: [],
+        toReply: [],
+        evaluations: [],
+        skipped: 0,
+        evaluated: 0,
+        failedEvaluations: 0,
+        uniqueFindingsEvaluated: 0,
+        uniqueFindingsCodeChanged: 0,
+        uniqueFindingsResolved: 0,
+        usage: { inputTokens: 0, outputTokens: 0, costUSD: 0 },
+      };
+
+      async function runReportWithZeroFindings(comments: ExistingComment[]): Promise<string[]> {
+        const report = createSkillReport({ findings: [] });
+        const findingsFile = writeFindingsArtifact([report], [
+          { triggerName: 'test-skill', skillName: 'test-skill', report },
+        ]);
+        mockFetchExistingComments.mockResolvedValue(comments);
+        mockEvaluateFixAttempts.mockResolvedValue(EMPTY_FIX_EVALUATION);
+        vi.mocked(mockOctokit.graphql).mockResolvedValue({});
+
+        try {
+          await runPRWorkflow(
+            mockOctokit,
+            createDefaultInputs({ mode: 'report', findingsFile }),
+            'pull_request',
+            EVENT_PAYLOAD_PATH,
+            FIXTURES_DIR
+          );
+        } finally {
+          rmSync(dirname(findingsFile), { recursive: true, force: true });
+        }
+
+        return vi.mocked(mockOctokit.graphql).mock.calls.map(
+          (call) => (call[1] as { threadId: string }).threadId
+        );
+      }
+
+      function fixEvaluatedCommentIds(): number[] {
+        return mockEvaluateFixAttempts.mock.calls.flatMap((call) => call[1].map((c) => c.id));
+      }
+
+      it('does not resolve or fix-evaluate comments from a skill that did not run', async () => {
+        const resolved = await runReportWithZeroFindings([
+          createExistingWardenComment({ id: 1, threadId: 'other-skill-thread', skills: ['other-skill'] }),
+        ]);
+
+        expect(resolved).toEqual([]);
+        expect(fixEvaluatedCommentIds()).toEqual([]);
+      });
+
+      it('resolves comments from a skill that ran and reported zero findings', async () => {
+        const resolved = await runReportWithZeroFindings([
+          createExistingWardenComment({ id: 1, threadId: 'ran-thread', skills: ['test-skill'] }),
+          createExistingWardenComment({ id: 2, threadId: 'other-skill-thread', skills: ['other-skill'] }),
+        ]);
+
+        expect(resolved).toEqual(['ran-thread']);
+        expect(fixEvaluatedCommentIds()).toEqual([1]);
+      });
+
+      it('resolves a merged comment when any of its skills ran', async () => {
+        const resolved = await runReportWithZeroFindings([
+          createExistingWardenComment({ id: 1, threadId: 'merged-thread', skills: ['other-skill', 'test-skill'] }),
+        ]);
+
+        expect(resolved).toEqual(['merged-thread']);
+      });
+
+      it('still resolves legacy comments whose skill cannot be determined', async () => {
+        const resolved = await runReportWithZeroFindings([
+          createExistingWardenComment({ id: 1, threadId: 'legacy-thread', skills: [] }),
+          createExistingWardenComment({ id: 2, threadId: 'no-footer-thread', skills: undefined }),
+        ]);
+
+        expect(resolved).toEqual(['legacy-thread', 'no-footer-thread']);
+        expect(fixEvaluatedCommentIds()).toEqual([1, 2]);
+      });
+    });
+
     it('report mode fails no-trigger cleanup write errors', async () => {
       const findingsFile = writeFindingsArtifact([], []);
       mockFetchExistingComments.mockResolvedValue([
