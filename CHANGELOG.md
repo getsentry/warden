@@ -1,4 +1,8 @@
 # Changelog
+## 0.51.1
+
+- Prevent wrongly-rejected findings: keep the finding's own file in verifier changed_files by @babyalexford in [#539](https://github.com/getsentry/warden/pull/539)
+
 ## 0.51.0
 
 ### Bug Fixes 🐛
