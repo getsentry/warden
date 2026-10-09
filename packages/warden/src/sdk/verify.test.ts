@@ -145,6 +145,43 @@ describe('verifyFindings', () => {
     }));
   });
 
+  it('lists the finding\'s own file in changed_files', async () => {
+    const runtime = mockRuntime('{"verdict":"keep"}');
+    vi.mocked(getRuntime).mockReturnValue(runtime);
+
+    await verifyFindings([makeFinding()], {
+      repoPath: '/repo',
+      skill: makeSkill(),
+      prContext: {
+        changedFiles: ['src/app.ts', 'src/guard.ts'],
+      },
+    });
+
+    const { userPrompt } = vi.mocked(runtime.runSkill).mock.calls[0]![0];
+    const changedFiles = userPrompt.match(/<changed_files>[\s\S]*?<\/changed_files>/)?.[0];
+    expect(changedFiles).toContain('- src/app.ts');
+    expect(changedFiles).toContain('- src/guard.ts');
+  });
+
+  it('keeps the finding\'s own file in changed_files when the list is truncated', async () => {
+    const runtime = mockRuntime('{"verdict":"keep"}');
+    vi.mocked(getRuntime).mockReturnValue(runtime);
+    const otherFiles = Array.from({ length: 60 }, (_, i) => `src/other-${i}.ts`);
+
+    await verifyFindings([makeFinding()], {
+      repoPath: '/repo',
+      skill: makeSkill(),
+      prContext: {
+        changedFiles: [...otherFiles, 'src/app.ts'],
+      },
+    });
+
+    const { userPrompt } = vi.mocked(runtime.runSkill).mock.calls[0]![0];
+    const changedFiles = userPrompt.match(/<changed_files>[\s\S]*?<\/changed_files>/)?.[0];
+    expect(changedFiles).toContain('- src/app.ts');
+    expect(changedFiles).toContain('- ... and 11 more');
+  });
+
   it('keeps the original id when revising a finding', async () => {
     const revised = makeFinding({
       id: 'DIFFERENT',

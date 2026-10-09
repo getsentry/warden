@@ -107,10 +107,24 @@ Use "finding" only for verdict "revise". For revised findings, return the comple
 `)}`;
 }
 
+// Unlike the hunk prompt, the verifier gets no diff, so the finding's own file
+// must appear in changed_files or it reads as unchanged by the PR. Pin it first
+// so the maxContextFiles truncation can't drop it on large PRs.
+function withFindingFileFirst(
+  prContext: PromptPRContext | undefined,
+  path: string | undefined
+): PromptPRContext | undefined {
+  if (!prContext || !path || !prContext.changedFiles.includes(path)) return prContext;
+  return {
+    ...prContext,
+    changedFiles: [path, ...prContext.changedFiles.filter((f) => f !== path)],
+  };
+}
+
 function buildVerificationUserPrompt(finding: Finding, prContext?: PromptPRContext): string {
   return joinPromptSections([
     buildPullRequestContextSection(prContext),
-    buildChangedFilesSection(prContext, finding.location?.path),
+    buildChangedFilesSection(withFindingFileFirst(prContext, finding.location?.path)),
     buildTaggedSection('candidate_finding', JSON.stringify(finding, null, 2)),
     `<task>
 Verify this candidate. Return keep, revise, or reject.
