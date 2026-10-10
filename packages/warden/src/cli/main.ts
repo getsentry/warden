@@ -30,6 +30,7 @@ import { isRepoRelativePath, normalizePath, resolveConfigInput } from '../utils/
 import { parseCliArgs, showVersion, classifyTargets, expandTargetFileReferences, type CLIOptions } from './args.js';
 import { showHelp } from './help.js';
 import { buildLocalEventContext, buildFileEventContext } from './context.js';
+import { WardenGlobExpansionError } from './files.js';
 import { getRepoRoot, getHeadSha, refExists, getDefaultBranch } from './git.js';
 import { renderTerminalReport, filterReports } from './terminal.js';
 import {
@@ -1504,16 +1505,27 @@ export async function runSkills(
 
 async function runFileMode(filePatterns: string[], options: CLIOptions, reporter: Reporter): Promise<number> {
   const cwd = process.cwd();
+
   const config = loadOptionalConfig(options, findRepoPath(cwd));
 
   // Build context from files
   reporter.step('Building context from files...');
-  const context = await buildFileEventContext({
-    patterns: filePatterns,
-    cwd,
-    ignore: config?.defaults?.ignore,
-    scan: config?.defaults?.scan,
-  });
+  let context: Awaited<ReturnType<typeof buildFileEventContext>>;
+  try {
+    context = await buildFileEventContext({
+      patterns: filePatterns,
+      cwd,
+      ignore: config?.defaults?.ignore,
+      scan: config?.defaults?.scan,
+    });
+  } catch (error) {
+    if (error instanceof WardenGlobExpansionError) {
+      reporter.error(error.message);
+      return 1;
+    }
+    reporter.error('Failed to build context');
+    return 1;
+  }
 
   const pullRequest = context.pullRequest;
   if (!pullRequest) {

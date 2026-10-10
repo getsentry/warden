@@ -324,6 +324,49 @@ describe('expandFileGlobs', () => {
         rmSync(outsideDir, { recursive: true, force: true });
       }
     });
+
+    it('picks up .gitignore from a brand-new untracked subdirectory', async () => {
+      // Simulate the reported bug: a new Laravel app added in `dieter/` with
+      // vendor/ in its .gitignore, but nothing yet committed.  The gitignore
+      // detection must find dieter/.gitignore even though dieter/ has never
+      // been git-tracked.
+      initGitRepo(tempDir);
+      // Commit something so the repo is real
+      mkdirSync(join(tempDir, 'src'), { recursive: true });
+      writeFileSync(join(tempDir, 'src', '.gitkeep'), '');
+      execFileSync('git', ['add', '.'], { cwd: tempDir, stdio: 'ignore' });
+      execFileSync('git', ['commit', '-m', 'init', '--allow-empty'], { cwd: tempDir, stdio: 'ignore' });
+
+      // Now add a brand-new untracked Laravel-style app directory (never staged)
+      const appDir = join(tempDir, 'dieter');
+      mkdirSync(join(appDir, 'app'), { recursive: true });
+      mkdirSync(join(appDir, 'vendor', 'laravel', 'framework'), { recursive: true });
+      writeFileSync(join(appDir, '.gitignore'), 'vendor/\n');
+      writeFileSync(join(appDir, 'app', 'Controller.php'), '<?php class Controller {}');
+      writeFileSync(join(appDir, 'vendor', 'laravel', 'framework', 'Framework.php'), '<?php');
+
+      const files = await expandFileGlobs(['dieter/**/*.php'], tempDir);
+
+      expect(files.some(f => f.includes('app/Controller.php'))).toBe(true);
+      expect(files.some(f => f.includes('vendor/'))).toBe(false);
+    });
+  });
+
+  describe('MAX_GLOB_FILE_RESULTS guardrail', () => {
+    it('throws WardenGlobExpansionError when filtered result exceeds limit', async () => {
+      const { WardenGlobExpansionError, MAX_GLOB_FILE_RESULTS } = await import('./files.js');
+
+      // No git repo so gitignore can't shrink the set; create limit+1 files
+      const count = MAX_GLOB_FILE_RESULTS + 1;
+      for (let i = 0; i < count; i++) {
+        writeFileSync(join(tempDir, `file${i}.ts`), `// ${i}`);
+      }
+
+      await expect(expandFileGlobs(['**/*.ts'], tempDir))
+        .rejects.toThrow(WardenGlobExpansionError);
+      await expect(expandFileGlobs(['**/*.ts'], tempDir))
+        .rejects.toThrow(/Glob pattern matched/);
+    });
   });
 });
 
