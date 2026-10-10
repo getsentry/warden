@@ -4,7 +4,7 @@ import type { DatabaseClient, WardenDatabase } from './db/database.js';
 import type { GoogleAuthBridge, GoogleAuthSession } from './google-auth.js';
 
 function readyDatabase(
-  versions: string[] = ['0006_tiny_garia'],
+  versions: string[] = ['0007_finding_short_urls'],
 ): WardenDatabase {
   return {
     driver: 'postgres',
@@ -44,7 +44,8 @@ describe('createWardenService', () => {
   it('stays ready when newer backward-compatible migrations are applied', async () => {
     const app = createWardenService({
       database: readyDatabase([
-        '0007_future_migration',
+        '0008_future_migration',
+        '0007_finding_short_urls',
         '0006_tiny_garia',
         '0005_large_mattie_franklin',
       ]),
@@ -56,8 +57,8 @@ describe('createWardenService', () => {
     await expect(response.json()).resolves.toEqual({
       status: 'ready',
       database: 'ready',
-      currentVersion: '0007_future_migration',
-      requiredVersion: '0006_tiny_garia',
+      currentVersion: '0008_future_migration',
+      requiredVersion: '0007_finding_short_urls',
     });
   });
 
@@ -84,8 +85,8 @@ describe('createWardenService', () => {
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({
       ready: true,
-      currentVersion: '0006_tiny_garia',
-      requiredVersion: '0006_tiny_garia',
+      currentVersion: '0007_finding_short_urls',
+      requiredVersion: '0007_finding_short_urls',
     });
   });
 
@@ -409,6 +410,11 @@ describe('createWardenService', () => {
         primaryModel: 'openrouter/moonshotai/kimi-k3',
       },
       verification: 'The query interpolates untrusted input.',
+    });
+    const shortDetail = await app.request('/api/v1/findings/7MV-5V7');
+    expect(shortDetail.status).toBe(200);
+    await expect(shortDetail.json()).resolves.toMatchObject({
+      finding: { id: '00000000-0000-4000-8000-000000000010', displayId: '7MV-5V7' },
     });
     expect((await app.request('/api/v1/findings/not-a-uuid')).status).toBe(404);
 

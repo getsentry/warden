@@ -187,6 +187,7 @@ export const findings = pgTable('findings', {
   index('findings_tenant_run_idx').on(table.tenantId, table.runId),
   index('findings_tenant_severity_idx').on(table.tenantId, table.severity),
   index('findings_tenant_skill_idx').on(table.tenantId, table.skillExecutionId),
+  index('findings_tenant_display_idx').on(table.tenantId, sql`coalesce(${table.reportedId}, ${table.clientFindingId})`),
 ]);
 
 export const findingLocations = pgTable('finding_locations', {
