@@ -9,8 +9,8 @@
     "build": "pnpm --filter @sentry/warden-service-api build && pnpm --filter @sentry/warden-service build && pnpm --filter warden-service-app build && pnpm --filter @sentry/warden build",
     "build:action": "pnpm --filter @sentry/warden build:action",
     "dev": "pnpm --filter @sentry/warden dev",
-    "lint": "oxlint .",
-    "lint:fix": "oxlint --fix .",
+    "lint": "oxlint . && pnpm --filter warden-service-app lint:types",
+    "lint:fix": "oxlint --fix . && pnpm --filter warden-service-app lint:types",
     "test": "pnpm --filter @sentry/warden-service-api test && pnpm --filter @sentry/warden-service test && pnpm --filter warden-service-app test && pnpm --filter @sentry/warden test",
     "test:coverage": "pnpm --filter @sentry/warden test:coverage",
     "test:watch": "pnpm --filter @sentry/warden test:watch",
@@ -42,19 +42,28 @@
     ],
     "packages/docs/**/*.astro": [
       "pnpm -C packages/docs build"
+    ],
+    "apps/warden-service/**/*.{ts,tsx}": [
+      "oxlint --fix"
+    ],
+    "packages/warden-service*/src/**/*.ts": [
+      "oxlint --fix"
     ]
   },
   "devDependencies": {
     "@types/node": "^25.9.1",
     "@types/react": "^19.2.15",
+    "@types/react-dom": "^19.2.7",
     "@vercel/ncc": "^0.38.4",
     "@vitest/coverage-v8": "^4.1.11",
     "ink-testing-library": "^4.0.0",
     "lint-staged": "^17.0.5",
     "oxlint": "^1.66.0",
+    "oxlint-tsgolint": "^7.0.2003",
     "simple-git-hooks": "^2.13.1",
     "tsx": "^4.23.12",
     "typescript": "^6.0.3",
+    "vite": "^8.2.2",
     "vitest": "^4.1.11"
   },
   "engines": {
@@ -73,7 +82,9 @@
       "path-to-regexp@8.3.0": "8.4.2",
       "smol-toml@<1.6.1": "1.8.0",
       "undici@5.28.4": "6.28.0",
-      "undici@5.29.0": "6.28.0"
+      "undici@5.29.0": "6.28.0",
+      "react": "19.2.6",
+      "react-dom": "19.2.6"
     }
   }
 }

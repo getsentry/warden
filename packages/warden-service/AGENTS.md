@@ -1,5 +1,9 @@
 # Warden Service Instructions
 
+## Dashboard
+
+- Follow [the frontend policy](../../policies/warden-service-frontend.md) for dashboard changes in `apps/warden-service`.
+
 ## Database Queries
 
 - Use the Drizzle schema and typed query builder for new or changed runtime queries.

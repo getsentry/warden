@@ -11,9 +11,9 @@ import { createHostedMemoryRuntime } from './memory-ai.js';
 import { captureServiceError, traceDatabase } from './sentry.js';
 
 const dashboard = {
-  html: readFileSync(new URL('../public/index.html', import.meta.url), 'utf8'),
-  script: readFileSync(new URL('../public/assets/app.js', import.meta.url), 'utf8'),
-  stylesheet: readFileSync(new URL('../public/assets/styles.css', import.meta.url), 'utf8'),
+  html: readFileSync(new URL('../dist/dashboard/index.html', import.meta.url), 'utf8'),
+  script: readFileSync(new URL('../dist/dashboard/assets/app.js', import.meta.url), 'utf8'),
+  stylesheet: readFileSync(new URL('../dist/dashboard/assets/styles.css', import.meta.url), 'utf8'),
 };
 
 function requiredAuthValue(value: string | undefined, name: string): string {
