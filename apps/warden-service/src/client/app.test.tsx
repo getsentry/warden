@@ -723,6 +723,18 @@ it('retries a failed Linear request', async () => {
   expect(screen.queryByRole('alert')).toBeNull();
 });
 
+it('waits for Linear to be enabled before showing the action', async () => {
+  let release: (response: Response) => void = () => { throw new Error('Missing response'); };
+  const status = new Promise<Response>((resolve) => { release = resolve; });
+  workspace('/findings/finding-1', mockApi((url) => (
+    url.pathname.endsWith('/linear-issue') ? status : undefined
+  )));
+  await screen.findByRole('heading', { level: 1, name: finding.title });
+  expect(screen.queryByRole('button', { name: 'Create Linear issue' })).toBeNull();
+  await act(async () => { release(json({ enabled: true, issue: null })); });
+  await screen.findByRole('button', { name: 'Create Linear issue' });
+});
+
 it('hides the Linear action when the service has no integration', async () => {
   workspace('/findings/finding-1');
   await screen.findByRole('heading', { level: 1, name: finding.title });
