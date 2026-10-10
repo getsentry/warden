@@ -84,6 +84,7 @@ function findingsEnvelope(clientRunId: string): FindingsRunEnvelope {
     findings: [{
       id: 'finding-1', skillExecutionId: 'skill-security', severity: 'high',
       title: 'Unsafe sink', description: 'Untrusted input reaches a sensitive sink.',
+      verification: '- `handleRequest` passes user input to `query`.\n- The sink accepts the input without validation.',
       location: { path: 'src/query.ts', startLine: 10 },
     }],
     observations: [{
@@ -258,6 +259,7 @@ function defineDriverIntegration(driver: DatabaseDriver, environmentName: string
       expect(findingPage.items).toHaveLength(1);
       await expect(getFindingDetail(database, context, findingPage.items[0]!.id)).resolves.toMatchObject({
         finding: { title: 'Unsafe sink', outcome: 'resolved' },
+        verification: '- `handleRequest` passes user input to `query`.\n- The sink accepts the input without validation.',
       });
       await expect(listRepositories(database, context)).resolves.toMatchObject({
         items: [{ repository: { fullName: 'acme/widgets' }, runs: 1, findings: 1, costUsd: 0.01 }],
