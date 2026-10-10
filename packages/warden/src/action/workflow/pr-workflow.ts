@@ -43,10 +43,10 @@ import type { ActionInputs } from '../inputs.js';
 import {
   publishActionEarlyFailureFailOpen,
   publishActionRunFailOpen,
-  recallActionMemoryFailOpen,
+  createActionReviewMemory,
   resolveActionServiceOptions,
 } from '../service.js';
-import type { ActionMemoryRecall } from '../service.js';
+import type { ActionReviewMemory } from '../service.js';
 import type { ResolvedServiceOptions } from '../../service/index.js';
 import { executeTrigger } from '../triggers/executor.js';
 import type { TriggerCheckReporter, TriggerResult } from '../triggers/executor.js';
@@ -118,7 +118,7 @@ interface InitResult {
   resolvedTriggers: ResolvedTrigger[];
   matchedTriggers: ResolvedTrigger[];
   skippedTriggers: ResolvedTrigger[];
-  memoryRecall?: ActionMemoryRecall;
+  memoryRecall?: ActionReviewMemory;
   skipCoreCheck?: SkippedCoreCheck;
   postChecks: boolean;
 }
@@ -474,7 +474,7 @@ async function initializeWorkflow(
     const service = resolveActionServiceOptions(inputs, layered.config.service);
     const memoryRecall = inputs.mode === 'report' || matchedTriggers.length === 0
       ? undefined
-      : await recallActionMemoryFailOpen(service, context, matchedTriggers.map((trigger) => trigger.skill));
+      : createActionReviewMemory(service, context);
     return {
       context,
       service,
@@ -626,7 +626,7 @@ async function executeAllTriggers(
   inputs: ActionInputs,
   options: {
     checks?: TriggerCheckReporter;
-    memoryRecall?: ActionMemoryRecall;
+    memoryRecall?: ActionReviewMemory;
     /** Fired after each trigger settles, with every result settled so far (completion order, not input order). */
     onTriggerComplete?: (completedSoFar: TriggerResult[]) => void;
   } = {}
@@ -657,7 +657,7 @@ async function executeAllTriggers(
         abortController,
         circuitBreaker,
         checks: options.checks,
-        historicalEvidence: options.memoryRecall?.historicalEvidence,
+        memory: options.memoryRecall?.memory,
       });
       completedSoFar.push(result);
       options.onTriggerComplete?.([...completedSoFar]);
@@ -1180,7 +1180,7 @@ async function finalizeWorkflow(
   skippedTriggers: ResolvedTrigger[],
   inputs: ActionInputs,
   service: ResolvedServiceOptions | undefined,
-  memoryRecall: ActionMemoryRecall | undefined,
+  memoryRecall: ActionReviewMemory | undefined,
   postChecks: boolean,
   matchedTriggers: ResolvedTrigger[],
   resolvedTriggers: ResolvedTrigger[]

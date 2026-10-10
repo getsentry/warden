@@ -1,12 +1,17 @@
 import type { z } from 'zod';
 import {
   IngestRunResponseSchema,
+  MemoryDetailResponseSchema,
   MemoryRecallResponseSchema,
+  ReviewMemoryWriteResponseSchema,
+  ReviewMemoryWriteRequestSchema,
 } from './api.js';
 import type {
   IngestRunResponse,
   MemoryRecallRequest,
   MemoryRecallResponse,
+  ReviewMemoryWriteRequest,
+  ReviewMemoryWriteResponse,
 } from './api.js';
 import {
   MemoryRecallRequestSchema,
@@ -18,7 +23,7 @@ import {
 import type { RunEnvelopeV1 } from './protocol.js';
 import { sha256Checksum } from './checksum.js';
 
-export type ServiceClientOperation = 'publish_run' | 'recall_memory';
+export type ServiceClientOperation = 'publish_run' | 'recall_memory' | 'update_memory' | 'memory_detail';
 export type ServiceClientErrorKind = 'network' | 'timeout' | 'http' | 'invalid_response';
 
 export class ServiceClientError extends Error {
@@ -75,7 +80,8 @@ export function createWardenServiceClient(options: WardenServiceClientOptions) {
   async function request<TSchema extends z.ZodType>(args: {
     operation: ServiceClientOperation;
     path: string;
-    body: unknown;
+    body?: unknown;
+    method?: 'GET' | 'POST';
     responseSchema: TSchema;
     runId?: string;
     checksum?: string;
@@ -96,7 +102,7 @@ export function createWardenServiceClient(options: WardenServiceClientOptions) {
       const timeout = setTimeout(() => controller.abort(), remainingMs);
       try {
         const response = await fetchImpl(serviceUrl(baseUrl, args.path), {
-          method: 'POST',
+          method: args.method ?? 'POST',
           headers: {
             accept: 'application/json',
             authorization: `Bearer ${token}`,
@@ -158,6 +164,18 @@ export function createWardenServiceClient(options: WardenServiceClientOptions) {
   }
 
   return {
+    async getMemory(id: string) {
+      return request({ operation: 'memory_detail', path: `api/v1/memories/${encodeURIComponent(id)}`,
+        method: 'GET', responseSchema: MemoryDetailResponseSchema });
+    },
+    async updateMemory(input: ReviewMemoryWriteRequest): Promise<ReviewMemoryWriteResponse> {
+      return request({
+        operation: 'update_memory',
+        path: 'api/v1/memory/update',
+        body: ReviewMemoryWriteRequestSchema.parse(input),
+        responseSchema: ReviewMemoryWriteResponseSchema,
+      });
+    },
     async publishRun(envelopeInput: RunEnvelopeV1): Promise<IngestRunResponse> {
       const envelope = RunEnvelopeV1Schema.parse(envelopeInput);
       const checksum = await sha256Checksum(envelope);

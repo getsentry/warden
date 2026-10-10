@@ -76,6 +76,85 @@ function makeErrorResult(errors: string[]): SkillRunResponse {
 }
 
 describe('verifyFindings', () => {
+  it('lets the verifier correct recalled claims while keeping a real finding', async () => {
+    const memory = { search: vi.fn().mockResolvedValue([{ id: 'old', version: 1, content: 'All routes check ownership.', paths: ['src/app.ts'] }]), update: vi.fn().mockResolvedValue({ status: 'saved' }) };
+    const runtime = mockRuntime('{"verdict":"keep"}');
+    vi.mocked(runtime.runSkill).mockImplementation(async (request) => {
+      expect(request.systemPrompt).not.toContain('All routes check ownership.');
+      expect(memory.search).not.toHaveBeenCalled();
+      const found = await request.runtimeTools!.find((tool) => tool.name === 'find_memories')!.execute({ query: 'Which routes check ownership?' });
+      expect(JSON.parse(found).memories).toEqual([expect.objectContaining({ id: 'old' })]);
+      await request.runtimeTools!.find((tool) => tool.name === 'update_memory')!.execute({
+        id: 'old', expectedVersion: 1, content: 'Only wrapped routes check ownership in src/app.ts.', paths: ['src/app.ts'], reason: 'This entrypoint bypasses the wrapper.',
+      });
+      return { result: { status: 'success', text: '{"verdict":"keep"}', errors: [], usage: makeUsage() } };
+    });
+    vi.mocked(getRuntime).mockReturnValue(runtime);
+    const finding = makeFinding();
+    expect((await verifyFindings([finding], { repoPath: '/repo', skill: makeSkill(), memory })).findings).toEqual([finding]);
+    expect(memory.update).toHaveBeenCalledWith(expect.objectContaining({ id: 'old', expectedVersion: 1, skill: 'test-skill' }));
+  });
+  it('persists a rejected claim and exact rationale even when the verifier writes no memory tools', async () => {
+    const finding = makeFinding({ verification: 'decode() accepts an attacker-selected algorithm.' });
+    const reason = 'loadKey() constructs an asymmetric key object; HS256 cannot use it. The claimed path is unreachable.';
+    const memory = { search: vi.fn().mockResolvedValue([]), update: vi.fn(), recordJudgment: vi.fn().mockResolvedValue(undefined) };
+    vi.mocked(getRuntime).mockReturnValue(mockRuntime(JSON.stringify({ verdict: 'reject', reason })));
+    const result = await verifyFindings([finding], { repoPath: '/repo', skill: makeSkill(), memory });
+    expect(result.findings).toEqual([]);
+    expect(memory.search).not.toHaveBeenCalled();
+    expect(memory.recordJudgment).toHaveBeenCalledExactlyOnceWith({ skill: 'test-skill', judgment: {
+      verdict: 'reject', candidate: expect.objectContaining({ ...finding }), reason, observedAt: expect.any(String),
+    } });
+    memory.recordJudgment.mockRejectedValue(new Error('storage unavailable'));
+    expect((await verifyFindings([finding], { repoPath: '/repo', skill: makeSkill(), memory })).findings).toEqual([]);
+  });
+
+  it('links only provisional versions retrieved during this verification', async () => {
+    const memory = { search: vi.fn().mockResolvedValue([
+      { id: 'valid', version: 2, content: 'No guard found.', paths: ['src/app.ts'] },
+      { id: 'stale', version: 3, content: 'Earlier investigation.', paths: ['src/app.ts'] },
+      { id: 'judged', version: 1, content: 'Previously verified.', paths: ['src/app.ts'], verdict: 'keep' },
+    ]), update: vi.fn(), recordJudgment: vi.fn().mockResolvedValue(undefined) };
+    const runtime = mockRuntime('');
+    vi.mocked(runtime.runSkill).mockImplementation(async (request) => {
+      await request.runtimeTools!.find((tool) => tool.name === 'find_memories')!.execute({ query: 'Is this path guarded?' });
+      return { result: { status: 'success', errors: [], usage: makeUsage(), text: JSON.stringify({
+        verdict: 'reject', reason: 'The wrapper checks ownership.', supersedes: [
+          { id: 'valid', version: 2 }, { id: 'stale', version: 2 }, { id: 'unseen', version: 1 }, { id: 'judged', version: 1 },
+        ],
+      }) } };
+    });
+    vi.mocked(getRuntime).mockReturnValue(runtime);
+    expect((await verifyFindings([makeFinding()], { repoPath: '/repo', skill: makeSkill(), memory })).findings).toEqual([]);
+    expect(memory.recordJudgment).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ supersedes: [{ id: 'valid', version: 2 }] }));
+  });
+
+  it('does not save an interrupted verification as a historical verdict', async () => {
+    const memory = { search: vi.fn().mockResolvedValue([]), update: vi.fn(), recordJudgment: vi.fn() };
+    vi.mocked(getRuntime).mockReturnValue(mockRuntimeResponse(makeErrorResult(['stream interrupted'])));
+    const finding = makeFinding();
+    expect((await verifyFindings([finding], { repoPath: '/repo', skill: makeSkill(), memory })).findings).toEqual([finding]);
+    expect(memory.recordJudgment).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    { verdict: 'reject', supersedes: null },
+    { verdict: 'revise', supersedes: [{ id: 'old', version: '1' }] },
+  ])('applies $verdict even when memory supersession metadata is malformed', async ({ verdict, supersedes }) => {
+    const finding = makeFinding();
+    const revised = { ...finding, severity: 'low' as const, description: 'Only the unguarded route is affected.' };
+    const memory = { search: vi.fn(), update: vi.fn(), recordJudgment: vi.fn().mockResolvedValue(undefined) };
+    vi.mocked(getRuntime).mockReturnValue(mockRuntime(JSON.stringify({
+      verdict, supersedes, reason: 'Traced the current route guard.', ...(verdict === 'revise' ? { finding: revised } : {}),
+    })));
+    const result = await verifyFindings([finding], { repoPath: '/repo', skill: makeSkill(), memory });
+    expect(result.findings).toEqual(verdict === 'reject' ? [] : [revised]);
+    expect(memory.recordJudgment).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
+      judgment: expect.objectContaining({ verdict }),
+    }));
+    expect(memory.recordJudgment.mock.calls[0]?.[0]).not.toHaveProperty('supersedes');
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
   });

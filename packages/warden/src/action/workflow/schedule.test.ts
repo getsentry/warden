@@ -536,7 +536,7 @@ describe('runScheduleWorkflow', () => {
       expect(mockCreateOrUpdateIssue).not.toHaveBeenCalled();
     });
 
-    it('recalls schedule memory from the union of trigger paths', async () => {
+    it('runs scheduled skills with on-demand memory and no injected history', async () => {
       const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url, request) => {
         const body = JSON.parse(String(request?.body)) as { clientRecallId?: string };
         if (String(url).endsWith('/api/v1/memory/recall')) {
@@ -569,16 +569,14 @@ describe('runScheduleWorkflow', () => {
         SCHEDULE_MULTI_FIXTURES,
       );
 
-      expect(mockBuildContext.mock.calls[0]?.[0].patterns).toEqual([
-        'src/**/*.ts',
-        'lib/**/*.js',
-      ]);
+      expect(mockBuildContext).toHaveBeenCalledTimes(2);
       expect(mockRunSkill).toHaveBeenCalledTimes(2);
       for (const [, , options] of mockRunSkill.mock.calls) {
-        expect(options?.historicalEvidence).toContain('Keep shared behavior consistent.');
+        expect(options?.historicalEvidence).toBeUndefined();
+        expect(options?.memory).toBeDefined();
       }
       expect(fetchMock.mock.calls.filter(([url]) =>
-        String(url).endsWith('/api/v1/memory/recall'))).toHaveLength(1);
+        String(url).endsWith('/api/v1/memory/recall'))).toHaveLength(0);
     });
   });
 

@@ -9,7 +9,11 @@ const PassiveEvidenceSchema = z.object({
   runId: z.string().min(1).max(128),
   skill: z.string().min(1).max(512),
   title: z.string().min(1).max(512),
-  description: z.string().min(1).max(2_000),
+  description: z.string().min(1).max(8_000),
+  verification: z.string().max(4_000).optional(),
+  reason: z.string().max(8_000).optional(),
+  headSha: z.string().max(128).optional(),
+  path: z.string().max(1_024).optional(),
   outcome: z.enum(['posted', 'resolved', 'rejected', 'revised']),
   observedAt: z.string().datetime(),
 }).strict();

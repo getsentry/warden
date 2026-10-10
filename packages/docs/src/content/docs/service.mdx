@@ -191,3 +191,66 @@ Back up Postgres with the provider's managed backup feature or standard `pg_dump
 ### Outages
 
 Recall and publication have bounded deadlines and fail open. A service outage does not change CLI exit status, GitHub review output, findings files, JSONL, or SDK results. Keep local artifacts until the missed run has been replayed or is no longer needed.
+
+## Revisable Review Notes
+
+When memory is enabled, discovery and verification can use `find_memories`
+and `update_memory` to reuse investigation notes or correct them. Retrieval happens
+only when the agent calls `find_memories`; setup and verification do not fetch or
+inject historical notes automatically. Notes must
+include their scope and supporting source files. Reviewers are instructed to
+check current code before dismissing a concern based on memory, and may ignore
+an unsupported or stale conclusion.
+
+Corrections require the note's current version. Earlier content and evidence
+are retained in revision history. A concurrent correction returns the newer
+version instead of overwriting it. These agent-written notes remain provisional;
+they are separate from feedback collected from review outcomes.
+
+`find_memories` sends the investigation query to the service. It searches the
+repository with full-text and embedding search, then filters for relevance. It
+returns the selected notes with their full saved judgments and up to ten recent supporting
+evidence records in the same tool response. Ranking admits at most five note summaries
+and 8,000 summary characters; detailed judgments and evidence add to that size.
+
+Completed verifier judgments with source locations are saved automatically, including the original
+candidate, revised finding, written rationale, evidence, and observed commit.
+Judgments live in the same memory store and are returned by `find_memories`.
+These records are immutable. A verifier can explicitly link its new judgment to
+provisional note versions it retrieved about the same concern. Matching versions
+are superseded and removed from active search; their content and evidence remain
+in revision history. Other notes in the same file are unaffected. Later reviews
+save a new historical judgment; provisional notes can still be corrected with
+version checks. A historical
+verdict does not establish safety at a later revision. Recheck the relevant
+conditions when relying on it, especially to dismiss a concern.
+
+## Local Memory Testing
+
+Local reviews use the same HTTP service, Postgres/pgvector storage, AI providers,
+and job handlers as the hosted deployment. From the repository root:
+
+```bash
+# Uses your configured AI_GATEWAY_API_KEY for real embedding and extraction calls.
+pnpm memory:local
+```
+
+In a second terminal, load the generated settings and run Warden normally:
+
+```bash
+source .warden/local-service/client.env
+pnpm cli run HEAD
+```
+
+The database and service bind to localhost. The database volume persists across
+restarts. Client credentials are stored in the ignored `.warden/local-service`
+directory and revoked when the local service stops. Set `WARDEN_LOCAL_SERVICE_PORT`
+to change the HTTP port (default 4141). The default database port is 55432;
+for another database port, set both `WARDEN_LOCAL_DATABASE_PORT` and
+`WARDEN_LOCAL_DATABASE_URL`.
+
+`pnpm memory:test` starts an isolated temporary pgvector database, runs the real
+service and SQL tests with external AI calls mocked, and removes its test volume.
+It requires Docker and makes no paid inference calls. Real benchmark comparisons
+must include extraction, embedding, relevance, and review costs, plus recall
+regressions on unchanged and changed code.

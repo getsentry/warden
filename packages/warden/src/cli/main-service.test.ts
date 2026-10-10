@@ -1,10 +1,17 @@
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanupArtifacts } from './log-cleanup.js';
 import { main } from './main.js';
+import { getRuntime } from '../sdk/runtimes/index.js';
+import type * as Runtimes from '../sdk/runtimes/index.js';
+
+vi.mock('../sdk/runtimes/index.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof Runtimes>();
+  return { ...actual, getRuntime: vi.fn() };
+});
 
 vi.mock('./log-cleanup.js', () => ({
   cleanupArtifacts: vi.fn(async () => undefined),
@@ -64,6 +71,7 @@ describe('config-mode service publication', () => {
     delete process.env['WARDEN_SERVICE_MEMORY'];
     delete process.env['WARDEN_SERVICE_TIMEOUT_MS'];
     delete process.env['WARDEN_SENTRY_DSN'];
+    vi.mocked(getRuntime).mockReset();
     cleanupArtifactsMock.mockReset();
     cleanupArtifactsMock.mockResolvedValue(0);
   });
@@ -116,6 +124,30 @@ describe('config-mode service publication', () => {
       skills: [],
     });
     expect(process.exit).toHaveBeenCalledWith(0);
+  });
+
+  it.each([false, true])('does not fetch memory before analysis in CLI mode (explicit skill: %s)', async (explicitSkill) => {
+    process.env['WARDEN_SERVICE_MEMORY'] = 'true';
+    mkdirSync(join(repoPath, 'src'));
+    writeFileSync(join(repoPath, 'src/guard.ts'), 'export const guarded = true;\n');
+    mkdirSync(join(repoPath, '.warden/skills/security-review'), { recursive: true });
+    writeFileSync(join(repoPath, '.warden/skills/security-review/SKILL.md'), '---\nname: security-review\ndescription: Review security\n---\nReview the code for security issues.\n');
+    git(repoPath, ['add', 'src/guard.ts']);
+    if (explicitSkill) process.argv.push('--skill', 'security-review');
+    const fetchMock = mockSuccessfulPublish();
+    const run = vi.fn(async (request) => {
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect(request.systemPrompt).not.toContain('<historical_repository_evidence>');
+      expect(request.runtimeTools.map(({ name }: { name: string }) => name)).toEqual(['find_memories', 'update_memory']);
+      return { result: { status: 'success' as const, text: '{"findings":[]}', errors: [],
+        usage: { inputTokens: 10, outputTokens: 5, costUSD: 0 } } };
+    });
+    vi.mocked(getRuntime).mockReturnValue({ name: 'pi', runSkill: run, runAuxiliary: vi.fn(), runSynthesis: vi.fn() });
+    await main();
+    expect(run).toHaveBeenCalledOnce();
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(fetchMock.mock.calls[0]?.[0]).toContain('/api/v1/runs');
+    expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))).toMatchObject({ features: { memory: true }, outcome: 'success' });
   });
 
   it('does not send an environment token to the repository-configured endpoint', async () => {

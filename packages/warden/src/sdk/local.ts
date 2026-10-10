@@ -1,5 +1,4 @@
 import { randomUUID } from 'node:crypto';
-import { extname } from 'node:path';
 import type { SkillDefinition } from '../config/schema.js';
 import { buildLocalEventContext, type LocalContextOptions } from '../cli/context.js';
 import { resolveSkillAsync } from '../skills/loader.js';
@@ -9,8 +8,7 @@ import { getVersion } from '../utils/index.js';
 import {
   buildServiceRunEnvelope,
   publishRunFailOpen,
-  recallMemoryFailOpen,
-  renderHistoricalMemory,
+  createServiceReviewMemory,
   resolveServiceOptions,
 } from '../service/index.js';
 import type { ServiceOptionOverrides } from '../service/index.js';
@@ -85,20 +83,7 @@ export async function runLocalSkill(options: RunLocalSkillOptions): Promise<RunL
     fullName: context.repository.fullName,
   };
   const clientRunId = randomUUID();
-  const paths = context.pullRequest?.files.map((file) => file.filename) ?? [];
-  const recall = service ? await recallMemoryFailOpen(service, {
-    protocolVersion: 1,
-    clientRecallId: clientRunId,
-    repository,
-    skills: [skill.name],
-    languages: [...new Set(paths.map((path) => extname(path).slice(1)).filter(Boolean))],
-    paths,
-  }) : undefined;
-  const recalledMemories = recall?.memories ?? [];
-  const recalledEvidence = renderHistoricalMemory(recalledMemories);
-  const historicalEvidence = runnerOptions.historicalEvidence && recalledEvidence
-    ? `${runnerOptions.historicalEvidence}\n\n${recalledEvidence}`
-    : (runnerOptions.historicalEvidence ?? recalledEvidence);
+  const memory = runnerOptions.memory ?? createServiceReviewMemory(service, repository, context.repoPath);
   const publishReport = async (
     publishedService: typeof service,
     report: SkillReport,
@@ -117,8 +102,8 @@ export async function runLocalSkill(options: RunLocalSkillOptions): Promise<RunL
         outcome,
         repository,
         reports: [{ executionId: `1:${report.skill}`, report }],
-        recalledMemories: recalledMemories.map(({ id, version }) => ({ id, version })),
-        ...(recall ? { memoryRecallId: recall.clientRecallId } : {}),
+        recalledMemories: memory?.recall?.memories.map(({ id, version }) => ({ id, version })),
+        ...(memory?.recall ? { memoryRecallId: memory.recall.clientRecallId } : {}),
         event: context.eventType,
         ...(context.pullRequest?.headSha ? { headSha: context.pullRequest.headSha } : {}),
       }),
@@ -129,7 +114,7 @@ export async function runLocalSkill(options: RunLocalSkillOptions): Promise<RunL
   try {
     report = await runSkill(skill, context, {
       ...runnerOptions,
-      historicalEvidence,
+      memory,
     });
   } catch (error) {
     const classified = classifyError(error);

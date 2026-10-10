@@ -1021,6 +1021,13 @@ export const piRuntime: Runtime = {
     } = request;
     const { maxTurns = 50, model, effort, abortController } = options;
     const skillTools = resolvePiSkillTools(tools, allowMutatingTools);
+    const memoryTools = toPiCustomTools(request.runtimeTools?.map((tool) => ({
+      name: tool.name, description: tool.description, inputSchema: z.toJSONSchema(tool.schema, { io: 'input' }),
+    })), async (name, input) => {
+      const tool = request.runtimeTools?.find((item) => item.name === name);
+      if (!tool) throw new Error('Unknown runtime tool');
+      return tool.execute(tool.schema.parse(input));
+    });
 
     return startTracedSpan(
       {
@@ -1048,7 +1055,8 @@ export const piRuntime: Runtime = {
             agentName: skillName,
             model,
             legacyAnthropicApiKey: apiKey,
-            toolNames: skillTools.toolNames,
+            toolNames: [...skillTools.toolNames, ...(memoryTools?.map((tool) => tool.name) ?? [])],
+            customTools: memoryTools,
             maxTurns,
             effort,
             maxRetries: PI_SKILL_PROVIDER_MAX_RETRIES,

@@ -117,4 +117,18 @@ describe('runSkill verification', () => {
     ]);
     expect(verifyFindings).not.toHaveBeenCalled();
   });
+
+  it('passes revisable memory through discovery and postprocessing and preserves source chunks', async () => {
+    const memory = { search: vi.fn().mockResolvedValue([{ id: 'm1', version: 1, content: 'Check the ownership guard.', paths: ['src/app.ts'] }]), update: vi.fn() };
+    const onChunkComplete = vi.fn();
+    vi.mocked(verifyFindings).mockResolvedValue({ findings: [], usage: makeUsage() });
+    await runSkill(makeSkill(), makeContext(), { memory, callbacks: { onChunkComplete } });
+    expect(getRuntime().runSkill).toHaveBeenCalledWith(expect.objectContaining({
+      systemPrompt: expect.not.stringContaining('Check the ownership guard.'),
+      runtimeTools: [expect.objectContaining({ name: 'find_memories' }), expect.objectContaining({ name: 'update_memory' })],
+    }));
+    expect(memory.search).not.toHaveBeenCalled();
+    expect(verifyFindings).toHaveBeenCalledWith(expect.any(Array), expect.objectContaining({ memory }));
+    expect(onChunkComplete).toHaveBeenCalledWith(expect.objectContaining({ filename: 'src/app.ts', failed: false }));
+  });
 });

@@ -372,7 +372,7 @@ describe.skipIf(!process.env['WARDEN_TEST_POSTGRES_URL'])('Postgres query plans'
         await client.query('SET enable_seqscan = off');
         for (const [sql, indexName, values] of [
           ['SELECT * FROM runs WHERE tenant_id = $1 ORDER BY completed_at DESC LIMIT 10', 'runs_tenant_completed_idx', [tenantId]],
-          ["SELECT * FROM usage_line_items WHERE tenant_id = $1 AND lane = 'scan'", 'usage_tenant_dimensions_idx', [tenantId]],
+          ["SELECT tenant_id, lane, model, runtime, provider FROM usage_line_items WHERE tenant_id = $1 AND lane = 'scan' ORDER BY model, runtime, provider", 'usage_tenant_dimensions_idx', [tenantId]],
           ["SELECT * FROM memories WHERE to_tsvector('simple', search_document) @@ plainto_tsquery('simple', 'security')", 'memories_search_idx', []],
           ["SELECT id FROM jobs WHERE state IN ('pending', 'retry') AND next_attempt_at <= now() ORDER BY next_attempt_at LIMIT 10", 'jobs_claim_idx', []],
         ] as const) {

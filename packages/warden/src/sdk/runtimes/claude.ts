@@ -16,7 +16,7 @@
  * - Claude-specific result subtypes normalize to Warden-owned statuses.
  */
 import type Anthropic from '@anthropic-ai/sdk';
-import { query, type EffortLevel, type SDKResultMessage, type SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
+import { query, createSdkMcpServer, tool as sdkTool, type EffortLevel, type SDKResultMessage, type SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
 import type { Effort, ToolConfig, ToolName } from '../../config/schema.js';
 import { recordTracedSpan, startInactiveTracedSpan, startTracedSpan } from '../../sentry-trace.js';
 import { callHaiku, callHaikuWithTools } from '../haiku.js';
@@ -369,6 +369,12 @@ export const claudeRuntime: Runtime = {
     const { maxTurns = 50, model, effort, abortController } = options;
     const { pathToClaudeCodeExecutable } = getClaudeProviderOptions(providerOptions);
     const skillTools = resolveClaudeSkillTools(tools, allowMutatingTools);
+    const memoryServer = request.runtimeTools?.length ? createSdkMcpServer({
+      name: 'warden',
+      tools: request.runtimeTools.map((tool) => sdkTool(tool.name, tool.description, tool.schema.shape, async (input) => ({
+        content: [{ type: 'text' as const, text: await tool.execute(tool.schema.parse(input)) }],
+      }))),
+    }) : undefined;
 
     return startTracedSpan(
       {
@@ -390,14 +396,17 @@ export const claudeRuntime: Runtime = {
         const stderrChunks: string[] = [];
 
         const stream = query({
-          prompt: userPrompt,
+          prompt: memoryServer ? (async function* (): AsyncGenerator<SDKUserMessage> {
+            yield { type: 'user', message: { role: 'user', content: userPrompt }, parent_tool_use_id: null, session_id: '' };
+          })() : userPrompt,
           options: {
             maxTurns,
             cwd: repoPath,
             systemPrompt,
             // Hunk analysis is read-only; trusted internal writer tasks may opt
             // into mutating tools explicitly at the runtime request boundary.
-            allowedTools: skillTools.allowedTools,
+            allowedTools: [...skillTools.allowedTools, ...(request.runtimeTools?.map((tool) => `mcp__warden__${tool.name}`) ?? [])],
+            ...(memoryServer ? { mcpServers: { warden: memoryServer } } : {}),
             disallowedTools: skillTools.disallowedTools,
             permissionMode: 'bypassPermissions',
             // Prevent SDK from writing session .jsonl files and polluting Claude Code's session index.

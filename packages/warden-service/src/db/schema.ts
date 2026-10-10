@@ -1,3 +1,4 @@
+import type { ReviewMemoryJudgment } from '@sentry/warden-service-api';
 import { sql } from 'drizzle-orm';
 import {
   bigint,
@@ -270,6 +271,7 @@ export const memories = pgTable('memories', {
   origin: text('origin').notNull(),
   content: text('content').notNull(),
   contentHash: text('content_hash').notNull(),
+  judgment: jsonb('judgment').$type<ReviewMemoryJudgment>(),
   searchDocument: text('search_document').notNull(),
   skill: text('skill'),
   language: text('language'),
@@ -296,6 +298,15 @@ export const memories = pgTable('memories', {
   index('memories_search_idx').using('gin', sql`to_tsvector('simple', ${table.searchDocument})`),
   check('memories_counts_nonnegative', sql`${table.supportCount} >= 0 AND ${table.contradictionCount} >= 0`),
 ]);
+
+export const reviewMemoryRevisions = pgTable('review_memory_revisions', {
+  tenantId: uuid('tenant_id').notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  memoryId: uuid('memory_id').notNull().references(() => memories.id, { onDelete: 'cascade' }),
+  version: integer('version').notNull(),
+  snapshot: jsonb('snapshot').notNull(),
+  reason: text('reason').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [primaryKey({ columns: [table.memoryId, table.version] })]);
 
 export const memoryEvidence = pgTable('memory_evidence', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -335,6 +346,7 @@ export const memoryRecallBatches = pgTable('memory_recall_batches', {
   repositoryId: uuid('repository_id').notNull().references(() => repositories.id, { onDelete: 'cascade' }),
   runId: uuid('run_id').references(() => runs.id, { onDelete: 'set null' }),
   clientRecallId: text('client_recall_id').notNull(),
+  parentRecallId: text('parent_recall_id'),
   memoryCount: integer('memory_count').notNull(),
   durationMs: numeric('duration_ms', { precision: 18, scale: 3 }).notNull(),
   provider: text('provider'),
@@ -347,6 +359,7 @@ export const memoryRecallBatches = pgTable('memory_recall_batches', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [
   uniqueIndex('memory_recall_batches_tenant_client_unique').on(table.tenantId, table.clientRecallId),
+  index('memory_recall_batches_parent_idx').on(table.tenantId, table.parentRecallId),
   index('memory_recall_batches_tenant_repository_idx').on(table.tenantId, table.repositoryId, table.createdAt),
   check('memory_recall_batches_count_nonnegative', sql`${table.memoryCount} >= 0`),
 ]);

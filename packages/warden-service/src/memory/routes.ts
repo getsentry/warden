@@ -7,6 +7,8 @@ import {
   MemoryRecallRequestSchema,
   MemoryRecallResponseSchema,
   RepositoryIdentitySchema,
+  ReviewMemoryWriteRequestSchema,
+  ReviewMemoryWriteResponseSchema,
 } from '@sentry/warden-service-api';
 import type { Hono } from 'hono';
 import { z } from 'zod';
@@ -23,6 +25,7 @@ import {
   transitionMemory,
 } from './store.js';
 import type { RecallMemoryOptions } from './store.js';
+import { updateReviewMemory } from './review.js';
 
 const CreateMemorySchema = z.object({
   repository: RepositoryIdentitySchema,
@@ -50,6 +53,11 @@ export function registerMemoryRoutes(
   database: WardenDatabase,
   recallOptions: RecallMemoryOptions = {},
 ): void {
+  app.post('/api/v1/memory/update', requireRole('read'), requireRole('ingest'), async (context) => {
+    const body = ReviewMemoryWriteRequestSchema.safeParse(await context.req.json().catch(() => null));
+    if (!body.success) return context.json({ error: { code: 'invalid_request', message: 'Memory update is not valid.' } }, 400);
+    return context.json(ReviewMemoryWriteResponseSchema.parse(await updateReviewMemory(database, context.get('serviceContext'), body.data, recallOptions.embedding)));
+  });
   app.post('/api/v1/memory/recall', requireRole('read'), async (context) => {
     const body = MemoryRecallRequestSchema.safeParse(await context.req.json().catch(() => null));
     if (!body.success) return context.json({ error: { code: 'invalid_request', message: 'Recall request is not valid.' } }, 400);
