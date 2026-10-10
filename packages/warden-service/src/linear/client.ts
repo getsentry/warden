@@ -62,7 +62,7 @@ export async function findLinearIssue(
 
 function issueDescription(detail: FindingDetailResponse, baseUrl: string): string {
   const { finding } = detail;
-  const findingUrl = new URL(`/findings/${encodeURIComponent(finding.id)}`, baseUrl);
+  const findingUrl = new URL(`/findings/${encodeURIComponent(finding.displayId)}`, baseUrl);
   const sections = [finding.description];
   if (detail.verification) sections.push(`## Evidence\n\n${detail.verification}`);
   const metadata = [
