@@ -4,6 +4,7 @@ import {
   DashboardSummaryResponseSchema,
   FindingDetailResponseSchema,
   FindingListResponseSchema,
+  FindingShortIdSchema,
   HistoryDimensionsResponseSchema,
   OutcomeSummaryResponseSchema,
   RepositoryListResponseSchema,
@@ -99,7 +100,7 @@ export function registerHistoryRoutes(app: Hono<{ Variables: ServiceVariables }>
   app.get('/api/v1/findings/:id', requireRole('read'), async (context) => {
     const id = z.union([
       z.string().uuid(),
-      z.string().regex(/^[A-Z0-9]{3}-[A-Z0-9]{3}$/),
+      FindingShortIdSchema,
     ]).safeParse(context.req.param('id'));
     if (!id.success) return context.json({ error: { code: 'not_found', message: 'Finding not found.' } }, 404);
     const detail = await getFindingDetail(database, context.get('serviceContext'), id.data);

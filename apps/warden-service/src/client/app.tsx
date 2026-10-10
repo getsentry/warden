@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { JSX } from 'react';
-import { Link, useLocation, useSearchParams } from 'react-router';
+import { Link, Navigate, useLocation, useSearchParams } from 'react-router';
 import { Effect } from 'effect';
+import { FindingShortIdSchema } from '@sentry/warden-service-api';
 import type { DashboardSummaryResponse, FindingListResponse } from '@sentry/warden-service-api';
 import { dashboardApi } from './api.js';
 import { useQuery } from './runtime.js';
@@ -121,6 +122,18 @@ function FindingPage({ id }: FindingPageProps): JSX.Element {
   const request = useMemo(() => dashboardApi.finding(id), [id]);
   const result = useQuery(request);
   const [params] = useSearchParams();
+  if (
+    result.status === 'success'
+    && id !== result.data.finding.displayId
+    && FindingShortIdSchema.safeParse(result.data.finding.displayId).success
+  ) {
+    return (
+      <Navigate
+        replace
+        to={`/findings/${result.data.finding.displayId}${params.size ? `?${params}` : ''}`}
+      />
+    );
+  }
   const back = new URLSearchParams(params);
   back.set('view', 'findings');
   let content: JSX.Element;

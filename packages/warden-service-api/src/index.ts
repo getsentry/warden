@@ -47,6 +47,7 @@ export {
   FindingFeedItemSchema,
   FindingListResponseSchema,
   FindingOutcomeSchema,
+  FindingShortIdSchema,
   HistoryDimensionsResponseSchema,
   IngestRunResponseSchema,
   MemoryKindSchema,

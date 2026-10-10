@@ -47,6 +47,10 @@ At current AI Gateway rates, the defaults cost $0.20 per million extraction inpu
 
 The service never runs migrations during a function cold start. Production deploy builds own schema rollout so new code is not promoted before its required migration completes.
 
+## Finding URLs
+
+Finding pages use short URLs such as `/findings/ZWW-DCC`. Each URL stays attached to the same finding. Repeated IDs get a numeric suffix, such as `ZWW-DCC-2`. Existing UUID links redirect to the short URL. Production deploys assign IDs to existing findings automatically.
+
 ## API Access
 
 Open **API access** in the dashboard to create a personal token. The plaintext token is shown once, expires after 90 days, and can only make `GET` and `HEAD` requests to read APIs. It cannot ingest runs, recall or change memory, administer the service, or manage other tokens.

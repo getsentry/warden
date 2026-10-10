@@ -166,6 +166,14 @@ export const usageLineItems = pgTable('usage_line_items', {
   index('usage_tenant_dimensions_idx').on(table.tenantId, table.lane, table.model, table.runtime, table.provider),
 ]);
 
+export const findingShortIdCounters = pgTable('finding_short_id_counters', {
+  tenantId: uuid('tenant_id').notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  baseId: text('base_id').notNull(),
+  lastValue: bigint('last_value', { mode: 'bigint' }).notNull(),
+}, (table) => [
+  primaryKey({ columns: [table.tenantId, table.baseId] }),
+]);
+
 export const findings = pgTable('findings', {
   id: uuid('id').primaryKey().defaultRandom(),
   tenantId: uuid('tenant_id').notNull().references(() => tenants.id, { onDelete: 'cascade' }),
@@ -173,6 +181,7 @@ export const findings = pgTable('findings', {
   skillExecutionId: uuid('skill_execution_id').notNull().references(() => skillExecutions.id, { onDelete: 'cascade' }),
   clientFindingId: text('client_finding_id').notNull(),
   reportedId: text('reported_id'),
+  shortId: text('short_id'),
   severity: text('severity').notNull(),
   confidence: text('confidence'),
   title: text('title').notNull(),
@@ -183,6 +192,7 @@ export const findings = pgTable('findings', {
   ...timestamps,
 }, (table) => [
   uniqueIndex('findings_run_client_unique').on(table.runId, table.clientFindingId),
+  uniqueIndex('findings_tenant_short_id_unique').on(table.tenantId, table.shortId),
   // Dashboard feed joins findings to recent runs, then filters by severity/skill.
   index('findings_tenant_run_idx').on(table.tenantId, table.runId),
   index('findings_tenant_severity_idx').on(table.tenantId, table.severity),

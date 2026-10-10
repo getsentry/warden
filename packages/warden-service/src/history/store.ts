@@ -238,7 +238,7 @@ function encodeCursor(completedAt: Date | string, id: string): string {
 interface FindingFeedRow extends Record<string, unknown> {
   id: string;
   client_finding_id: string;
-  reported_id: string | null;
+  display_id: string | null;
   run_id: string;
   client_run_id: string;
   provider: FindingFeedItem['repository']['provider'];
@@ -270,7 +270,7 @@ interface FindingDetailRow extends FindingFeedRow {
 function mapFinding(row: FindingFeedRow): FindingFeedItem {
   return {
     id: row.id,
-    displayId: row.reported_id ?? row.client_finding_id,
+    displayId: row.display_id ?? row.client_finding_id,
     runId: row.run_id,
     clientRunId: row.client_run_id,
     repository: {
@@ -384,7 +384,7 @@ export async function listFindings(
   const result = await read.select({
     id: findings.id,
     client_finding_id: findings.clientFindingId,
-    reported_id: findings.reportedId,
+    display_id: sql<string>`coalesce(${findings.shortId}, ${findings.reportedId})`,
     run_id: findings.runId,
     client_run_id: runs.clientRunId,
     provider: repositories.provider,
@@ -425,7 +425,7 @@ export async function listFindings(
   };
 }
 
-/** Resolve a UUID or a short ID that belongs to one authorized repository. */
+/** Resolve a finding's permanent short ID or historical UUID within the caller's access. */
 export async function getFindingDetail(
   database: WardenDatabase,
   contextInput: ServiceContext | undefined,
@@ -437,25 +437,14 @@ export async function getFindingDetail(
   const isUuid = z.string().uuid().safeParse(findingId).success;
   const locator = isUuid
     ? eq(findings.id, findingId)
-    : eq(sql<string>`coalesce(${findings.reportedId}, ${findings.clientFindingId})`, findingId);
+    : eq(findings.shortId, findingId);
   const conditions: SQL[] = [eq(findings.tenantId, context.tenantId), locator];
   const authorizedRepositories = repositoryScope(context);
   if (authorizedRepositories) conditions.push(authorizedRepositories);
-  if (!isUuid) {
-    const [repository, collision] = await read.selectDistinct({ repositoryId: runs.repositoryId })
-      .from(findings)
-      .innerJoin(runs, and(eq(runs.id, findings.runId), eq(runs.tenantId, findings.tenantId)))
-      .innerJoin(repositories, and(eq(repositories.id, runs.repositoryId), eq(repositories.tenantId, runs.tenantId)))
-      .where(and(...conditions))
-      .limit(2);
-    if (!repository || collision) return null;
-    // Keep this lookup in the same repository if another collision arrives between queries.
-    conditions.push(eq(runs.repositoryId, repository.repositoryId));
-  }
   const result = await read.select({
     id: findings.id,
     client_finding_id: findings.clientFindingId,
-    reported_id: findings.reportedId,
+    display_id: sql<string>`coalesce(${findings.shortId}, ${findings.reportedId})`,
     run_id: findings.runId,
     client_run_id: runs.clientRunId,
     head_sha: runs.headSha,
