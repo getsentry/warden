@@ -272,6 +272,17 @@ it('cancels a pending search when switching views', async () => {
   expect(location.search).not.toContain('no-match');
 });
 
+it('keeps the selected status when a pending search finishes', async () => {
+  workspace();
+  await settled();
+  fireEvent.change(screen.getByLabelText('Search findings'), { target: { value: 'ownership' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Posted' }));
+  await waitFor(() => expect(location.search).toContain('query=ownership'));
+  expect(location.search).toContain('findingOutcome=posted');
+  const posted = await screen.findByRole('button', { name: 'Posted' });
+  expect(posted.getAttribute('aria-pressed')).toBe('true');
+});
+
 it('keeps the latest inspection and aborts a closed inspector request', async () => {
   let calls = 0;
   const signals: (AbortSignal | null)[] = [];

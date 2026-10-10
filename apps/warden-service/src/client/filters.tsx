@@ -74,8 +74,13 @@ export function commonApiParams(params: URLSearchParams): URLSearchParams {
 /** Update one filter without discarding filters belonging to the other dashboard tab. */
 export function useFilterNavigation(): (values: Record<string, string>) => void {
   const [params, setParams] = useSearchParams();
+  const latest = useRef(params);
+  useEffect(() => {
+    latest.current = params;
+  }, [params]);
   return (values: Record<string, string>) => {
-    const next = new URLSearchParams(params);
+    // A debounced search may finish after another filter changes.
+    const next = new URLSearchParams(latest.current);
     next.delete('cursor');
     for (const [name, value] of Object.entries(values)) {
       const normalized = value.trim();
