@@ -51,16 +51,6 @@ function TokenAccess(): JSX.Element {
   const [created, setCreated] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const refresh = () => setRevision((value) => value + 1);
-  if (tokens.status === 'loading') return <div className="empty">Loading tokens</div>;
-  if (tokens.status === 'error')
-    return (
-      <div className="error">
-        Could not load API tokens. Try again.
-        <button className="quiet-button" type="button" onClick={refresh}>
-          Try again
-        </button>
-      </div>
-    );
   return (
     <>
       <form
@@ -122,7 +112,16 @@ function TokenAccess(): JSX.Element {
         </section>
       )}
       <div className="token-list">
-        {tokens.data.tokens.length ? (
+        {tokens.status === 'loading' ? (
+          <div className="empty">Loading tokens</div>
+        ) : tokens.status === 'error' ? (
+          <div className="error" role="alert">
+            Could not load API tokens. Try again.
+            <button className="quiet-button" type="button" onClick={refresh}>
+              Try again
+            </button>
+          </div>
+        ) : tokens.data.tokens.length ? (
           tokens.data.tokens.map((token) => (
             <TokenRow key={token.id} token={token} refresh={refresh} />
           ))
@@ -169,7 +168,8 @@ function TokenDialog({ close }: TokenDialogProps): JSX.Element {
 
 /** Load account controls without delaying the page; discard token secrets when the dialog closes. */
 export function Account(): JSX.Element {
-  const account = useQuery(dashboardApi.account);
+  const [revision, setRevision] = useState(0);
+  const account = useQuery(dashboardApi.account, revision);
   const signOut = useAction();
   const [open, setOpen] = useState(false);
   const [dialog, setDialog] = useState(false);
@@ -197,6 +197,16 @@ export function Account(): JSX.Element {
   const canSignOut = account.status === 'success' && !account.data.authDisabled;
   return (
     <>
+      {account.status === 'error' && (
+        <button
+          className="quiet-button"
+          type="button"
+          title="Could not load account controls"
+          onClick={() => setRevision((value) => value + 1)}
+        >
+          Retry account
+        </button>
+      )}
       <div ref={menu} id="account-menu" className="account-menu" hidden={!canManage && !canSignOut}>
         <button
           ref={trigger}

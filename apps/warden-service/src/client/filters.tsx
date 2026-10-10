@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import type { JSX } from 'react';
-import { useSearchParams } from 'react-router';
+import { useLocation, useNavigationType, useSearchParams } from 'react-router';
 import type { HistoryDimensionsResponse } from '@sentry/warden-service-api';
 import type { RemoteData } from './runtime.js';
 
@@ -8,6 +8,7 @@ interface Choice {
   value: string;
   label: string;
 }
+const externalSearchSource = 'warden-search';
 const ranges: Choice[] = [
   { value: 'all', label: 'All time' },
   { value: '7', label: 'Last 7 days' },
@@ -72,7 +73,9 @@ export function commonApiParams(params: URLSearchParams): URLSearchParams {
 }
 
 /** Update one filter without discarding filters belonging to the other dashboard tab. */
-export function useFilterNavigation(): (values: Record<string, string>) => void {
+export function useFilterNavigation(
+  searchSource = externalSearchSource,
+): (values: Record<string, string>) => void {
   const [params, setParams] = useSearchParams();
   const latest = useRef(params);
   useEffect(() => {
@@ -87,7 +90,7 @@ export function useFilterNavigation(): (values: Record<string, string>) => void 
       if (normalized) next.set(name, normalized);
       else next.delete(name);
     }
-    setParams(next, { replace: true });
+    setParams(next, { replace: true, state: 'query' in values ? searchSource : undefined });
   };
 }
 
@@ -99,7 +102,10 @@ interface FiltersProps {
 /** Keep filters usable while their choices load. */
 export function Filters({ usage, dimensions }: FiltersProps): JSX.Element {
   const [params] = useSearchParams();
-  const update = useFilterNavigation();
+  const location = useLocation();
+  const navigationType = useNavigationType();
+  const searchSource = useId();
+  const update = useFilterNavigation(searchSource);
   const [query, setQuery] = useState(params.get('query') ?? '');
   const [expanded, setExpanded] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -107,9 +113,16 @@ export function Filters({ usage, dimensions }: FiltersProps): JSX.Element {
   const summary = useRef<HTMLElement>(null);
   useEffect(() => () => clearTimeout(timer.current), []);
   const urlQuery = params.get('query') ?? '';
+  const previousQuery = useRef(urlQuery);
   useEffect(() => {
+    const changed = previousQuery.current !== urlQuery;
+    previousQuery.current = urlQuery;
+    // Our delayed URL update must not replace text typed since it was submitted.
+    if (navigationType === 'REPLACE' && location.state === searchSource) return;
+    if (!changed && navigationType !== 'POP' && location.state !== externalSearchSource) return;
+    clearTimeout(timer.current);
     setQuery(urlQuery);
-  }, [urlQuery]);
+  }, [urlQuery, location.key, location.state, navigationType, searchSource]);
   useEffect(() => {
     if (!expanded) return;
     const close = (event: MouseEvent) => {

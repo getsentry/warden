@@ -17,6 +17,7 @@ overrides:
   smol-toml@<1.6.1: 1.8.0
   undici@5.28.4: 6.28.0
   undici@5.29.0: 6.28.0
+  react: 19.2.6
   react-dom: 19.2.6
 
 importers:
@@ -96,7 +97,7 @@ importers:
         specifier: ^4.13.5
         version: 4.13.7
       react:
-        specifier: ^19.2.6
+        specifier: 19.2.6
         version: 19.2.6
       react-dom:
         specifier: 19.2.6
@@ -255,7 +256,7 @@ importers:
         specifier: ^5.1.16
         version: 5.1.16
       react:
-        specifier: ^19.2.6
+        specifier: 19.2.6
         version: 19.2.6
       smol-toml:
         specifier: ^1.7.0
@@ -2831,7 +2832,7 @@ packages:
       '@testing-library/dom': ^10.0.0
       '@types/react': ^18.0.0 || ^19.0.0
       '@types/react-dom': ^18.0.0 || ^19.0.0
-      react: ^18.0.0 || ^19.0.0
+      react: 19.2.6
       react-dom: 19.2.6
     peerDependenciesMeta:
       '@types/react':
@@ -3379,7 +3380,7 @@ packages:
       next: ^14.0.0 || ^15.0.0 || ^16.0.0
       pg: ^8.0.0
       prisma: ^5.0.0 || ^6.0.0 || ^7.0.0
-      react: ^18.0.0 || ^19.0.0
+      react: 19.2.6
       react-dom: 19.2.6
       solid-js: ^1.0.0
       svelte: ^4.0.0 || ^5.0.0
@@ -4420,7 +4421,7 @@ packages:
     engines: {node: '>=22'}
     peerDependencies:
       '@types/react': '>=19.2.0'
-      react: '>=19.2.0'
+      react: 19.2.6
       react-devtools-core: '>=6.1.2'
     peerDependenciesMeta:
       '@types/react':
@@ -5415,7 +5416,7 @@ packages:
   react-dom@19.2.6:
     resolution: {integrity: sha512-0prMI+hvBbPjsWnxDLxlCGyM8PN6UuWjEUCYmZhO67xIV9Xasa/r/vDnq+Xyq4Lo27g8QSbO5YzARu0D1Sps3g==}
     peerDependencies:
-      react: ^19.2.6
+      react: 19.2.6
 
   react-is@17.0.2:
     resolution: {integrity: sha512-w2GsyukL62IJnlaff/nRegPQR94C/XXamvMWmSHRJ4y7Ts/4ocGRmTHvOs8PSE6pB3dWOrD/nueuU5sduBsQ4w==}
@@ -5424,13 +5425,13 @@ packages:
     resolution: {integrity: sha512-KetWRytFv1epdpJc3J4G75I4WrplZE5jOL7Yq0p34+OVOKF4Se7WrdIdVC45XsSSmUTlht2FM/fM1FZb1mfQeA==}
     engines: {node: '>=0.10.0'}
     peerDependencies:
-      react: ^19.2.0
+      react: 19.2.6
 
   react-router@7.18.4:
     resolution: {integrity: sha512-PUPQcMhMGRAslLcvtlPz/kmzBEWPhLdgLFrL7pLNepBL6dX0lWj4WD2cUYVgYCuT3jxvghYFg81cDTj44DhetQ==}
     engines: {node: '>=20.0.0'}
     peerDependencies:
-      react: '>=18'
+      react: 19.2.6
       react-dom: 19.2.6
     peerDependenciesMeta:
       react-dom:

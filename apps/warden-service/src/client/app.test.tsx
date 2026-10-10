@@ -283,6 +283,43 @@ it('keeps the selected status when a pending search finishes', async () => {
   expect(posted.getAttribute('aria-pressed')).toBe('true');
 });
 
+it('keeps newer search input when an earlier URL update finishes', async () => {
+  workspace();
+  await settled();
+  const input = screen.getByLabelText<HTMLInputElement>('Search findings');
+  vi.useFakeTimers();
+  try {
+    await act(async () => {
+      fireEvent.change(input, { target: { value: 'owner' } });
+      vi.advanceTimersByTime(250);
+      fireEvent.change(input, { target: { value: 'ownership' } });
+    });
+    expect(new URLSearchParams(location.search).get('query')).toBe('owner');
+    expect(input.value).toBe('ownership');
+    await act(async () => vi.advanceTimersByTime(250));
+    expect(new URLSearchParams(location.search).get('query')).toBe('ownership');
+    expect(input.value).toBe('ownership');
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+it('restores search from browser history and cancels unsent input', async () => {
+  workspace('/?view=findings&range=30&query=ownership');
+  await settled();
+  const input = screen.getByLabelText<HTMLInputElement>('Search findings');
+  fireEvent.change(input, { target: { value: 'unsent' } });
+  await act(async () => {
+    window.history.pushState({}, '', '/?view=findings&range=30&query=previous');
+    window.dispatchEvent(new PopStateEvent('popstate'));
+  });
+  expect(input.value).toBe('previous');
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 300));
+  });
+  expect(new URLSearchParams(location.search).get('query')).toBe('previous');
+});
+
 it('keeps the latest inspection and aborts a closed inspector request', async () => {
   let calls = 0;
   const signals: (AbortSignal | null)[] = [];
@@ -488,6 +525,56 @@ it('shows token mutation failures and keeps the token available for retry', asyn
   fireEvent.click(await screen.findByRole('button', { name: 'Revoke' }));
   expect((await screen.findByRole('alert')).textContent).toBe('Try later.');
   expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Revoke' }).disabled).toBe(false);
+});
+
+it('keeps a newly created token available to copy when the list refresh fails', async () => {
+  let created = false;
+  const writeText = vi.fn().mockResolvedValue(undefined);
+  Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
+  workspace(
+    '/?view=findings&range=30',
+    mockApi((url, options) => {
+      if (url.pathname !== '/api/v1/personal-tokens') return undefined;
+      if (options?.method === 'POST') {
+        created = true;
+        return json({ ...token, token: 'wds_pat_secret12345678' }, 201);
+      }
+      return created
+        ? json({ error: { code: 'unavailable', message: 'Try later.' } }, 503)
+        : json({ tokens: [] });
+    }),
+  );
+  await settled();
+  fireEvent.click(await screen.findByRole('button', { name: 'Open account menu' }));
+  fireEvent.click(screen.getByRole('button', { name: 'API access' }));
+  await screen.findByText('No active API tokens.');
+  fireEvent.change(screen.getByLabelText('Token name'), { target: { value: 'Local agent' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Create token' }));
+  await screen.findByText('Could not load API tokens. Try again.');
+  expect(screen.getByText('wds_pat_secret12345678')).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Copy token' }));
+  await screen.findByRole('button', { name: 'Copied' });
+  expect(writeText).toHaveBeenCalledWith('wds_pat_secret12345678');
+});
+
+it('recovers account controls after a failed request', async () => {
+  let calls = 0;
+  workspace(
+    '/?view=findings&range=30',
+    mockApi((url) => {
+      if (url.pathname !== '/api/v1/auth/context') return undefined;
+      calls += 1;
+      return calls === 1
+        ? json({ error: { code: 'unavailable', message: 'Try later.' } }, 503)
+        : json({ canManagePersonalTokens: true, authDisabled: false });
+    }),
+  );
+  await settled();
+  fireEvent.click(await screen.findByRole('button', { name: 'Retry account' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Open account menu' }));
+  expect(screen.getByRole('button', { name: 'API access' })).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Sign out' })).toBeTruthy();
+  expect(calls).toBe(2);
 });
 
 it('redirects an expired session to login with the current finding URL', async () => {
