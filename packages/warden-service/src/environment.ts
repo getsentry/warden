@@ -18,10 +18,19 @@ export const ServiceEnvironmentSchema = ServiceDatabaseEnvironmentSchema.extend(
   WARDEN_SERVICE_GOOGLE_DOMAIN: z.string().trim().toLowerCase().min(1).default('sentry.io'),
   GOOGLE_CLIENT_ID: z.string().trim().min(1).optional(),
   GOOGLE_CLIENT_SECRET: z.string().trim().min(1).optional(),
+  LINEAR_API_KEY: z.string().trim().min(1).optional(),
+  LINEAR_TEAM_ID: z.uuid().optional(),
   WARDEN_SERVICE_MEMORY_MODEL: z.string().trim().min(1).default('openai/gpt-5.6-luna'),
   WARDEN_SERVICE_EMBEDDING_MODEL: z.string().trim().min(1).default('openai/text-embedding-3-small'),
   WARDEN_SERVICE_MEMORY_AUTO_PROMOTE: z.enum(['true', 'false']).default('true').transform((value) => value === 'true'),
 }).strict().superRefine((value, context) => {
+  if (value.LINEAR_API_KEY || value.LINEAR_TEAM_ID) {
+    for (const name of ['LINEAR_API_KEY', 'LINEAR_TEAM_ID', 'WARDEN_SERVICE_BASE_URL'] as const) {
+      if (!value[name]) {
+        context.addIssue({ code: 'custom', path: [name], message: `${name} is required when Linear is enabled` });
+      }
+    }
+  }
   if (!value.DISABLE_AUTH) {
     for (const name of ['WARDEN_SERVICE_BASE_URL', 'GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET'] as const) {
       if (!value[name]) {
@@ -70,6 +79,8 @@ export function parseServiceEnvironment(environment: NodeJS.ProcessEnv): Service
     WARDEN_SERVICE_GOOGLE_DOMAIN: environment['WARDEN_SERVICE_GOOGLE_DOMAIN'],
     GOOGLE_CLIENT_ID: environment['GOOGLE_CLIENT_ID'],
     GOOGLE_CLIENT_SECRET: environment['GOOGLE_CLIENT_SECRET'],
+    LINEAR_API_KEY: environment['LINEAR_API_KEY'],
+    LINEAR_TEAM_ID: environment['LINEAR_TEAM_ID'],
     WARDEN_SERVICE_MEMORY_MODEL: environment['WARDEN_SERVICE_MEMORY_MODEL'],
     WARDEN_SERVICE_EMBEDDING_MODEL: environment['WARDEN_SERVICE_EMBEDDING_MODEL'],
     WARDEN_SERVICE_MEMORY_AUTO_PROMOTE: environment['WARDEN_SERVICE_MEMORY_AUTO_PROMOTE'],

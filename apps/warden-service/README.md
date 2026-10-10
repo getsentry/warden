@@ -69,4 +69,17 @@ curl --fail --silent \
 
 Warden follows Junior's stateless Better Auth setup. Browser sessions are encrypted cookies with an eight-hour lifetime, and only verified accounts in `WARDEN_SERVICE_GOOGLE_DOMAIN` receive read access. The normalized Google email owns personal tokens.
 
-For local or private deployments, `DISABLE_AUTH=true` bypasses browser authentication and maps anonymous requests to the configured tenant with read-only authority. It defaults to `false`. Bearer tokens are still authenticated normally, and the bypass never grants `admin` or `ingest`.
+For local or private deployments, `DISABLE_AUTH=true` bypasses browser authentication and maps anonymous requests to the configured tenant with read authority. It defaults to `false`. Bearer tokens are still authenticated normally, and the bypass never grants `admin` or `ingest`.
+
+## Linear issues
+
+Set these environment variables in the Warden Vercel project's **Settings > Environment Variables**, then redeploy:
+
+- `LINEAR_API_KEY`: an API key that can read and create issues in the target team. Use an integration account and restrict the key to that team.
+- `LINEAR_TEAM_ID`: the team's UUID. Linear's **Copy model UUID** command can copy it from a team page.
+
+Warden uses its stable production URL for ticket links. Set `WARDEN_SERVICE_BASE_URL` if you use a custom domain or a private deployment.
+
+Use **Create Linear issue** in the finding inspector or full page. The ticket includes the finding description, evidence, and source links. The button becomes a link to the ticket. Repeated clicks and retries reuse it, including archived tickets.
+
+The key stays on the server. Only browser users in the configured tenant can create tickets for findings they can read; bearer tokens cannot use the action. This also applies to private deployments using `DISABLE_AUTH=true`. Leave both Linear variables unset to hide the action.
