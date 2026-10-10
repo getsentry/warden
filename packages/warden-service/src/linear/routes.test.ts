@@ -16,7 +16,7 @@ const authority: ServiceContext = {
 };
 // Sanitized finding row from the history integration scenarios, in selected-column order.
 const finding = {
-  id: findingId, client_finding_id: 'finding-20', reported_id: '7MV-5V7',
+  id: findingId, client_finding_id: 'finding-20', display_id: '7MV-5V7-2',
   run_id: '00000000-0000-4000-8000-000000000021', client_run_id: 'run-21',
   head_sha: 'abc123def456', source_evidence: null,
   verification: 'The route reads an account before checking the caller.',
@@ -87,7 +87,7 @@ describe('finding Linear routes', () => {
     const { description } = z.object({ description: z.string() }).parse(inputs[0]);
     expect(description).toContain(finding.description);
     expect(description).toContain(`## Evidence\n\n${finding.verification}`);
-    expect(description).toContain(`${origin}/findings/${findingId}`);
+    expect(description).toContain(`${origin}/findings/${finding.display_id}`);
     expect(description).toContain('- Location: src/api route.ts:42-48');
     expect(description).toContain('https://github.com/acme/widgets/blob/abc123def456/src/api%20route.ts#L42-L48');
   });
