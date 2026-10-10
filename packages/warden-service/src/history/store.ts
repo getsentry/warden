@@ -425,7 +425,7 @@ export async function listFindings(
   };
 }
 
-/** Return one authorized finding without revealing cross-tenant or restricted repository IDs. */
+/** Resolve a UUID or the newest authorized occurrence of a displayed short finding ID. */
 export async function getFindingDetail(
   database: WardenDatabase,
   contextInput: ServiceContext | undefined,
@@ -434,7 +434,10 @@ export async function getFindingDetail(
   const context = requireServiceContext(contextInput);
   const read = getReadDatabase(database);
   const { location, observation, firstObservation } = findingContextQueries(read);
-  const conditions: SQL[] = [eq(findings.tenantId, context.tenantId), eq(findings.id, findingId)];
+  const locator = z.string().uuid().safeParse(findingId).success
+    ? eq(findings.id, findingId)
+    : eq(sql<string>`coalesce(${findings.reportedId}, ${findings.clientFindingId})`, findingId);
+  const conditions: SQL[] = [eq(findings.tenantId, context.tenantId), locator];
   const authorizedRepositories = repositoryScope(context);
   if (authorizedRepositories) conditions.push(authorizedRepositories);
   const result = await read.select({
@@ -472,7 +475,9 @@ export async function getFindingDetail(
     .leftJoinLateral(location, sql`true`)
     .leftJoinLateral(observation, sql`true`)
     .leftJoinLateral(firstObservation, sql`true`)
-    .where(and(...conditions));
+    .where(and(...conditions))
+    .orderBy(desc(runs.completedAt), desc(findings.id))
+    .limit(1);
   const finding = result[0] as unknown as FindingDetailRow | undefined;
   if (!finding) return null;
   const sourceEvidence = SourceEvidenceSchema.safeParse(finding.source_evidence);

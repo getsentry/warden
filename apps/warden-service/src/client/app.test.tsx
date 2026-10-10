@@ -109,6 +109,7 @@ function mockApi(
           nextCursor: 'page-2',
         });
       case '/api/v1/findings/finding-1':
+      case '/api/v1/findings/7MV-5V7':
         return json(detail);
       case '/api/v1/personal-tokens':
         return json({ tokens: [token] });
@@ -157,7 +158,7 @@ it('inspects evidence beside the feed, restores focus, and retains filters on th
   await screen.findByText(detail.verification ?? '');
   fireEvent.click(screen.getByRole('link', { name: 'Open full page' }));
   await settled();
-  expect(location.pathname).toBe('/findings/finding-1');
+  expect(location.pathname).toBe('/findings/7MV-5V7');
   expect(screen.getByRole('heading', { level: 1 }).textContent).toBe(finding.title);
   fireEvent.click(screen.getByRole('link', { name: 'Back to findings' }));
   await settled();
@@ -385,40 +386,43 @@ it('shows an error when the service returns an invalid finding', async () => {
   expect(screen.queryByRole('list', { name: 'Findings' })).toBeNull();
 });
 
-it('renders direct finding pages and escaped multiline content with highlighted source', async () => {
-  workspace(
-    '/findings/finding-1?range=7',
-    mockApi((url) =>
-      url.pathname.endsWith('/findings/finding-1')
-        ? json({
-            ...detail,
-            verification: '<script>alert(1)</script>\nTrace line two',
-            sourceUrl: 'https://github.com/acme/widgets/blob/1234567/src/api.ts#L42',
-            headSha: '1234567890abcdef',
-            sourceEvidence: {
-              path: 'src/api.ts',
-              language: 'typescript',
-              startLine: 41,
-              endLine: 43,
-              targetStartLine: 42,
-              targetEndLine: 42,
-              content: 'before\n<script>unsafe</script>\nafter',
-            },
-          })
-        : undefined,
-    ),
-  );
-  await settled();
-  expect(screen.getByRole('heading', { level: 1 }).textContent).toBe(finding.title);
-  expect(control('.finding-verification p').textContent).toBe(
-    '<script>alert(1)</script>\nTrace line two',
-  );
-  expect(control('.source-line-target').textContent).toContain('<script>unsafe</script>');
-  expect(document.querySelector('script')).toBeNull();
-  expect(screen.getByRole('link', { name: 'Open on GitHub' }).getAttribute('href')).toContain(
-    '#L42',
-  );
-});
+it.each(['finding-1', '7MV-5V7'])(
+  'opens a direct finding URL with %s and safely displays its source',
+  async (id) => {
+    workspace(
+      `/findings/${id}?range=7`,
+      mockApi((url) =>
+        url.pathname.endsWith(`/findings/${id}`)
+          ? json({
+              ...detail,
+              verification: '<script>alert(1)</script>\nTrace line two',
+              sourceUrl: 'https://github.com/acme/widgets/blob/1234567/src/api.ts#L42',
+              headSha: '1234567890abcdef',
+              sourceEvidence: {
+                path: 'src/api.ts',
+                language: 'typescript',
+                startLine: 41,
+                endLine: 43,
+                targetStartLine: 42,
+                targetEndLine: 42,
+                content: 'before\n<script>unsafe</script>\nafter',
+              },
+            })
+          : undefined,
+      ),
+    );
+    await settled();
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe(finding.title);
+    expect(control('.finding-verification p').textContent).toBe(
+      '<script>alert(1)</script>\nTrace line two',
+    );
+    expect(control('.source-line-target').textContent).toContain('<script>unsafe</script>');
+    expect(document.querySelector('script')).toBeNull();
+    expect(screen.getByRole('link', { name: 'Open on GitHub' }).getAttribute('href')).toContain(
+      '#L42',
+    );
+  },
+);
 
 it('restores the saved theme without resetting an inspected finding', async () => {
   localStorage.setItem('warden.theme', 'dark');
@@ -622,4 +626,20 @@ it('signs out and hides account controls when authentication is disabled', async
   );
   await settled();
   expect(screen.queryByRole('button', { name: 'Open account menu' })).toBeNull();
+});
+
+it('keeps UUID links for older findings without a short ID', async () => {
+  workspace(
+    '/?view=findings&range=30',
+    mockApi((url) =>
+      url.pathname === '/api/v1/findings'
+        ? json({ items: [{ ...finding, displayId: 'legacy-id' }] })
+        : undefined,
+    ),
+  );
+  fireEvent.click(await screen.findByRole('button', { name: new RegExp(finding.title) }));
+  const link = await screen.findByRole<HTMLAnchorElement>('link', { name: 'Open full page' });
+  expect(link.pathname).toBe('/findings/finding-1');
+  fireEvent.click(link);
+  await screen.findByRole('heading', { level: 1, name: finding.title });
 });

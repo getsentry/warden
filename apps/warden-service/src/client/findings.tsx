@@ -135,6 +135,9 @@ function Inspector({ selected, close }: InspectorProps): JSX.Element {
   const detail = useQuery(request, attempt);
   const title = useRef<HTMLHeadingElement>(null);
   const location = useLocation();
+  const locator = /^[A-Z0-9]{3}-[A-Z0-9]{3}$/.test(finding.displayId)
+    ? finding.displayId
+    : finding.id;
   useEffect(() => {
     const narrow = window.matchMedia('(max-width: 720px)').matches;
     if (!narrow) trigger.scrollIntoView({ block: 'nearest' });
@@ -176,7 +179,7 @@ function Inspector({ selected, close }: InspectorProps): JSX.Element {
           <span className="inspector-id">{finding.displayId}</span>
           <Link
             className="text-link"
-            to={`/findings/${encodeURIComponent(finding.id)}${location.search}`}
+            to={`/findings/${encodeURIComponent(locator)}${location.search}`}
           >
             Open full page
           </Link>
