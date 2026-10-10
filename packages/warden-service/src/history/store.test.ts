@@ -130,7 +130,7 @@ describe('history store', () => {
       return { rows: [{
         id: '00000000-0000-0000-0000-000000000020',
         client_finding_id: '7MV-5V7',
-        reported_id: null,
+        display_id: null,
         run_id: '00000000-0000-0000-0000-000000000021',
         client_run_id: 'run-21',
         provider: 'github',
@@ -228,7 +228,7 @@ describe('history store', () => {
           rows: [{
             id: rowValues[0],
             client_finding_id: rowValues[1],
-            reported_id: rowValues[2],
+            display_id: rowValues[2],
             run_id: rowValues[3],
             client_run_id: rowValues[4],
             provider: rowValues[5],
@@ -273,7 +273,7 @@ describe('history store', () => {
         rows: [{
           id: '00000000-0000-0000-0000-000000000020',
           client_finding_id: 'finding-20',
-          reported_id: '7MV-5V7',
+          display_id: '7MV-5V7',
           run_id: '00000000-0000-0000-0000-000000000021',
           client_run_id: 'run-21',
           head_sha: 'abc123def456',

@@ -59,6 +59,8 @@ export const FindingOutcomeSchema = z.enum([
   'revised',
 ]);
 
+export const FindingShortIdSchema = z.string().regex(/^[A-Z0-9]{3}-[A-Z0-9]{3}(?:-[1-9][0-9]*)?$/);
+
 export const FindingFeedItemSchema = z.object({
   id: IdSchema,
   displayId: IdSchema,

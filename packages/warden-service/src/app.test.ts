@@ -4,7 +4,7 @@ import type { DatabaseClient, WardenDatabase } from './db/database.js';
 import type { GoogleAuthBridge, GoogleAuthSession } from './google-auth.js';
 
 function readyDatabase(
-  versions: string[] = ['0007_finding_short_urls'],
+  versions: string[] = ['0008_stable_finding_short_urls'],
 ): WardenDatabase {
   return {
     driver: 'postgres',
@@ -44,8 +44,8 @@ describe('createWardenService', () => {
   it('stays ready when newer backward-compatible migrations are applied', async () => {
     const app = createWardenService({
       database: readyDatabase([
-        '0008_future_migration',
-        '0007_finding_short_urls',
+        '0009_future_migration',
+        '0008_stable_finding_short_urls',
         '0006_tiny_garia',
         '0005_large_mattie_franklin',
       ]),
@@ -57,8 +57,8 @@ describe('createWardenService', () => {
     await expect(response.json()).resolves.toEqual({
       status: 'ready',
       database: 'ready',
-      currentVersion: '0008_future_migration',
-      requiredVersion: '0007_finding_short_urls',
+      currentVersion: '0009_future_migration',
+      requiredVersion: '0008_stable_finding_short_urls',
     });
   });
 
@@ -85,8 +85,8 @@ describe('createWardenService', () => {
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({
       ready: true,
-      currentVersion: '0007_finding_short_urls',
-      requiredVersion: '0007_finding_short_urls',
+      currentVersion: '0008_stable_finding_short_urls',
+      requiredVersion: '0008_stable_finding_short_urls',
     });
   });
 
@@ -323,7 +323,7 @@ describe('createWardenService', () => {
         if (sql.includes('inner join "findings"') || sql.includes('from "findings"')) {
           const finding = {
           id: '00000000-0000-4000-8000-000000000010',
-          client_finding_id: '7MV-5V7', reported_id: null,
+          client_finding_id: '7MV-5V7', display_id: null,
           run_id: '00000000-0000-4000-8000-000000000011',
           client_run_id: 'run-11',
           ...(sql.includes('"runs"."head_sha"') ? {

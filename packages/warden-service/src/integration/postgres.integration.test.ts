@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { readFile, readdir } from 'node:fs/promises';
 import { neonConfig } from '@neondatabase/serverless';
 import type { CodeRunEnvelope, FindingsRunEnvelope, MetricsRunEnvelope } from '@sentry/warden-service-api';
 import { describe, expect, it, beforeAll, afterAll } from 'vitest';
@@ -109,6 +110,28 @@ function codeEnvelope(clientRunId: string): CodeRunEnvelope {
   };
 }
 
+function shortFindingEnvelope(
+  title: string,
+  completedAt = '2026-08-12T12:00:00.000Z',
+  fullName = 'acme/widgets',
+  reported = true,
+): FindingsRunEnvelope {
+  const base = findingsEnvelope(`short-${randomUUID()}`);
+  const [owner, name] = fullName.split('/') as [string, string];
+  return {
+    ...base,
+    completedAt,
+    repository: { provider: 'github', owner, name, fullName },
+    findings: [{
+      ...base.findings[0]!,
+      id: reported ? 'HID-DEN' : '7MV-5V7',
+      ...(reported ? { reportedId: '7MV-5V7' } : {}),
+      title,
+    }],
+    observations: [],
+  };
+}
+
 function defineDriverIntegration(driver: DatabaseDriver, environmentName: string): void {
   const url = process.env[environmentName];
   describe.skipIf(!url)(`${driver} Postgres integration`, () => {
@@ -179,57 +202,66 @@ function defineDriverIntegration(driver: DatabaseDriver, environmentName: string
       expect(await authenticateServiceToken(database, active.token)).toBeNull();
     }, 30_000);
 
-    it('resolves repeated short IDs within one repository and rejects accessible collisions', async () => {
+    it('keeps short URLs tied to one finding across repeats, repositories, and tenants', async () => {
       const tenantA = await createTenant(database, { slug: `short-a-${randomUUID()}`, name: 'Short ID Tenant A' });
       const tenantB = await createTenant(database, { slug: `short-b-${randomUUID()}`, name: 'Short ID Tenant B' });
       tenantIds.push(tenantA, tenantB);
       const contextA: ServiceContext = { tenantId: tenantA, tokenId: randomUUID(), roles: ['admin'], repositoryAllowlist: null };
       const contextB = { ...contextA, tenantId: tenantB };
-      const envelope = (title: string, completedAt: string, fullName = 'acme/widgets', reported = true): FindingsRunEnvelope => {
-        const base = findingsEnvelope(`short-${randomUUID()}`);
-        const [owner, name] = fullName.split('/') as [string, string];
-        return {
-          ...base,
-          completedAt,
-          repository: { provider: 'github', owner, name, fullName },
-          findings: [{
-            ...base.findings[0]!,
-            id: reported ? 'HID-DEN' : '7MV-5V7',
-            ...(reported ? { reportedId: '7MV-5V7' } : {}),
-            title,
-          }],
-          observations: [],
-        };
-      };
-      await ingestRun(database, contextA, envelope('Original finding', '2026-08-12T11:00:00.000Z', 'acme/widgets', false));
+      const first = await ingestRun(database, contextA, shortFindingEnvelope('Original finding', '2026-08-12T11:00:00.000Z', 'acme/widgets', false));
       const original = await getFindingDetail(database, contextA, '7MV-5V7');
       expect(original?.finding.title).toBe('Original finding');
-      await ingestRun(database, contextA, envelope('Updated finding', '2026-08-12T12:00:00.000Z'));
-      expect((await getFindingDetail(database, contextA, '7MV-5V7'))?.finding.title).toBe('Updated finding');
-      await ingestRun(database, contextA, envelope('Other repository', '2026-08-12T13:00:00.000Z', 'acme/other'));
-      await ingestRun(database, contextB, envelope('Other tenant', '2026-08-12T14:00:00.000Z'));
+      const repeated = shortFindingEnvelope('Repeated finding');
+      await ingestRun(database, contextA, repeated);
+      expect((await ingestRun(database, contextA, repeated)).created).toBe(false);
+      await ingestRun(database, contextA, shortFindingEnvelope('Other repository', '2026-08-12T13:00:00.000Z', 'acme/other'));
+      await ingestRun(database, contextB, shortFindingEnvelope('Other tenant'));
 
-      const scoped = { ...contextA, repositoryAllowlist: ['acme/widgets'] };
-      expect(await getFindingDetail(database, contextA, '7MV-5V7')).toBeNull();
-      expect((await getFindingDetail(database, scoped, '7MV-5V7'))?.finding.title).toBe('Updated finding');
+      expect((await getFindingDetail(database, contextA, '7MV-5V7'))?.finding.id).toBe(original!.finding.id);
+      expect((await getFindingDetail(database, contextA, '7MV-5V7-2'))?.finding.title).toBe('Repeated finding');
+      expect((await getFindingDetail(database, contextA, '7MV-5V7-3'))?.finding.title).toBe('Other repository');
       expect((await getFindingDetail(database, contextB, '7MV-5V7'))?.finding.title).toBe('Other tenant');
-      expect((await getFindingDetail(database, scoped, original!.finding.id))?.finding.title).toBe('Original finding');
+      expect(await getFindingDetail(database, contextB, original!.finding.id)).toBeNull();
+      const scoped = { ...contextA, repositoryAllowlist: ['acme/widgets'] };
+      expect(await getFindingDetail(database, scoped, '7MV-5V7-3')).toBeNull();
       expect(await getFindingDetail(database, scoped, 'HID-DEN')).toBeNull();
       expect(await getFindingDetail(database, { ...contextA, repositoryAllowlist: ['acme/unavailable'] }, '7MV-5V7')).toBeNull();
 
-      const app = createWardenService({ database, disableAuth: { tenantId: tenantA } });
-      const response = await app.request('/api/v1/findings/7MV-5V7');
-      expect(response.status).toBe(404);
+      await Promise.all(Array.from({ length: 3 }, (_, i) =>
+        ingestRun(database, contextA, shortFindingEnvelope(`Concurrent finding ${i}`)),
+      ));
+      const page = await listFindings(database, contextA, {});
+      expect(new Set(page.items.map((item) => item.displayId)).size).toBe(6);
+      for (const item of page.items) {
+        expect((await getFindingDetail(database, contextA, item.displayId))?.finding.id).toBe(item.id);
+      }
+
+      const app = createWardenService({
+        database,
+        disableAuth: { tenantId: tenantA },
+        dashboard: { html: '<!doctype html><title>Warden</title>', script: '', stylesheet: '' },
+      });
+      const uuidResponse = await app.request(`/api/v1/findings/${original!.finding.id}`);
+      await expect(uuidResponse.json()).resolves.toMatchObject({ finding: { id: original!.finding.id, displayId: '7MV-5V7' } });
+      const redirect = await app.request(`/findings/${original!.finding.id}?range=7&severity=high`);
+      expect(redirect.status).toBe(302);
+      expect(redirect.headers.get('location')).toBe('/findings/7MV-5V7?range=7&severity=high');
+      expect((await app.request(redirect.headers.get('location')!)).headers.get('content-type')).toContain('text/html');
       const scopedToken = await createServiceToken(database, {
         tenantId: tenantA, name: 'Scoped reader', roles: ['read'], repositoryAllowlist: ['acme/widgets'],
       });
-      const scopedResponse = await createWardenService({ database }).request('/api/v1/findings/7MV-5V7', {
-        headers: { authorization: `Bearer ${scopedToken.token}` },
-      });
-      expect(scopedResponse.status).toBe(200);
-      await expect(scopedResponse.json()).resolves.toMatchObject({ finding: { title: 'Updated finding', displayId: '7MV-5V7' } });
+      const restrictedApp = createWardenService({ database });
+      const headers = { authorization: `Bearer ${scopedToken.token}` };
+      await expect((await restrictedApp.request('/api/v1/findings/7MV-5V7-2', { headers })).json())
+        .resolves.toMatchObject({ finding: { title: 'Repeated finding', displayId: '7MV-5V7-2' } });
+      expect((await restrictedApp.request('/api/v1/findings/7MV-5V7-3', { headers })).status).toBe(404);
       expect((await app.request('/api/v1/findings/ZZZ-ZZZ')).status).toBe(404);
-    });
+
+      await database.query('DELETE FROM runs WHERE tenant_id = $1 AND id = $2', [tenantA, first.runId]);
+      await ingestRun(database, contextA, shortFindingEnvelope('After retention'));
+      expect(await getFindingDetail(database, contextA, '7MV-5V7')).toBeNull();
+      expect((await getFindingDetail(database, contextA, '7MV-5V7-7'))?.finding.title).toBe('After retention');
+    }, 30_000);
 
     it('persists every profile, multi-skill lanes and early failures, and rolls back invalid references', async () => {
       const tenantId = await createTenant(database, { slug: `ingest-${randomUUID()}`, name: 'Ingestion Tenant' });
@@ -407,6 +439,49 @@ function defineDriverIntegration(driver: DatabaseDriver, environmentName: string
 
 defineDriverIntegration('postgres', 'WARDEN_TEST_POSTGRES_URL');
 defineDriverIntegration('neon', 'WARDEN_TEST_NEON_URL');
+
+describe.skipIf(!process.env['WARDEN_TEST_POSTGRES_URL'])('Finding URL migration', () => {
+  it('backfills existing findings and accepts writes from the previous deployment', async () => {
+    const server = createDatabase({ url: process.env['WARDEN_TEST_POSTGRES_URL']!, driver: 'postgres' });
+    const name = `warden_short_urls_${randomUUID().replaceAll('-', '')}`;
+    const url = new URL(process.env['WARDEN_TEST_POSTGRES_URL']!);
+    url.pathname = `/${name}`;
+    let legacy: WardenDatabase | undefined;
+    try {
+      await server.query(`CREATE DATABASE "${name}"`);
+      legacy = createDatabase({ url: url.toString(), driver: 'postgres' });
+      const directory = new URL('../../drizzle/', import.meta.url);
+      await legacy.query('CREATE TABLE _warden_service_migrations (version text PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now())');
+      const files = (await readdir(directory)).filter((file) => /^000[0-7]_.*\.sql$/.test(file)).sort();
+      for (const file of files) {
+        await legacy.query(await readFile(new URL(file, directory), 'utf8'));
+        await legacy.query('INSERT INTO _warden_service_migrations (version) VALUES ($1)', [file.replace(/\.sql$/, '')]);
+      }
+      const tenantId = await createTenant(legacy, { slug: 'migration', name: 'Migration Tenant' });
+      const context: ServiceContext = { tenantId, tokenId: randomUUID(), roles: ['admin'], repositoryAllowlist: null };
+      const older = await ingestRun(legacy, context, shortFindingEnvelope('Older finding', '2026-08-12T11:00:00.000Z', 'acme/widgets', false));
+      const newer = await ingestRun(legacy, context, shortFindingEnvelope('Newer finding'));
+      const fallback = await ingestRun(legacy, context, findingsEnvelope('no-reported-code'));
+      expect((await migrateDatabase(legacy)).ready).toBe(true);
+      const items = (await listFindings(legacy, context, {})).items;
+      expect(items.find((item) => item.runId === older.runId)?.displayId).toBe('7MV-5V7-2');
+      expect(items.find((item) => item.runId === newer.runId)?.displayId).toBe('7MV-5V7');
+      const withoutCode = items.find((item) => item.runId === fallback.runId)!;
+      expect(withoutCode.displayId).toMatch(/^[A-F0-9]{3}-[A-F0-9]{3}$/);
+      expect((await getFindingDetail(legacy, context, withoutCode.displayId))?.finding.id).toBe(withoutCode.id);
+
+      // Ingestion still uses the previous INSERT shape, without a short_id column.
+      await ingestRun(legacy, context, shortFindingEnvelope('Old deployment write'));
+      expect((await getFindingDetail(legacy, context, '7MV-5V7-3'))?.finding.title).toBe('Old deployment write');
+      expect((await getFindingDetail(legacy, context, '7MV-5V7'))?.finding.runId).toBe(newer.runId);
+      expect((await getFindingDetail(legacy, context, '7MV-5V7-2'))?.finding.runId).toBe(older.runId);
+    } finally {
+      await legacy?.close();
+      await server.query(`DROP DATABASE IF EXISTS "${name}"`);
+      await server.close();
+    }
+  }, 30_000);
+});
 
 describe.skipIf(!process.env['WARDEN_TEST_POSTGRES_URL'])('Postgres query plans', () => {
   it('uses tenant/history, usage, full-text memory, and job claim indexes', async () => {

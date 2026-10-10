@@ -57,6 +57,13 @@
       "when": 1791609979741,
       "tag": "0007_finding_short_urls",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1791663951670,
+      "tag": "0008_stable_finding_short_urls",
+      "breakpoints": true
     }
   ]
 }

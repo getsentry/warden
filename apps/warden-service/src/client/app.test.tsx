@@ -158,7 +158,7 @@ it('inspects evidence beside the feed, restores focus, and retains filters on th
   await screen.findByText(detail.verification ?? '');
   fireEvent.click(screen.getByRole('link', { name: 'Open full page' }));
   await settled();
-  expect(location.pathname).toBe('/findings/finding-1');
+  expect(location.pathname).toBe('/findings/7MV-5V7');
   expect(screen.getByRole('heading', { level: 1 }).textContent).toBe(finding.title);
   fireEvent.click(screen.getByRole('link', { name: 'Back to findings' }));
   await settled();
@@ -386,13 +386,13 @@ it('shows an error when the service returns an invalid finding', async () => {
   expect(screen.queryByRole('list', { name: 'Findings' })).toBeNull();
 });
 
-it.each(['finding-1', '7MV-5V7'])(
+it.each(['00000000-0000-4000-8000-000000000020', '7MV-5V7'])(
   'opens a direct finding URL with %s and safely displays its source',
   async (id) => {
     workspace(
       `/findings/${id}?range=7`,
       mockApi((url) =>
-        url.pathname.endsWith(`/findings/${id}`)
+        url.pathname === `/api/v1/findings/${id}` || url.pathname === '/api/v1/findings/7MV-5V7'
           ? json({
               ...detail,
               verification: '<script>alert(1)</script>\nTrace line two',
@@ -411,8 +411,9 @@ it.each(['finding-1', '7MV-5V7'])(
           : undefined,
       ),
     );
-    await settled();
-    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe(finding.title);
+    await screen.findByRole('heading', { level: 1, name: finding.title });
+    expect(location.pathname).toBe('/findings/7MV-5V7');
+    expect(location.search).toBe('?range=7');
     expect(control('.finding-verification p').textContent).toBe(
       '<script>alert(1)</script>\nTrace line two',
     );
@@ -448,7 +449,7 @@ it('shows retained evidence in an open disclosure and explains missing historica
   workspace(
     '/findings/finding-1',
     mockApi((url) =>
-      url.pathname.endsWith('/findings/finding-1') ? json({ finding }) : undefined,
+      url.pathname.startsWith('/api/v1/findings/') ? json({ finding }) : undefined,
     ),
   );
   await screen.findByText('No verification evidence was retained for this finding.');
@@ -645,23 +646,24 @@ it('signs out and hides account controls when authentication is disabled', async
   expect(screen.queryByRole('button', { name: 'Open account menu' })).toBeNull();
 });
 
-it('opens the inspected occurrence when its short ID also has a newer finding', async () => {
+it('opens a repeated finding by its own short URL and keeps the selected occurrence', async () => {
+  const repeated = { ...finding, displayId: '7MV-5V7-2' };
   workspace(
     '/?view=findings&range=30',
-    mockApi((url) =>
-      url.pathname === '/api/v1/findings/7MV-5V7'
-        ? json({ ...detail, finding: { ...finding, id: 'finding-2', title: 'Newer occurrence' } })
-        : undefined,
-    ),
+    mockApi((url) => {
+      if (url.pathname === '/api/v1/findings') return json({ items: [repeated] });
+      if (url.pathname === '/api/v1/findings/7MV-5V7') {
+        return json({ ...detail, finding: { ...finding, id: 'finding-2', title: 'Other occurrence' } });
+      }
+      if (url.pathname.startsWith('/api/v1/findings/')) return json({ ...detail, finding: repeated });
+      return undefined;
+    }),
   );
   fireEvent.click(await screen.findByRole('button', { name: new RegExp(finding.title) }));
   const link = await screen.findByRole<HTMLAnchorElement>('link', { name: 'Open full page' });
-  expect(link.pathname).toBe('/findings/finding-1');
+  expect(link.pathname).toBe('/findings/7MV-5V7-2');
   fireEvent.click(link);
   await screen.findByRole('heading', { level: 1, name: finding.title });
-  expect(screen.queryByText('Newer occurrence')).toBeNull();
-  fireEvent.click(screen.getByText('Finding Details'));
-  fireEvent.click(screen.getByRole('link', { name: finding.displayId }));
-  await screen.findByRole('heading', { level: 1, name: 'Newer occurrence' });
-  expect(location.pathname).toBe('/findings/7MV-5V7');
+  expect(location.pathname).toBe('/findings/7MV-5V7-2');
+  expect(screen.queryByText('Other occurrence')).toBeNull();
 });

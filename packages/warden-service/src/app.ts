@@ -1,4 +1,4 @@
-import { ApiErrorSchema } from '@sentry/warden-service-api';
+import { ApiErrorSchema, FindingShortIdSchema } from '@sentry/warden-service-api';
 import { Hono } from 'hono';
 import { createMiddleware } from 'hono/factory';
 import { z } from 'zod';
@@ -10,6 +10,7 @@ import type { WardenDatabase } from './db/database.js';
 import { getSchemaStatus } from './db/migrations.js';
 import { registerRunRoutes } from './runs/routes.js';
 import { registerHistoryRoutes } from './history/routes.js';
+import { getFindingDetail } from './history/store.js';
 import { registerJobRoutes } from './jobs/routes.js';
 import type { JobHandlers } from './jobs/runner.js';
 import { registerMemoryRoutes } from './memory/routes.js';
@@ -235,11 +236,25 @@ export function createWardenService(options: CreateWardenServiceOptions = {}) {
     }
     if (options.dashboard) {
       const dashboard = options.dashboard;
+      const database = options.database;
       const requireSession = requireDashboardSession(dashboardAuth);
       for (const path of ['/', '/index.html']) {
         app.get(path, requireSession, (context) => context.html(dashboard.html));
       }
-      app.get('/findings/:id', requireSession, (context) => context.html(dashboard.html));
+      app.get('/findings/:id', requireSession, async (context) => {
+        const id = context.req.param('id');
+        if (z.uuid().safeParse(id).success) {
+          const detail = await getFindingDetail(database, context.get('serviceContext'), id);
+          if (detail && FindingShortIdSchema.safeParse(detail.finding.displayId).success) {
+            const search = new URL(context.req.url).search;
+            return context.redirect(
+              `/findings/${encodeURIComponent(detail.finding.displayId)}${search}`,
+              302,
+            );
+          }
+        }
+        return context.html(dashboard.html);
+      });
       app.get('/assets/app.js', requireSession, (context) => context.body(
         dashboard.script,
         200,
