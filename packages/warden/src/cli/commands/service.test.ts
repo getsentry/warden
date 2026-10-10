@@ -34,6 +34,7 @@ const findingsArtifact = JSON.stringify({
       severity: 'high',
       title: 'Unsafe query',
       description: 'Use a parameterized query.',
+      verification: '- `handleRequest` passes user input to `query`.\n- The query interpolates input without binding parameters.',
       location: { path: 'src/query.ts', startLine: 12 },
     }],
   }],
@@ -96,7 +97,10 @@ describe('service replay', () => {
       repository: { provider: 'github', fullName: 'acme/widgets' },
     });
     if (findings.dataProfile !== 'findings') throw new Error('Expected findings replay envelope');
-    expect(findings.findings[0]).toMatchObject({ title: 'Unsafe query' });
+    expect(findings.findings[0]).toMatchObject({
+      title: 'Unsafe query',
+      verification: '- `handleRequest` passes user input to `query`.\n- The query interpolates input without binding parameters.',
+    });
     expect(legacy).toMatchObject({
       clientRunId: 'legacy-run-123',
       source: 'replay',

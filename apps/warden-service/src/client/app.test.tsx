@@ -433,6 +433,23 @@ it('restores the saved theme without resetting an inspected finding', async () =
   expect(control('.finding-item').getAttribute('aria-pressed')).toBe('true');
 });
 
+it('shows retained evidence in an open disclosure and explains missing historical evidence', async () => {
+  workspace('/findings/finding-1');
+  await settled();
+  const evidence = control<HTMLDetailsElement>('.finding-verification');
+  expect(evidence.open).toBe(true);
+  expect(evidence.querySelector('summary')?.textContent).toBe('Evidence');
+  expect(evidence.querySelector('p')?.textContent).toBe(detail.verification);
+  cleanup();
+  workspace(
+    '/findings/finding-1',
+    mockApi((url) =>
+      url.pathname.endsWith('/findings/finding-1') ? json({ finding }) : undefined,
+    ),
+  );
+  await screen.findByText('No verification evidence was retained for this finding.');
+});
+
 it('defaults to thirty days of Usage and follows the system theme on a first visit', async () => {
   vi.stubGlobal(
     'matchMedia',

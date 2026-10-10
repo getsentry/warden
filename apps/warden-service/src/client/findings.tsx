@@ -53,13 +53,11 @@ export function FindingArticle({ detail }: FindingArticleProps): JSX.Element {
       <section className="finding-page-section">
         <h2>Why Warden Flagged This</h2>
         <p className="finding-page-description">{finding.description}</p>
-        {detail.verification && (
-          <div className="finding-verification">
-            <strong>Verification evidence</strong>
-            <p>{detail.verification}</p>
-          </div>
-        )}
       </section>
+      <details className="finding-page-section finding-verification" open>
+        <summary>Evidence</summary>
+        <p>{detail.verification ?? 'No verification evidence was retained for this finding.'}</p>
+      </details>
       <section className="finding-page-section">
         <div className="finding-page-section-header">
           <h2>Code Context</h2>

@@ -238,7 +238,7 @@ button:disabled { opacity: .5; cursor: not-allowed; }
 .finding-page-section-header { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; }
 .finding-page-description { margin: 10px 0 0; color: var(--muted-strong); font-size: 14px; line-height: 1.65; white-space: pre-wrap; }
 .finding-verification { margin-top: 18px; padding: 14px 16px; border-left: 2px solid var(--accent); background: var(--accent-surface); }
-.finding-verification strong { color: var(--muted-strong); font-size: 11px; }
+.finding-verification summary { color: var(--muted-strong); font-size: 13px; font-weight: 600; cursor: pointer; }
 .finding-verification p { margin: 5px 0 0; color: var(--muted-strong); font-size: 13px; white-space: pre-wrap; }
 .source-context { overflow: hidden; margin-top: 12px; border: 1px solid var(--border); border-radius: 4px; background: var(--background); }
 .source-context-header { display: flex; justify-content: space-between; gap: 16px; padding: 8px 12px; border-bottom: 1px solid var(--border); color: var(--muted); font-size: 11px; }
