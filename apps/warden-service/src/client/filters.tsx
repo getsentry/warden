@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import type { JSX } from 'react';
 import { useSearchParams } from 'react-router';
 import type { HistoryDimensionsResponse } from '@sentry/warden-service-api';
 import type { RemoteData } from './runtime.js';
@@ -31,19 +32,15 @@ const outcomes: Choice[] = [
   label: value ? value.charAt(0).toUpperCase() + value.slice(1) : 'Any status',
 }));
 
-function SelectField({
-  name,
-  label,
-  value,
-  choices,
-  onChange,
-}: {
+interface SelectFieldProps {
   name: string;
   label: string;
   value: string;
   choices: Choice[];
   onChange: (name: string, value: string) => void;
-}) {
+}
+
+function SelectField({ name, label, value, choices, onChange }: SelectFieldProps): JSX.Element {
   const available = choices.some((item) => item.value === value)
     ? choices
     : [...choices, { value, label: name === 'repositoryId' ? 'Selected repository' : value }];
@@ -75,7 +72,7 @@ export function commonApiParams(params: URLSearchParams): URLSearchParams {
 }
 
 /** Update one filter without discarding filters belonging to the other dashboard tab. */
-export function useFilterNavigation() {
+export function useFilterNavigation(): (values: Record<string, string>) => void {
   const [params, setParams] = useSearchParams();
   return (values: Record<string, string>) => {
     const next = new URLSearchParams(params);
@@ -89,14 +86,13 @@ export function useFilterNavigation() {
   };
 }
 
-/** Keep filters interactive while account, dimensions, and page data load independently. */
-export function Filters({
-  usage,
-  dimensions,
-}: {
+interface FiltersProps {
   usage: boolean;
   dimensions: RemoteData<HistoryDimensionsResponse>;
-}) {
+}
+
+/** Keep filters usable while their choices load. */
+export function Filters({ usage, dimensions }: FiltersProps): JSX.Element {
   const [params] = useSearchParams();
   const update = useFilterNavigation();
   const [query, setQuery] = useState(params.get('query') ?? '');
@@ -145,18 +141,20 @@ export function Filters({
   const skills = available.skills
     .map((value) => ({ value, label: value }))
     .sort((a, b) => a.label.localeCompare(b.label));
-  const field = (name: string, label: string, choices: Choice[]) => (
-    <SelectField
-      name={name}
-      label={label}
-      value={params.get(name) ?? (name === 'range' ? '30' : '')}
-      choices={choices}
-      onChange={(key, value) => {
-        clearTimeout(timer.current);
-        update({ [key]: value, ...(usage ? {} : { query }) });
-      }}
-    />
-  );
+  function field(name: string, label: string, choices: Choice[]): JSX.Element {
+    return (
+      <SelectField
+        name={name}
+        label={label}
+        value={params.get(name) ?? (name === 'range' ? '30' : '')}
+        choices={choices}
+        onChange={(key, value) => {
+          clearTimeout(timer.current);
+          update({ [key]: value, ...(usage ? {} : { query }) });
+        }}
+      />
+    );
+  }
   const skill = field('skill', 'Skill', [{ value: '', label: 'All skills' }, ...skills]);
   const chips = ['skill', 'severity'].filter((name) => params.get(name));
   return (

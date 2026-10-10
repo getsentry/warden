@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import type { JSX, ReactNode } from 'react';
 import { Link, useLocation, useSearchParams } from 'react-router';
 import type {
   FindingDetailResponse,
@@ -16,13 +17,17 @@ import {
 } from './format.js';
 import { useFilterNavigation } from './filters.js';
 
-/** Render finding content as escaped React text, including retained source and verification. */
-export function FindingArticle({ detail }: { detail: FindingDetailResponse }) {
+interface FindingArticleProps {
+  detail: FindingDetailResponse;
+}
+
+/** Share finding content between the inspector and full page. */
+export function FindingArticle({ detail }: FindingArticleProps): JSX.Element {
   const { finding, sourceEvidence } = detail;
   const description = outcomeDescription(finding);
   const sourceUrl =
     detail.sourceUrl && /^https?:\/\//.test(detail.sourceUrl) ? detail.sourceUrl : undefined;
-  const metadata = [
+  const metadata: [string, ReactNode][] = [
     ['ID', finding.displayId],
     ['Repository', finding.repository.fullName],
     ['Skill', finding.skill],
@@ -35,7 +40,7 @@ export function FindingArticle({ detail }: { detail: FindingDetailResponse }) {
     ['Run completed', <DateTime key="completed" value={finding.completedAt} />],
     ['Run', finding.clientRunId],
     ['Commit', detail.headSha?.slice(0, 12) ?? 'Not reported'],
-  ] as const;
+  ];
   return (
     <article className="finding-page-card">
       <div className="finding-page-heading">
@@ -118,7 +123,12 @@ interface Selection {
   revision: number;
 }
 
-function Inspector({ selected, close }: { selected: Selection; close: () => void }) {
+interface InspectorProps {
+  selected: Selection;
+  close: () => void;
+}
+
+function Inspector({ selected, close }: InspectorProps): JSX.Element {
   const { finding, trigger } = selected;
   const [attempt, setAttempt] = useState(0);
   const request = useMemo(() => dashboardApi.finding(finding.id), [finding.id]);
@@ -130,6 +140,25 @@ function Inspector({ selected, close }: { selected: Selection; close: () => void
     if (!narrow) trigger.scrollIntoView({ block: 'nearest' });
     title.current?.focus({ preventScroll: !narrow });
   }, [trigger]);
+  let content: JSX.Element;
+  if (detail.status === 'loading') {
+    content = <div className="empty">Loading evidence…</div>;
+  } else if (detail.status === 'success') {
+    content = <FindingArticle detail={detail.data} />;
+  } else {
+    content = (
+      <div className="inspector-error">
+        <p>Could not load the evidence. Try again.</p>
+        <button
+          type="button"
+          className="quiet-button"
+          onClick={() => setAttempt((value) => value + 1)}
+        >
+          Try again
+        </button>
+      </div>
+    );
+  }
   return (
     <aside
       id="finding-inspector"
@@ -168,34 +197,23 @@ function Inspector({ selected, close }: { selected: Selection; close: () => void
         </p>
       </header>
       <div className="inspector-body" aria-live="polite" aria-busy={detail.status === 'loading'}>
-        {detail.status === 'loading' ? (
-          <div className="empty">Loading evidence…</div>
-        ) : detail.status === 'success' ? (
-          <FindingArticle detail={detail.data} />
-        ) : (
-          <div className="inspector-error">
-            <p>Could not load the evidence. Try again.</p>
-            <button
-              type="button"
-              className="quiet-button"
-              onClick={() => setAttempt((value) => value + 1)}
-            >
-              Try again
-            </button>
-          </div>
-        )}
+        {content}
       </div>
     </aside>
   );
 }
 
-/** Keep the feed visible while a cancellable detail request populates the adjacent inspector. */
-export function Findings({ data }: { data: FindingListResponse }) {
+interface FindingsProps {
+  data: FindingListResponse;
+}
+
+/** Keep the feed visible while users inspect findings. */
+export function Findings({ data }: FindingsProps): JSX.Element {
   const [params] = useSearchParams();
   const update = useFilterNavigation();
   const [selected, setSelected] = useState<Selection | null>(null);
   const current = params.get('findingOutcome') ?? '';
-  const statuses = [
+  const statuses: [string, string][] = [
     ['', 'All findings'],
     ['posted', 'Posted'],
     ['resolved', 'Resolved'],
@@ -219,7 +237,7 @@ export function Findings({ data }: { data: FindingListResponse }) {
               type="button"
               className="status-tab"
               aria-pressed={current === value}
-              onClick={() => update({ findingOutcome: value ?? '' })}
+              onClick={() => update({ findingOutcome: value })}
             >
               {label}
             </button>

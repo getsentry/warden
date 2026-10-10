@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import type { JSX } from 'react';
 
 type Theme = 'light' | 'dark';
 function savedTheme(): Theme | undefined {
@@ -10,8 +11,8 @@ function savedTheme(): Theme | undefined {
   }
 }
 
-/** Follow system appearance until the user explicitly chooses a persisted theme. */
-export function ThemeToggle() {
+/** Use the system theme until the user saves a preference. */
+export function ThemeToggle(): JSX.Element {
   const [preferred, setPreferred] = useState(savedTheme);
   const [system, setSystem] = useState<Theme>(() =>
     matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light',

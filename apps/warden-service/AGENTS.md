@@ -13,7 +13,7 @@
 ## Commands
 
 - Typecheck: `pnpm --filter warden-service-app typecheck`
-- Lint: `pnpm exec oxlint apps/warden-service/src/client`
+- Lint: `pnpm --filter warden-service-app lint`
 - Test one file: `pnpm --filter warden-service-app test src/client/app.test.tsx`
 - Build client: `pnpm --filter warden-service-app build:client`
 

@@ -1,11 +1,17 @@
 import { useEffect, useRef, useState } from 'react';
+import type { JSX } from 'react';
 import { Effect } from 'effect';
 import { dashboardApi } from './api.js';
 import type { PersonalToken } from './api.js';
 import { useAction, useQuery } from './runtime.js';
 import { formatDate } from './format.js';
 
-function TokenRow({ token, refresh }: { token: PersonalToken; refresh: () => void }) {
+interface TokenRowProps {
+  token: PersonalToken;
+  refresh: () => void;
+}
+
+function TokenRow({ token, refresh }: TokenRowProps): JSX.Element {
   const action = useAction();
   return (
     <div className="token-row">
@@ -36,7 +42,7 @@ function TokenRow({ token, refresh }: { token: PersonalToken; refresh: () => voi
   );
 }
 
-function TokenAccess() {
+function TokenAccess(): JSX.Element {
   const [revision, setRevision] = useState(0);
   const tokens = useQuery(dashboardApi.tokens, revision);
   const create = useAction();
@@ -128,7 +134,11 @@ function TokenAccess() {
   );
 }
 
-function TokenDialog({ close }: { close: () => void }) {
+interface TokenDialogProps {
+  close: () => void;
+}
+
+function TokenDialog({ close }: TokenDialogProps): JSX.Element {
   const dialog = useRef<HTMLDialogElement>(null);
   useEffect(() => {
     dialog.current?.showModal();
@@ -157,8 +167,8 @@ function TokenDialog({ close }: { close: () => void }) {
   );
 }
 
-/** Fetch account controls independently and keep token secrets scoped to the open dialog. */
-export function Account() {
+/** Load account controls without delaying the page; discard token secrets when the dialog closes. */
+export function Account(): JSX.Element {
   const account = useQuery(dashboardApi.account);
   const signOut = useAction();
   const [open, setOpen] = useState(false);

@@ -1,17 +1,16 @@
+import type { JSX } from 'react';
 import type { DashboardSummaryResponse } from '@sentry/warden-service-api';
 import { formatCost, formatNumber } from './format.js';
 
 type Groups = DashboardSummaryResponse['breakdowns'][number]['groups'];
 
-function BarBreakdown({
-  title,
-  groups,
-  dimension,
-}: {
+interface BarBreakdownProps {
   title: string;
   groups: Groups;
   dimension: string;
-}) {
+}
+
+function BarBreakdown({ title, groups, dimension }: BarBreakdownProps): JSX.Element {
   const sorted = [...groups].sort((a, b) => (b.costUsd ?? 0) - (a.costUsd ?? 0)).slice(0, 7);
   const max = Math.max(...sorted.map((group) => group.costUsd ?? 0), 0.000001);
   return (
@@ -44,7 +43,11 @@ function BarBreakdown({
   );
 }
 
-function DailyChart({ groups }: { groups: Groups }) {
+interface DailyChartProps {
+  groups: Groups;
+}
+
+function DailyChart({ groups }: DailyChartProps): JSX.Element {
   const sorted = [...groups]
     .sort((a, b) => (a.dimensions['day'] ?? '').localeCompare(b.dimensions['day'] ?? ''))
     .slice(-30);
@@ -89,15 +92,19 @@ function DailyChart({ groups }: { groups: Groups }) {
   );
 }
 
-/** Render the usage summary from the single bounded dashboard request. */
-export function Usage({ summary }: { summary: DashboardSummaryResponse }) {
+interface UsageProps {
+  summary: DashboardSummaryResponse;
+}
+
+/** Show totals and cost charts from the same summary response. */
+export function Usage({ summary }: UsageProps): JSX.Element {
   const { totals } = summary;
   const metrics = [
     ['Known cost', formatCost(totals.costUsd)],
     ['Runs', formatNumber(totals.runs)],
     ['Findings', formatNumber(totals.findings)],
     ['Failed runs', formatNumber(totals.failed)],
-  ];
+  ] as const;
   const groups = (dimension: string) =>
     summary.breakdowns.find((item) => item.dimension === dimension)?.groups ?? [];
   return (

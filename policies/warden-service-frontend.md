@@ -1,27 +1,21 @@
 # Warden Service Frontend
 
-## Policy
+- Write dashboard code in strict TypeScript and TSX under `apps/warden-service/src/client/`. Keep the client compiler checks enabled. Do not use `any`, unchecked API casts, or comments that suppress type errors.
+- Build views with React components. React owns rendered content, state, and event handlers. Do not build views with DOM mutations, HTML strings, or `dangerouslySetInnerHTML`.
+- Use Effect for requests and browser actions. Keep them in `api.ts`, with explicit error types. Cancel requests when the user changes views or closes a component, and ignore late responses.
+- Validate API responses with the shared `@sentry/warden-service-api` schemas before displaying them.
+- Use React Router for navigation and URL filters. Keep filters when switching views or using browser history.
+- Share finding content between the inspector and full page. Preserve labels, keyboard access, focus restoration, escaped text, and both themes.
+- Use the DOM directly only for browser features such as focus, native dialogs, theme setup, and mounting React.
+- Check all client code with Oxlint, including React hooks, accessibility, unsafe values, and promises. Keep these rules and both TypeScript checks enabled in CI.
+- Build with Vite into ignored `dist/dashboard/`. Serve compiled assets through the authenticated service routes. Do not commit build output.
+- Prefer integration tests that exercise the React app or service routes. Mock network services with sanitized fixtures. Test user behavior, including navigation and stale responses; do not assert source or config strings.
 
-- Author the dashboard in TypeScript and TSX under `apps/warden-service/src/client/`.
-- Use strict TypeScript, unchecked-index protection, exact optional properties, and type-only imports. The client compiler configuration is mandatory; do not bypass it with `any`, unchecked response casts, or suppression comments.
-- Render UI declaratively with React components. Keep state and event handlers in React. Do not build views through `createElement`, `append`, `replaceChildren`, HTML strings, or `dangerouslySetInnerHTML`.
-- Use Effect for browser IO, typed failures, and request lifetimes. Keep network access in the injected HTTP service. Interrupt obsolete requests on navigation, selection changes, and unmount; late responses must never replace the current view.
-- Validate API responses at the HTTP boundary. Reuse `@sentry/warden-service-api` schemas for shared contracts. Keep UI models typed throughout rendering.
-- Keep components focused on a view or interaction. Share presentation components between the inspector and full finding page.
-- Use React Router for navigation and URL filter state. Preserve filters across views and browser history.
-- Keep direct DOM access limited to platform boundaries such as focus, native dialogs, theme bootstrap, and the React root. These exceptions must not render application content.
-- Preserve accessible labels, keyboard navigation, focus restoration, escaped finding content, and both themes.
-- Oxlint must check all client TypeScript and TSX, including React hooks, accessibility, and type-aware unsafe-value and promise rules. Run both TypeScript configurations before building or shipping.
-- Build client assets with Vite into ignored `dist/dashboard/`. Serve the compiled HTML, JavaScript, and CSS through the service's existing authenticated routes; do not commit generated assets or expose them as unauthenticated static files.
-- Cover user entry points and navigation/cancellation regressions with React integration tests using validated, sanitized service fixtures. Do not evaluate source strings as browser tests.
-
-## Verification
-
-From the repository root:
+Run from the repository root:
 
 ```sh
-pnpm --filter warden-service-app typecheck
 pnpm --filter warden-service-app lint
+pnpm --filter warden-service-app typecheck
 pnpm --filter warden-service-app test
-pnpm lint && pnpm build && pnpm test
+pnpm --filter warden-service-app build
 ```

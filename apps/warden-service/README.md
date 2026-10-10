@@ -4,7 +4,9 @@
 
 This is the reference deployment for the optional Warden backing service. It uses Vercel Node functions, static dashboard assets, Vercel Cron, and a Marketplace Postgres database such as Neon. Redis and an always-on worker are not required.
 
-The dashboard uses strict TypeScript, React, and Effect. Source lives in `src/client/`; `pnpm --filter warden-service-app build:client` compiles it to ignored `dist/dashboard/` assets served through the authenticated Hono routes. See [the frontend policy](../../policies/warden-service-frontend.md). Run `pnpm --filter warden-service-app typecheck` and `pnpm --filter warden-service-app test` for client and app verification. Vercel and self-hosted builds compile the dashboard before loading the server.
+The dashboard uses strict TypeScript, React, and Effect. Source lives in `src/client/`; builds write to ignored `dist/dashboard/`. The service requires authentication to serve these files. Vercel and self-hosted builds compile the dashboard before starting the server.
+
+Follow [the frontend policy](../../policies/warden-service-frontend.md). Check changes with `pnpm --filter warden-service-app lint`, `pnpm --filter warden-service-app typecheck`, and `pnpm --filter warden-service-app test`. To build just the dashboard, run `pnpm --filter warden-service-app build:client`.
 
 ## Deploy
 

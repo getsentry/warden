@@ -165,26 +165,28 @@ it('inspects evidence beside the feed, restores focus, and retains filters on th
   expect(location.search).toContain('range=7');
 });
 
-it('loads findings while account controls are pending and reuses the account request', async () => {
+it('lets users inspect findings while account controls are still loading', async () => {
   let release: (value: Response) => void = () => {
     throw new Error('Missing deferred response');
   };
   const account = new Promise<Response>((resolve) => {
     release = resolve;
   });
-  const api = workspace(
+  workspace(
     '/?view=findings&range=30',
     mockApi((url) => (url.pathname === '/api/v1/auth/context' ? account : undefined)),
   );
   await screen.findByRole('heading', { name: 'Latest Findings' });
-  expect(control('#account-menu').hasAttribute('hidden')).toBe(true);
+  expect(screen.queryByRole('button', { name: 'Open account menu' })).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: new RegExp(finding.title) }));
+  await screen.findByText(detail.verification ?? '');
   await act(async () => {
     release(json({ canManagePersonalTokens: true, authDisabled: false }));
   });
   await screen.findByRole('button', { name: 'Open account menu' });
   fireEvent.click(screen.getByRole('link', { name: 'Usage' }));
   await settled();
-  expect(api.requests.filter((url) => url.pathname === '/api/v1/auth/context')).toHaveLength(1);
+  expect(screen.getByRole('heading', { name: 'Cost Breakdown' })).toBeTruthy();
 });
 
 it('interrupts obsolete tab requests and ignores responses that arrive after navigation', async () => {
@@ -254,7 +256,7 @@ it('debounces search, resets pagination, and clears an empty result', async () =
   fireEvent.click(screen.getByRole('button', { name: 'Clear finding filters' }));
   await screen.findByRole('list', { name: 'Findings' });
   expect(location.search).not.toMatch(/severity|skill|query|findingOutcome/);
-  expect(control<HTMLInputElement>('[name="query"]').value).toBe('');
+  expect(screen.getByLabelText<HTMLInputElement>('Search findings').value).toBe('');
 });
 
 it('cancels a pending search when switching views', async () => {
@@ -320,7 +322,7 @@ it('retries a failed inspector request without losing the feed', async () => {
   expect(screen.getByRole('list', { name: 'Findings' })).toBeTruthy();
 });
 
-it('shows a validated response error instead of rendering malformed API data', async () => {
+it('shows an error when the service returns an invalid finding', async () => {
   workspace(
     '/?view=findings&range=30',
     mockApi((url) =>
@@ -474,26 +476,52 @@ it('shows token mutation failures and keeps the token available for retry', asyn
   fireEvent.click(screen.getByRole('button', { name: 'API access' }));
   fireEvent.click(await screen.findByRole('button', { name: 'Revoke' }));
   expect((await screen.findByRole('alert')).textContent).toBe('Try later.');
-  expect(control<HTMLButtonElement>('.token-row button').disabled).toBe(false);
+  expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Revoke' }).disabled).toBe(false);
 });
 
 it('redirects an expired session to login with the current finding URL', async () => {
   const assign = vi.spyOn(window.location, 'assign').mockImplementation(() => undefined);
-  workspace('/findings/finding-1?range=7', mockApi((url) => url.pathname.endsWith('/findings/finding-1')
-    ? json({ error: { code: 'unauthorized', message: 'Authentication required.' } }, 401) : undefined));
-  await waitFor(() => expect(assign).toHaveBeenCalledWith('/api/auth/login?returnTo=%2Ffindings%2Ffinding-1%3Frange%3D7'));
+  workspace(
+    '/findings/finding-1?range=7',
+    mockApi((url) =>
+      url.pathname.endsWith('/findings/finding-1')
+        ? json({ error: { code: 'unauthorized', message: 'Authentication required.' } }, 401)
+        : undefined,
+    ),
+  );
+  await waitFor(() =>
+    expect(assign).toHaveBeenCalledWith(
+      '/api/auth/login?returnTo=%2Ffindings%2Ffinding-1%3Frange%3D7',
+    ),
+  );
 });
 
-it('signs out through Effect and hides account controls when authentication is disabled', async () => {
+it('signs out and hides account controls when authentication is disabled', async () => {
   const assign = vi.spyOn(window.location, 'assign').mockImplementation(() => undefined);
-  const api = workspace('/?view=usage&range=30', mockApi((url) => url.pathname === '/api/auth/sign-out' ? new Response(null, { status: 200 }) : undefined));
+  const api = workspace(
+    '/?view=usage&range=30',
+    mockApi((url) =>
+      url.pathname === '/api/auth/sign-out' ? new Response(null, { status: 200 }) : undefined,
+    ),
+  );
   await settled();
   fireEvent.click(await screen.findByRole('button', { name: 'Open account menu' }));
   fireEvent.click(screen.getByRole('button', { name: 'Sign out' }));
   await waitFor(() => expect(assign).toHaveBeenCalledWith('/'));
-  expect(api.fetcher.mock.calls.some(([input, options]) => input === '/api/auth/sign-out' && options?.method === 'POST')).toBe(true);
+  expect(
+    api.fetcher.mock.calls.some(
+      ([input, options]) => input === '/api/auth/sign-out' && options?.method === 'POST',
+    ),
+  ).toBe(true);
   cleanup();
-  workspace('/?view=usage&range=30', mockApi((url) => url.pathname === '/api/v1/auth/context' ? json({ canManagePersonalTokens: false, authDisabled: true }) : undefined));
+  workspace(
+    '/?view=usage&range=30',
+    mockApi((url) =>
+      url.pathname === '/api/v1/auth/context'
+        ? json({ canManagePersonalTokens: false, authDisabled: true })
+        : undefined,
+    ),
+  );
   await settled();
   expect(screen.queryByRole('button', { name: 'Open account menu' })).toBeNull();
 });

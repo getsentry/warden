@@ -46,79 +46,64 @@ export class DashboardHttp extends Context.Tag('warden/DashboardHttp')<
   HttpClient
 >() {}
 
-/** Provide cancellable browser IO and validate every JSON response at the boundary. */
-export function browserHttpLayer(fetcher: typeof fetch = globalThis.fetch) {
-  const send = (path: string, options: RequestInit = {}) =>
-    Effect.tryPromise({
-      try: (signal) =>
-        fetcher(path, {
-          ...options,
-          credentials: 'same-origin',
-          headers: { accept: 'application/json', ...options.headers },
-          signal,
-        }),
-      catch: () =>
-        new RequestError({
-          kind: 'network',
-          message: 'Request failed. Try again.',
-          status: undefined,
-        }),
-    }).pipe(
-      Effect.flatMap((response) =>
-        response.ok
-          ? Effect.succeed(response)
-          : Effect.gen(function* () {
-        const body: unknown = yield* Effect.tryPromise(async () => {
-          const value: unknown = await response.json();
-          return value;
-        }).pipe(
-                Effect.orElseSucceed(() => null),
-              );
-              const parsed = ApiErrorSchema.safeParse(body);
-              return yield* Effect.fail(
-                new RequestError({
-                  kind: 'http',
-                  status: response.status,
-                  message: parsed.success
-                    ? parsed.data.error.message
-                    : response.status === 401
-                      ? 'Authentication required.'
-                      : 'Request failed. Try again.',
-                }),
-              );
-            }),
-      ),
-    );
+/** Cancel browser requests with their Effect and validate API responses. */
+export function browserHttpLayer(
+  fetcher: typeof fetch = globalThis.fetch,
+): Layer.Layer<DashboardHttp> {
+  function send(path: string, options: RequestInit = {}): Effect.Effect<Response, RequestError> {
+    return Effect.gen(function* () {
+      const response = yield* Effect.tryPromise({
+        try: (signal) =>
+          fetcher(path, {
+            ...options,
+            credentials: 'same-origin',
+            headers: { accept: 'application/json', ...options.headers },
+            signal,
+          }),
+        catch: () =>
+          new RequestError({
+            kind: 'network',
+            message: 'Request failed. Try again.',
+            status: undefined,
+          }),
+      });
+      if (response.ok) return response;
+
+      const body: unknown = yield* Effect.tryPromise(() => response.json()).pipe(
+        Effect.orElseSucceed(() => null),
+      );
+      const parsed = ApiErrorSchema.safeParse(body);
+      let message = 'Request failed. Try again.';
+      if (parsed.success) message = parsed.data.error.message;
+      else if (response.status === 401) message = 'Authentication required.';
+      return yield* Effect.fail(
+        new RequestError({ kind: 'http', status: response.status, message }),
+      );
+    });
+  }
   return Layer.succeed(DashboardHttp, {
     request: <A>(path: string, schema: z.ZodType<A>, options?: RequestInit) =>
-      send(path, options).pipe(
-        Effect.flatMap((response) =>
-          Effect.tryPromise({
-            try: async () => {
-              const body: unknown = await response.json();
-              return body;
-            },
-            catch: () =>
-              new RequestError({
-                kind: 'decode',
-                message: 'The service returned an invalid response.',
-                status: response.status,
-              }),
+      Effect.gen(function* () {
+        const response = yield* send(path, options);
+        const body: unknown = yield* Effect.tryPromise({
+          try: () => response.json(),
+          catch: () =>
+            new RequestError({
+              kind: 'decode',
+              message: 'The service returned an invalid response.',
+              status: response.status,
+            }),
+        });
+        const result = schema.safeParse(body);
+        if (result.success) return result.data;
+        return yield* Effect.fail(
+          new RequestError({
+            kind: 'decode',
+            message: 'The service returned an invalid response.',
+            status: response.status,
           }),
-        ),
-        Effect.flatMap((body) => {
-          const result = schema.safeParse(body);
-          return result.success
-            ? Effect.succeed(result.data)
-            : Effect.fail(
-                new RequestError({
-                  kind: 'decode',
-                  message: 'The service returned an invalid response.',
-                  status: undefined,
-                }),
-              );
-        }),
-      ),
+        );
+      }),
     signOut: send('/api/auth/sign-out', { method: 'POST' }).pipe(Effect.asVoid),
     copy: (value) =>
       Effect.tryPromise({
@@ -134,7 +119,9 @@ export function browserHttpLayer(fetcher: typeof fetch = globalThis.fetch) {
 }
 
 /** Create a runtime that the browser entry point disposes when the page closes. */
-export function createDashboardRuntime(fetcher: typeof fetch = globalThis.fetch) {
+export function createDashboardRuntime(
+  fetcher: typeof fetch = globalThis.fetch,
+): ManagedRuntime.ManagedRuntime<DashboardHttp, never> {
   return ManagedRuntime.make(browserHttpLayer(fetcher));
 }
 export type DashboardRuntime = ReturnType<typeof createDashboardRuntime>;

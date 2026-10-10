@@ -1,31 +1,37 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
-import type { ReactNode } from 'react';
+import type { JSX, ReactNode } from 'react';
 import { Exit, Cause, Option } from 'effect';
 import type { Effect } from 'effect';
 import type { DashboardHttp, DashboardRuntime, RequestError } from './api.js';
 
 const RuntimeContext = createContext<DashboardRuntime | null>(null);
 
-/** Supply the application's Effect runtime to queries and user actions. */
-export function RuntimeProvider({
-  runtime,
-  children,
-}: {
+interface RuntimeProviderProps {
   runtime: DashboardRuntime;
   children: ReactNode;
-}) {
+}
+
+/** Share one Effect runtime across the app. */
+export function RuntimeProvider({ runtime, children }: RuntimeProviderProps): JSX.Element {
   return <RuntimeContext.Provider value={runtime}>{children}</RuntimeContext.Provider>;
 }
 
-/** Read the injected runtime, including the test runtime used by browser integration tests. */
-export function useRuntime() {
+function useRuntime(): DashboardRuntime {
   const runtime = useContext(RuntimeContext);
   if (!runtime) throw new Error('Dashboard runtime is missing.');
   return runtime;
 }
 
 export type RemoteData<A> =
-  { status: 'loading' } | { status: 'success'; data: A } | { status: 'error'; message: string };
+  | { status: 'loading' }
+  | { status: 'success'; data: A }
+  | { status: 'error'; message: string };
+
+function redirectToLogin(): void {
+  window.location.assign(
+    `/api/auth/login?returnTo=${encodeURIComponent(location.pathname + location.search)}`,
+  );
+}
 
 /** Interrupt obsolete requests and prevent late responses from replacing the current screen. */
 export function useQuery<A>(
@@ -48,9 +54,7 @@ export function useQuery<A>(
       } else {
         const failure = Cause.failureOption(exit.cause);
         if (Option.isSome(failure) && failure.value.status === 401) {
-          window.location.assign(
-            `/api/auth/login?returnTo=${encodeURIComponent(location.pathname + location.search)}`,
-          );
+          redirectToLogin();
           return;
         }
         setResult({
@@ -72,8 +76,14 @@ export function useQuery<A>(
     : { status: 'loading' };
 }
 
-/** Run user-triggered IO once, with typed feedback and cancellation on unmount. */
-export function useAction() {
+interface Action {
+  run<A>(effect: Effect.Effect<A, RequestError, DashboardHttp>): Promise<A | undefined>;
+  pending: boolean;
+  error: string | null;
+}
+
+/** Prevent duplicate submissions and cancel pending actions when a view closes. */
+export function useAction(): Action {
   const runtime = useRuntime();
   const active = useRef<AbortController | null>(null);
   const [pending, setPending] = useState(false);
@@ -93,9 +103,7 @@ export function useAction() {
       if (Exit.isSuccess(exit)) return exit.value;
       const failure = Cause.failureOption(exit.cause);
       if (Option.isSome(failure) && failure.value.status === 401) {
-        window.location.assign(
-          `/api/auth/login?returnTo=${encodeURIComponent(location.pathname + location.search)}`,
-        );
+        redirectToLogin();
       } else {
         setError(Option.isSome(failure) ? failure.value.message : 'Request failed. Try again.');
       }

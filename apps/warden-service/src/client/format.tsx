@@ -1,3 +1,4 @@
+import type { JSX } from 'react';
 import type { FindingFeedItem } from '@sentry/warden-service-api';
 
 /** Format known costs without presenting missing usage as free. */
@@ -23,21 +24,28 @@ export function formatDate(value: string): string {
   );
 }
 
-/** Retain an absolute timestamp even when the feed shows relative time. */
-export function DateTime({
-  value,
-  relative = false,
-}: {
+interface DateTimeProps {
   value: string | null;
   relative?: boolean;
-}) {
+}
+
+/** Keep the exact timestamp available when the feed shows relative time. */
+export function DateTime({ value, relative = false }: DateTimeProps): JSX.Element {
   if (!value) return <span>Not reported</span>;
   let label = formatDate(value);
   if (relative) {
     const minutes = Math.round((new Date(value).getTime() - Date.now()) / 60_000);
-    const unit = Math.abs(minutes) < 60 ? 'minute' : Math.abs(minutes) < 1440 ? 'hour' : 'day';
+    let unit: Intl.RelativeTimeFormatUnit = 'minute';
+    let divisor = 1;
+    if (Math.abs(minutes) >= 1440) {
+      unit = 'day';
+      divisor = 1440;
+    } else if (Math.abs(minutes) >= 60) {
+      unit = 'hour';
+      divisor = 60;
+    }
     label = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' }).format(
-      Math.round(minutes / (unit === 'minute' ? 1 : unit === 'hour' ? 60 : 1440)),
+      Math.round(minutes / divisor),
       unit,
     );
   }

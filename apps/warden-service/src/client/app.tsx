@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import type { JSX } from 'react';
 import { Link, useLocation, useSearchParams } from 'react-router';
 import { Effect } from 'effect';
 import type { DashboardSummaryResponse, FindingListResponse } from '@sentry/warden-service-api';
@@ -10,7 +11,12 @@ import { Filters, commonApiParams } from './filters.js';
 import { Findings, FindingArticle } from './findings.js';
 import { Usage } from './usage.js';
 
-function PageTitle({ title, description }: { title: string; description: string }) {
+interface PageTitleProps {
+  title: string;
+  description: string;
+}
+
+function PageTitle({ title, description }: PageTitleProps): JSX.Element {
   useEffect(() => {
     document.title = `${title} · Warden`;
   }, [title]);
@@ -26,7 +32,11 @@ type ExploreData =
   | { kind: 'usage'; data: DashboardSummaryResponse }
   | { kind: 'findings'; data: FindingListResponse };
 
-function Explore({ usage }: { usage: boolean }) {
+interface ExploreProps {
+  usage: boolean;
+}
+
+function Explore({ usage }: ExploreProps): JSX.Element {
   const [params, setParams] = useSearchParams();
   const normalized = new URLSearchParams(params);
   if (!normalized.get('range')) normalized.set('range', '30');
@@ -62,6 +72,24 @@ function Explore({ usage }: { usage: boolean }) {
     if (result.status === 'success') setDimensionsEnabled(true);
   }, [result.status]);
   const dimensions = useQuery(dimensionsEnabled ? dashboardApi.dimensions : null);
+  let content: JSX.Element;
+  if (result.status === 'loading') {
+    content = (
+      <div role="status" className="page-loading">
+        Loading {usage ? 'usage' : 'findings'}…
+      </div>
+    );
+  } else if (result.status === 'error') {
+    content = (
+      <div className="error" role="alert">
+        {result.message}
+      </div>
+    );
+  } else if (result.data.kind === 'usage') {
+    content = <Usage summary={result.data.data} />;
+  } else {
+    content = <Findings key={query} data={result.data.data} />;
+  }
   return (
     <>
       <PageTitle
@@ -79,30 +107,45 @@ function Explore({ usage }: { usage: boolean }) {
         tabIndex={-1}
         aria-busy={result.status === 'loading'}
       >
-        {result.status === 'loading' ? (
-          <div role="status" className="page-loading">
-            Loading {usage ? 'usage' : 'findings'}…
-          </div>
-        ) : result.status === 'error' ? (
-          <div className="error" role="alert">
-            {result.message}
-          </div>
-        ) : result.data.kind === 'usage' ? (
-          <Usage summary={result.data.data} />
-        ) : (
-          <Findings key={query} data={result.data.data} />
-        )}
+        {content}
       </section>
     </>
   );
 }
 
-function FindingPage({ id }: { id: string }) {
+interface FindingPageProps {
+  id: string;
+}
+
+function FindingPage({ id }: FindingPageProps): JSX.Element {
   const request = useMemo(() => dashboardApi.finding(id), [id]);
   const result = useQuery(request);
   const [params] = useSearchParams();
   const back = new URLSearchParams(params);
   back.set('view', 'findings');
+  let content: JSX.Element;
+  if (result.status === 'loading') {
+    content = (
+      <div className="page-loading" role="status">
+        Loading finding…
+      </div>
+    );
+  } else if (result.status === 'error') {
+    content = (
+      <div className="error" role="alert">
+        {result.message}
+      </div>
+    );
+  } else {
+    content = (
+      <section className="finding-page">
+        <Link className="text-link" to={`/?${back}`}>
+          Back to findings
+        </Link>
+        <FindingArticle detail={result.data} />
+      </section>
+    );
+  }
   return (
     <>
       <PageTitle
@@ -119,29 +162,14 @@ function FindingPage({ id }: { id: string }) {
         tabIndex={-1}
         aria-busy={result.status === 'loading'}
       >
-        {result.status === 'loading' ? (
-          <div className="page-loading" role="status">
-            Loading finding…
-          </div>
-        ) : result.status === 'error' ? (
-          <div className="error" role="alert">
-            {result.message}
-          </div>
-        ) : (
-          <section className="finding-page">
-            <Link className="text-link" to={`/?${back}`}>
-              Back to findings
-            </Link>
-            <FindingArticle detail={result.data} />
-          </section>
-        )}
+        {content}
       </section>
     </>
   );
 }
 
-/** Render the dashboard shell and route-specific React views. */
-export function App() {
+/** Keep the header mounted as users navigate between dashboard views. */
+export function App(): JSX.Element {
   const location = useLocation();
   const [params] = useSearchParams();
   const match = location.pathname.match(/^\/findings\/([^/]+)\/?$/);
