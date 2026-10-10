@@ -24,6 +24,7 @@ interface FindingArticleProps {
 /** Share finding content between the inspector and full page. */
 export function FindingArticle({ detail }: FindingArticleProps): JSX.Element {
   const { finding, sourceEvidence } = detail;
+  const location = useLocation();
   const description = outcomeDescription(finding);
   const sourceUrl =
     detail.sourceUrl && /^https?:\/\//.test(detail.sourceUrl) ? detail.sourceUrl : undefined;
@@ -41,6 +42,14 @@ export function FindingArticle({ detail }: FindingArticleProps): JSX.Element {
     ['Run', finding.clientRunId],
     ['Commit', detail.headSha?.slice(0, 12) ?? 'Not reported'],
   ];
+  if (/^[A-Z0-9]{3}-[A-Z0-9]{3}$/.test(finding.displayId)) {
+    metadata.push([
+      'Latest finding',
+      <Link key="latest" to={`/findings/${finding.displayId}${location.search}`}>
+        {finding.displayId}
+      </Link>,
+    ]);
+  }
   return (
     <article className="finding-page-card">
       <div className="finding-page-heading">
@@ -135,9 +144,6 @@ function Inspector({ selected, close }: InspectorProps): JSX.Element {
   const detail = useQuery(request, attempt);
   const title = useRef<HTMLHeadingElement>(null);
   const location = useLocation();
-  const locator = /^[A-Z0-9]{3}-[A-Z0-9]{3}$/.test(finding.displayId)
-    ? finding.displayId
-    : finding.id;
   useEffect(() => {
     const narrow = window.matchMedia('(max-width: 720px)').matches;
     if (!narrow) trigger.scrollIntoView({ block: 'nearest' });
@@ -179,7 +185,7 @@ function Inspector({ selected, close }: InspectorProps): JSX.Element {
           <span className="inspector-id">{finding.displayId}</span>
           <Link
             className="text-link"
-            to={`/findings/${encodeURIComponent(locator)}${location.search}`}
+            to={`/findings/${encodeURIComponent(finding.id)}${location.search}`}
           >
             Open full page
           </Link>

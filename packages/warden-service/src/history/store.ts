@@ -425,7 +425,7 @@ export async function listFindings(
   };
 }
 
-/** Resolve a UUID or the newest authorized occurrence of a displayed short finding ID. */
+/** Resolve a UUID or a short ID that belongs to one authorized repository. */
 export async function getFindingDetail(
   database: WardenDatabase,
   contextInput: ServiceContext | undefined,
@@ -434,12 +434,24 @@ export async function getFindingDetail(
   const context = requireServiceContext(contextInput);
   const read = getReadDatabase(database);
   const { location, observation, firstObservation } = findingContextQueries(read);
-  const locator = z.string().uuid().safeParse(findingId).success
+  const isUuid = z.string().uuid().safeParse(findingId).success;
+  const locator = isUuid
     ? eq(findings.id, findingId)
     : eq(sql<string>`coalesce(${findings.reportedId}, ${findings.clientFindingId})`, findingId);
   const conditions: SQL[] = [eq(findings.tenantId, context.tenantId), locator];
   const authorizedRepositories = repositoryScope(context);
   if (authorizedRepositories) conditions.push(authorizedRepositories);
+  if (!isUuid) {
+    const [repository, collision] = await read.selectDistinct({ repositoryId: runs.repositoryId })
+      .from(findings)
+      .innerJoin(runs, and(eq(runs.id, findings.runId), eq(runs.tenantId, findings.tenantId)))
+      .innerJoin(repositories, and(eq(repositories.id, runs.repositoryId), eq(repositories.tenantId, runs.tenantId)))
+      .where(and(...conditions))
+      .limit(2);
+    if (!repository || collision) return null;
+    // Keep this lookup in the same repository if another collision arrives between queries.
+    conditions.push(eq(runs.repositoryId, repository.repositoryId));
+  }
   const result = await read.select({
     id: findings.id,
     client_finding_id: findings.clientFindingId,

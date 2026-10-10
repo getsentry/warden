@@ -158,7 +158,7 @@ it('inspects evidence beside the feed, restores focus, and retains filters on th
   await screen.findByText(detail.verification ?? '');
   fireEvent.click(screen.getByRole('link', { name: 'Open full page' }));
   await settled();
-  expect(location.pathname).toBe('/findings/7MV-5V7');
+  expect(location.pathname).toBe('/findings/finding-1');
   expect(screen.getByRole('heading', { level: 1 }).textContent).toBe(finding.title);
   fireEvent.click(screen.getByRole('link', { name: 'Back to findings' }));
   await settled();
@@ -628,12 +628,12 @@ it('signs out and hides account controls when authentication is disabled', async
   expect(screen.queryByRole('button', { name: 'Open account menu' })).toBeNull();
 });
 
-it('keeps UUID links for older findings without a short ID', async () => {
+it('opens the inspected occurrence when its short ID also has a newer finding', async () => {
   workspace(
     '/?view=findings&range=30',
     mockApi((url) =>
-      url.pathname === '/api/v1/findings'
-        ? json({ items: [{ ...finding, displayId: 'legacy-id' }] })
+      url.pathname === '/api/v1/findings/7MV-5V7'
+        ? json({ ...detail, finding: { ...finding, id: 'finding-2', title: 'Newer occurrence' } })
         : undefined,
     ),
   );
@@ -642,4 +642,9 @@ it('keeps UUID links for older findings without a short ID', async () => {
   expect(link.pathname).toBe('/findings/finding-1');
   fireEvent.click(link);
   await screen.findByRole('heading', { level: 1, name: finding.title });
+  expect(screen.queryByText('Newer occurrence')).toBeNull();
+  fireEvent.click(screen.getByText('Finding Details'));
+  fireEvent.click(screen.getByRole('link', { name: finding.displayId }));
+  await screen.findByRole('heading', { level: 1, name: 'Newer occurrence' });
+  expect(location.pathname).toBe('/findings/7MV-5V7');
 });

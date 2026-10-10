@@ -178,7 +178,7 @@ function defineDriverIntegration(driver: DatabaseDriver, environmentName: string
       expect(await authenticateServiceToken(database, active.token)).toBeNull();
     }, 30_000);
 
-    it('resolves repeated short IDs to the newest authorized finding and preserves UUID lookups', async () => {
+    it('resolves repeated short IDs within one repository and rejects accessible collisions', async () => {
       const tenantA = await createTenant(database, { slug: `short-a-${randomUUID()}`, name: 'Short ID Tenant A' });
       const tenantB = await createTenant(database, { slug: `short-b-${randomUUID()}`, name: 'Short ID Tenant B' });
       tenantIds.push(tenantA, tenantB);
@@ -204,20 +204,29 @@ function defineDriverIntegration(driver: DatabaseDriver, environmentName: string
       const original = await getFindingDetail(database, contextA, '7MV-5V7');
       expect(original?.finding.title).toBe('Original finding');
       await ingestRun(database, contextA, envelope('Updated finding', '2026-08-12T12:00:00.000Z'));
+      expect((await getFindingDetail(database, contextA, '7MV-5V7'))?.finding.title).toBe('Updated finding');
       await ingestRun(database, contextA, envelope('Other repository', '2026-08-12T13:00:00.000Z', 'acme/other'));
       await ingestRun(database, contextB, envelope('Other tenant', '2026-08-12T14:00:00.000Z'));
 
       const scoped = { ...contextA, repositoryAllowlist: ['acme/widgets'] };
-      expect((await getFindingDetail(database, contextA, '7MV-5V7'))?.finding.title).toBe('Other repository');
+      expect(await getFindingDetail(database, contextA, '7MV-5V7')).toBeNull();
       expect((await getFindingDetail(database, scoped, '7MV-5V7'))?.finding.title).toBe('Updated finding');
+      expect((await getFindingDetail(database, contextB, '7MV-5V7'))?.finding.title).toBe('Other tenant');
       expect((await getFindingDetail(database, scoped, original!.finding.id))?.finding.title).toBe('Original finding');
       expect(await getFindingDetail(database, scoped, 'HID-DEN')).toBeNull();
       expect(await getFindingDetail(database, { ...contextA, repositoryAllowlist: ['acme/unavailable'] }, '7MV-5V7')).toBeNull();
 
       const app = createWardenService({ database, disableAuth: { tenantId: tenantA } });
       const response = await app.request('/api/v1/findings/7MV-5V7');
-      expect(response.status).toBe(200);
-      await expect(response.json()).resolves.toMatchObject({ finding: { title: 'Other repository', displayId: '7MV-5V7' } });
+      expect(response.status).toBe(404);
+      const scopedToken = await createServiceToken(database, {
+        tenantId: tenantA, name: 'Scoped reader', roles: ['read'], repositoryAllowlist: ['acme/widgets'],
+      });
+      const scopedResponse = await createWardenService({ database }).request('/api/v1/findings/7MV-5V7', {
+        headers: { authorization: `Bearer ${scopedToken.token}` },
+      });
+      expect(scopedResponse.status).toBe(200);
+      await expect(scopedResponse.json()).resolves.toMatchObject({ finding: { title: 'Updated finding', displayId: '7MV-5V7' } });
       expect((await app.request('/api/v1/findings/ZZZ-ZZZ')).status).toBe(404);
     });
 
