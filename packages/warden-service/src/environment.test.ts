@@ -67,4 +67,14 @@ describe('parseServiceEnvironment', () => {
 
     expect(() => parseServiceEnvironment({ ...environment, CRON_SECRET: 'short' })).toThrow();
   });
+
+  it('requires the Linear key, team, and service URL together', () => {
+    const linear = { LINEAR_API_KEY: 'linear-test-key', LINEAR_TEAM_ID: '00000000-0000-4000-8000-000000000002' };
+    expect(parseServiceEnvironment({ ...environment, ...linear })).toMatchObject(linear);
+    expect(() => parseServiceEnvironment({ ...environment, LINEAR_API_KEY: linear.LINEAR_API_KEY })).toThrow();
+    expect(() => parseServiceEnvironment({ ...environment, LINEAR_TEAM_ID: linear.LINEAR_TEAM_ID })).toThrow();
+    expect(() => parseServiceEnvironment({
+      ...environment, ...linear, DISABLE_AUTH: 'true', WARDEN_SERVICE_BASE_URL: undefined,
+    })).toThrow();
+  });
 });

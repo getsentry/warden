@@ -98,6 +98,19 @@ export const FindingDetailResponseSchema = z.object({
 }).strict();
 export type FindingDetailResponse = z.infer<typeof FindingDetailResponseSchema>;
 
+export const LinearIssueSchema = z.object({
+  id: z.uuid(),
+  identifier: z.string().trim().min(1).max(128),
+  url: z.url({ protocol: /^https$/, hostname: /^linear\.app$/ }).max(4_096),
+}).strict();
+export type LinearIssue = z.infer<typeof LinearIssueSchema>;
+
+export const FindingLinearIssueResponseSchema = z.object({
+  enabled: z.boolean(),
+  issue: LinearIssueSchema.nullable(),
+}).strict();
+export type FindingLinearIssueResponse = z.infer<typeof FindingLinearIssueResponseSchema>;
+
 export const FindingListResponseSchema = z.object({
   items: z.array(FindingFeedItemSchema),
   nextCursor: z.string().trim().min(1).max(512).optional(),

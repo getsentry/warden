@@ -5,7 +5,9 @@ import {
   DashboardSummaryResponseSchema,
   FindingDetailResponseSchema,
   FindingListResponseSchema,
+  FindingLinearIssueResponseSchema,
   HistoryDimensionsResponseSchema,
+  LinearIssueSchema,
 } from '@sentry/warden-service-api';
 
 export class RequestError extends Data.TaggedError('RequestError')<{
@@ -144,6 +146,18 @@ export const dashboardApi = {
   finding: (id: string) =>
     Effect.flatMap(DashboardHttp, (http) =>
       http.request(`/api/v1/findings/${encodeURIComponent(id)}`, FindingDetailResponseSchema),
+    ),
+  linearIssue: (id: string) =>
+    Effect.flatMap(DashboardHttp, (http) =>
+      http.request(`/api/v1/findings/${encodeURIComponent(id)}/linear-issue`, FindingLinearIssueResponseSchema),
+    ),
+  createLinearIssue: (id: string) =>
+    Effect.flatMap(DashboardHttp, (http) =>
+      http.request(
+        `/api/v1/findings/${encodeURIComponent(id)}/linear-issue`,
+        FindingLinearIssueResponseSchema.extend({ enabled: z.literal(true), issue: LinearIssueSchema }),
+        { method: 'POST' },
+      ),
     ),
   tokens: Effect.flatMap(DashboardHttp, (http) =>
     http.request('/api/v1/personal-tokens', TokenListSchema),

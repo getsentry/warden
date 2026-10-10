@@ -44,6 +44,7 @@ describe('personal API token routes', () => {
     const headers = { authorization: `Bearer ${token}` };
 
     expect((await app.request('/api/v1/memory/recall', { method: 'POST', headers })).status).toBe(403);
+    expect((await app.request('/api/v1/findings/00000000-0000-4000-8000-000000000003/linear-issue', { method: 'POST', headers })).status).toBe(403);
     expect((await app.request('/api/v1/personal-tokens', { headers })).status).toBe(403);
     expect((await app.request('/api/auth/session', {
       method: 'POST',

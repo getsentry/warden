@@ -39,6 +39,14 @@ export function createVercelWardenService(environment: NodeJS.ProcessEnv) {
     database,
     onError: captureServiceError,
     dashboard,
+    linear: config.LINEAR_API_KEY && config.LINEAR_TEAM_ID && config.WARDEN_SERVICE_BASE_URL
+      ? {
+          apiKey: config.LINEAR_API_KEY,
+          teamId: config.LINEAR_TEAM_ID,
+          tenantId: config.WARDEN_SERVICE_TENANT_ID,
+          baseUrl: config.WARDEN_SERVICE_BASE_URL,
+        }
+      : undefined,
     cronSecret: config.CRON_SECRET,
     jobHandlers: createMemoryJobHandlers(database, {
       extractor: memory.extractor,
