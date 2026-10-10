@@ -14,13 +14,13 @@ afterEach(() => {
 describe('Vercel service app', () => {
   it('declares Node functions, bounded resources, cron, and protected dashboard routes', async () => {
     const config = JSON.parse(await readFile(new URL('../vercel.json', import.meta.url), 'utf8')) as {
-      functions: Record<string, { maxDuration: number; memory: number }>;
+      functions: Record<string, { maxDuration: number; memory: number; includeFiles: string }>;
       crons: { path: string }[];
       rewrites: { source: string; destination: string }[];
       outputDirectory: string;
     };
 
-    expect(config.functions['api/index.ts']).toEqual({ maxDuration: 300, memory: 1024 });
+    expect(config.functions['api/index.ts']).toEqual({ maxDuration: 300, memory: 1024, includeFiles: 'dist/dashboard/**' });
     expect(config.crons).toContainEqual(expect.objectContaining({ path: '/api/internal/jobs/tick' }));
     expect(config.outputDirectory).toBe('static');
     expect(config.rewrites).toEqual(expect.arrayContaining([
@@ -49,13 +49,6 @@ describe('Vercel service app', () => {
       .toBeLessThan(manifest.scripts.build.indexOf('tsc --noEmit'));
   });
 
-  it('renders service content through text nodes without HTML injection sinks', async () => {
-    const script = await readFile(new URL('../public/assets/app.js', import.meta.url), 'utf8');
-
-    expect(script).toContain('textContent');
-    expect(script).not.toMatch(/\.innerHTML\s*=|insertAdjacentHTML|document\.write/);
-  });
-
   it('emulates the Vercel Node function and returns the Hono health route', async () => {
     process.env['DATABASE_URL'] = 'postgresql://user:password@example.invalid/warden';
     process.env['WARDEN_SERVICE_SESSION_SECRET'] = 's'.repeat(32);
@@ -78,14 +71,14 @@ describe('Vercel service app', () => {
       expect(page.status).toBe(200);
       expect(page.headers.get('content-type')).toContain('text/html');
       expect(page.headers.get('cache-control')).toBe('no-store');
-      expect(await page.text()).toBe(await readFile(new URL('../public/index.html', import.meta.url), 'utf8'));
+      expect(await page.text()).toBe(await readFile(new URL('../dist/dashboard/index.html', import.meta.url), 'utf8'));
 
       for (const [filename, contentType] of [['app.js', 'text/javascript'], ['styles.css', 'text/css']]) {
         const asset = await fetch(`http://127.0.0.1:${port}/assets/${filename}`);
         expect(asset.status).toBe(200);
         expect(asset.headers.get('content-type')).toContain(contentType);
         expect(asset.headers.get('cache-control')).toBe('no-store');
-        expect(await asset.text()).toBe(await readFile(new URL(`../public/assets/${filename}`, import.meta.url), 'utf8'));
+        expect(await asset.text()).toBe(await readFile(new URL(`../dist/dashboard/assets/${filename}`, import.meta.url), 'utf8'));
       }
     } finally {
       await new Promise<void>((resolve, reject) => server.close((error) => {

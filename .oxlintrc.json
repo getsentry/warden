@@ -1,7 +1,9 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
   "plugins": [
-    "typescript"
+    "typescript",
+    "react",
+    "jsx-a11y"
   ],
   "categories": {
     "correctness": "off"
@@ -164,6 +166,50 @@
       ],
       "rules": {
         "typescript/no-non-null-assertion": "off"
+      }
+    },
+    {
+      "files": [
+        "apps/warden-service/src/client/**/*.ts",
+        "apps/warden-service/src/client/**/*.tsx"
+      ],
+      "rules": {
+        "react/rules-of-hooks": "error",
+        "react/exhaustive-deps": "error",
+        "react/jsx-key": "error",
+        "react/jsx-no-duplicate-props": "error",
+        "react/no-danger": "error",
+        "jsx-a11y/alt-text": "error",
+        "jsx-a11y/anchor-has-content": "error",
+        "jsx-a11y/aria-props": "error",
+        "jsx-a11y/aria-proptypes": "error",
+        "jsx-a11y/role-has-required-aria-props": "error",
+        "jsx-a11y/label-has-associated-control": "error",
+        "no-restricted-properties": [
+          "error",
+          {
+            "object": "document",
+            "property": "createElement",
+            "message": "Render dashboard content with React components."
+          },
+          {
+            "object": "document",
+            "property": "write",
+            "message": "Render dashboard content with React components."
+          },
+          {
+            "property": "innerHTML",
+            "message": "Render escaped content with React."
+          },
+          {
+            "property": "replaceChildren",
+            "message": "Let React own rendered content."
+          },
+          {
+            "property": "insertAdjacentHTML",
+            "message": "Render escaped content with React."
+          }
+        ]
       }
     }
   ]

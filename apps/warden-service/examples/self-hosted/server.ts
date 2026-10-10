@@ -23,9 +23,9 @@ const database = createDatabase({
 const service = createWardenService({
   database,
   dashboard: {
-    html: readFileSync(new URL('../../public/index.html', import.meta.url), 'utf8'),
-    script: readFileSync(new URL('../../public/assets/app.js', import.meta.url), 'utf8'),
-    stylesheet: readFileSync(new URL('../../public/assets/styles.css', import.meta.url), 'utf8'),
+    html: readFileSync(new URL('../../dist/dashboard/index.html', import.meta.url), 'utf8'),
+    script: readFileSync(new URL('../../dist/dashboard/assets/app.js', import.meta.url), 'utf8'),
+    stylesheet: readFileSync(new URL('../../dist/dashboard/assets/styles.css', import.meta.url), 'utf8'),
   },
   cronSecret: environment.CRON_SECRET,
   jobHandlers: createMemoryJobHandlers(database),

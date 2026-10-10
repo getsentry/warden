@@ -4,22 +4,31 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "pnpm --filter @sentry/warden-service-api build && pnpm --filter @sentry/warden-service build && node scripts/migrate-database.mjs && tsc --noEmit && node scripts/check-static-assets.mjs",
-    "dev": "vercel dev",
-    "test": "vitest run --config vitest.config.ts",
-    "typecheck": "tsc --noEmit"
+    "build": "pnpm --filter @sentry/warden-service-api build && pnpm --filter @sentry/warden-service build && node scripts/migrate-database.mjs && tsc --noEmit && tsc --noEmit -p tsconfig.client.json && pnpm build:client && node scripts/check-static-assets.mjs",
+    "dev": "pnpm build:client && vercel dev",
+    "test": "pnpm build:client && vitest run --config vitest.config.ts",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.client.json",
+    "build:client": "vite build",
+    "lint": "oxlint . && pnpm lint:types",
+    "lint:types": "oxlint --type-aware --tsconfig tsconfig.client.json -c .oxlintrc.types.json src/client"
   },
   "dependencies": {
     "@ai-sdk/gateway": "^3.0.173",
     "@hono/node-server": "^1.19.17",
     "@sentry/node": "^10.71.0",
     "@sentry/warden-service": "workspace:*",
+    "@sentry/warden-service-api": "workspace:*",
     "@vercel/oidc": "^3.4.1",
     "ai": "^6.0.255",
+    "effect": "^3.22.2",
     "hono": "^4.13.5",
+    "react": "^19.2.6",
+    "react-dom": "^19.2.6",
+    "react-router": "^7.18.4",
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@testing-library/react": "^16.3.3",
     "@types/node": "^25.9.1",
     "happy-dom": "^20.14.5",
     "typescript": "^6.0.3",

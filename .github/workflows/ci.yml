@@ -29,6 +29,8 @@ jobs:
 
       - run: pnpm typecheck
       - run: pnpm lint
+      - name: Service and React dashboard tests
+        run: pnpm --filter @sentry/warden-service-api test && pnpm --filter @sentry/warden-service test && pnpm --filter warden-service-app test
       - name: Test
         env:
           VITEST_JUNIT: test-results.junit.xml
