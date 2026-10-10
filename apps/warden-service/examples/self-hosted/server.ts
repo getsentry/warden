@@ -22,6 +22,15 @@ const database = createDatabase({
 });
 const service = createWardenService({
   database,
+  linear: environment.LINEAR_API_KEY && environment.LINEAR_TEAM_ID && environment.WARDEN_SERVICE_BASE_URL
+    ? {
+        apiKey: environment.LINEAR_API_KEY,
+        teamId: environment.LINEAR_TEAM_ID,
+        tenantId: environment.WARDEN_SERVICE_TENANT_ID,
+        baseUrl: environment.WARDEN_SERVICE_BASE_URL,
+      }
+    : undefined,
+  ...(environment.WARDEN_SERVICE_BASE_URL ? { sessionOrigin: environment.WARDEN_SERVICE_BASE_URL } : {}),
   dashboard: {
     html: readFileSync(new URL('../../dist/dashboard/index.html', import.meta.url), 'utf8'),
     script: readFileSync(new URL('../../dist/dashboard/assets/app.js', import.meta.url), 'utf8'),

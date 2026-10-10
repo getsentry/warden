@@ -17,6 +17,8 @@ import { registerMemoryRoutes } from './memory/routes.js';
 import type { RecallMemoryOptions } from './memory/store.js';
 import { registerAdministrationRoutes } from './administration/routes.js';
 import { registerPersonalTokenRoutes } from './personal-tokens/routes.js';
+import { registerLinearRoutes } from './linear/routes.js';
+import type { LinearOptions } from './linear/client.js';
 import {
   createGoogleAuthenticationAdapter,
   dashboardLoginPath,
@@ -62,6 +64,7 @@ export interface CreateWardenServiceOptions {
   disableAuth?: { tenantId: string };
   memoryRecall?: RecallMemoryOptions;
   dashboard?: DashboardAssets;
+  linear?: LinearOptions;
 }
 
 function createDisabledAuthenticationAdapter(tenantId: string): DashboardAuthenticationAdapter {
@@ -280,6 +283,7 @@ export function createWardenService(options: CreateWardenServiceOptions = {}) {
     });
     registerRunRoutes(app, options.database);
     registerHistoryRoutes(app, options.database);
+    registerLinearRoutes(app, options.database, options.linear);
     registerMemoryRoutes(app, options.database, options.memoryRecall);
     registerAdministrationRoutes(app, options.database);
     registerPersonalTokenRoutes(app, options.database);
