@@ -15,7 +15,7 @@ export function LinearIssueAction({ findingId }: LinearIssueActionProps): JSX.El
   const status = useQuery(request, revision);
   const create = useAction();
   const [created, setCreated] = useState<LinearIssue | null>(null);
-  if (status.status === 'success' && !status.data.enabled) return null;
+  if (status.status === 'loading' || (status.status === 'success' && !status.data.enabled)) return null;
   const issue = created ?? (status.status === 'success' ? status.data.issue : null);
   if (issue) {
     return (
@@ -44,7 +44,7 @@ export function LinearIssueAction({ findingId }: LinearIssueActionProps): JSX.El
       <button
         type="button"
         className="quiet-button"
-        disabled={status.status === 'loading' || create.pending}
+        disabled={create.pending}
         onClick={() => {
           void create.run(dashboardApi.createLinearIssue(findingId)).then((result) => {
             if (result) setCreated(result.issue);
