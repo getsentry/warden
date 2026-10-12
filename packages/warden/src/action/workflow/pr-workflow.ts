@@ -28,7 +28,12 @@ import { buildEventContext } from '../../event/context.js';
 import { matchTrigger, matchPullRequestState, shouldFail, countFindingsAtOrAbove } from '../../triggers/matcher.js';
 import { fetchExistingComments } from '../../output/dedup.js';
 import type { ExistingComment } from '../../output/dedup.js';
-import { buildAnalyzedScope, findStaleComments, resolveStaleComments } from '../../output/stale.js';
+import {
+  buildAnalyzedScope,
+  findStaleComments,
+  isCommentFromRanSkill,
+  resolveStaleComments,
+} from '../../output/stale.js';
 import { filterFindings } from '../../types/index.js';
 import type { EventContext, SkillReport, Finding } from '../../types/index.js';
 import { AsyncWorkQueue, runPool } from '../../utils/index.js';
@@ -837,10 +842,28 @@ function wouldPostBlockingReview(result: TriggerResult): boolean {
 }
 
 /**
+ * Skills that completed in this run, including ones that reported zero
+ * findings. Footers carry `report.skill`; `skillName` is the configured name.
+ * Failed triggers are excluded, though stale resolution is already skipped
+ * whenever any trigger failed.
+ */
+function collectRanSkills(results: TriggerResult[]): Set<string> {
+  const skills = new Set<string>();
+  for (const result of results) {
+    if (result.error || !result.report) continue;
+    skills.add(result.skillName);
+    skills.add(result.report.skill);
+  }
+  return skills;
+}
+
+/**
  * Evaluate fix attempts on unresolved comments and resolve stale comments.
  *
  * Returns whether all Warden comments are resolved after evaluation.
  * Report mode passes failOnWriteError so GitHub write failures abort delivery.
+ * When `ranSkills` is set, only comments from those skills are evaluated or
+ * resolved, so a run covering one skill leaves other skills' threads alone.
  */
 async function evaluateFixesAndResolveStale(
   octokit: Octokit,
@@ -852,7 +875,7 @@ async function evaluateFixesAndResolveStale(
   anthropicApiKey: string,
   auxiliaryOptions: AuxiliaryWorkflowOptions,
   gate: ReviewFeedbackGate,
-  options: { failOnWriteError?: boolean } = {}
+  options: { failOnWriteError?: boolean; ranSkills?: ReadonlySet<string> } = {}
 ): Promise<{
   allResolved: boolean;
   autoResolvedByFixEvaluation: number;
@@ -870,8 +893,11 @@ async function evaluateFixesAndResolveStale(
     autoResolvedByStaleCheck: commentsResolvedByStale.size,
     findingObservations,
   });
+  const { ranSkills } = options;
+  const isInRunScope = (c: ExistingComment) =>
+    !ranSkills || isCommentFromRanSkill(c, ranSkills);
   const commentsForFixEvaluation = wardenComments.filter(
-    (c) => !activeWardenCommentIds.has(c.id)
+    (c) => !activeWardenCommentIds.has(c.id) && isInRunScope(c)
   );
   const fixEvaluationRuntime = auxiliaryOptions.runtime ?? 'pi';
   const canUseFixEvaluationRuntime = canUseRuntimeAuth({
@@ -1039,6 +1065,7 @@ async function evaluateFixesAndResolveStale(
       const commentsForStaleCheck = wardenComments.filter(
         (c) =>
           !activeWardenCommentIds.has(c.id) &&
+          isInRunScope(c) &&
           !commentsResolvedByFixEval.has(c.id) &&
           !commentsEvaluatedByFixEval.has(c.id)
       );
@@ -2208,7 +2235,7 @@ async function runReportMode(
           allFindings, reviewPhase.activeWardenCommentIds,
           canResolveStale, inputs.anthropicApiKey,
           auxiliaryOptions, gate,
-          { failOnWriteError: true },
+          { failOnWriteError: true, ranSkills: collectRanSkills(results) },
         );
         resolveSpan.setAttribute(
           'warden.feedback.auto_resolve.fix_eval_count',
@@ -2472,6 +2499,7 @@ export async function runPRWorkflow(
               allFindings, reviewPhase.activeWardenCommentIds,
               canResolveStale, inputs.anthropicApiKey,
               auxiliaryOptions, gate,
+              { ranSkills: collectRanSkills(results) },
             );
             resolveSpan.setAttribute(
               'warden.feedback.auto_resolve.fix_eval_count',
