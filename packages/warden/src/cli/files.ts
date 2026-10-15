@@ -1,6 +1,6 @@
 import { readFileSync, realpathSync, statSync } from 'node:fs';
 import { resolve, relative, dirname } from 'node:path';
-import fg from 'fast-glob';
+import { glob, globSync } from 'tinyglobby';
 import ignore, { type Ignore } from 'ignore';
 import { countPatchChunks } from '../types/index.js';
 import type { FileChange } from '../types/index.js';
@@ -128,7 +128,7 @@ function loadGitignoreRules(gitRoot: string): Ignore {
     // Not a real git repo or git not available. Walk directories manually,
     // skipping common large directories that would never contain relevant
     // .gitignore files.
-    gitignoreFiles = fg.sync('**/.gitignore', {
+    gitignoreFiles = globSync('**/.gitignore', {
       cwd: gitRoot,
       absolute: true,
       dot: true,
@@ -181,11 +181,12 @@ export async function expandFileGlobs(
   const expandedPatterns = patterns.map((pattern) => expandDirectoryPattern(pattern, cwd));
 
   // Get all matching files first
-  const files = await fg(expandedPatterns, {
+  const files = await glob(expandedPatterns, {
     cwd,
     onlyFiles: true,
     absolute: true,
     dot: false,
+    expandDirectories: false,
     // Always exclude .git directory
     ignore: ['**/.git/**'],
   });

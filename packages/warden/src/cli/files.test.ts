@@ -193,6 +193,24 @@ describe('expandFileGlobs', () => {
     expect(files).toHaveLength(0);
   });
 
+  it('handles deeply nested brace patterns without exhausting the stack', async () => {
+    writeFileSync(join(tempDir, 'file.ts'), 'content');
+    const pattern = `${'{'.repeat(3000)}a,b${'}'.repeat(3000)}*.ts`;
+
+    await expect(expandFileGlobs([pattern], tempDir)).resolves.toEqual([]);
+  });
+
+  it('preserves brace alternatives and excluded patterns', async () => {
+    writeFileSync(join(tempDir, 'file.ts'), 'content');
+    writeFileSync(join(tempDir, 'file.js'), 'content');
+    writeFileSync(join(tempDir, 'file.test.ts'), 'content');
+    writeFileSync(join(tempDir, 'file.css'), 'content');
+
+    const files = await expandFileGlobs(['*.{ts,js}', '!*.test.ts'], tempDir);
+
+    expect(files).toEqual([join(tempDir, 'file.js'), join(tempDir, 'file.ts')]);
+  });
+
   describe('gitignore support', () => {
     it('excludes files matching .gitignore patterns by default', async () => {
       initGitRepo(tempDir);
