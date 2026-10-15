@@ -37,6 +37,7 @@ export interface AuxiliaryCallOptions {
   effort?: Effort;
   maxRetries?: number;
   agentName?: string;
+  abortController?: AbortController;
 }
 
 /** Return true when the selected runtime can authenticate outside a legacy Anthropic API key. */
@@ -543,6 +544,10 @@ export async function mergeCrossLocationFindings(
   const apiKey = options?.apiKey;
   const repoPath = options?.repoPath ?? '.';
 
+  if (options?.abortController?.signal.aborted) {
+    return { findings, mergedCount: 0 };
+  }
+
   // Early exit: need at least 2 located findings to merge
   const withLocations = findings.filter((f) => f.location);
   if (withLocations.length < 2 || !canUseRuntimeAuth(options)) {
@@ -581,6 +586,7 @@ Singletons should not appear. Return [] if no findings describe the same issue.`
     effort: options?.effort,
     maxTokens: FINDING_COMPARISON_MAX_TOKENS,
     maxRetries: options?.maxRetries,
+    abortController: options?.abortController,
   });
 
   if (!result.success) {
