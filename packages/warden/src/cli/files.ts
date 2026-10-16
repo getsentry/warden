@@ -1,5 +1,6 @@
 import { readFileSync, realpathSync, statSync } from 'node:fs';
 import { resolve, relative, dirname } from 'node:path';
+import { expand as expandBraces } from 'brace-expansion';
 import { glob, globSync } from 'tinyglobby';
 import ignore, { type Ignore } from 'ignore';
 import { countPatchChunks } from '../types/index.js';
@@ -178,7 +179,10 @@ export async function expandFileGlobs(
   // Resolve to absolute path to handle relative paths like '.' or 'src'
   const cwd = resolve(options.cwd ?? process.cwd());
   const useGitignore = options.gitignore ?? true;
-  const expandedPatterns = patterns.map((pattern) => expandDirectoryPattern(pattern, cwd));
+  // Expand ranges before matching so multi-digit and padded values keep their width.
+  const expandedPatterns = patterns.flatMap((pattern) =>
+    expandBraces(expandDirectoryPattern(pattern, cwd))
+  );
 
   // Get all matching files first
   const files = await glob(expandedPatterns, {
@@ -187,6 +191,7 @@ export async function expandFileGlobs(
     absolute: true,
     dot: false,
     expandDirectories: false,
+    braceExpansion: false,
     // Always exclude .git directory
     ignore: ['**/.git/**'],
   });

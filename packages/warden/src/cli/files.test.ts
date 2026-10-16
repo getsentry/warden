@@ -1,8 +1,9 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { writeFileSync, mkdirSync, rmSync, symlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { execFileSync } from 'node:child_process';
+import * as exec from '../utils/exec.js';
 import {
   createPatchFromContent,
   createSyntheticFileChange,
@@ -117,6 +118,7 @@ describe('expandFileGlobs', () => {
   });
 
   afterEach(() => {
+    vi.restoreAllMocks();
     rmSync(tempDir, { recursive: true, force: true });
   });
 
@@ -211,7 +213,45 @@ describe('expandFileGlobs', () => {
     expect(files).toEqual([join(tempDir, 'file.js'), join(tempDir, 'file.ts')]);
   });
 
+  it.each([
+    { range: '{1..12}', matches: ['file1.ts', 'file2.ts', 'file9.ts', 'file10.ts', 'file12.ts'] },
+    { range: '{01..12}', matches: ['file01.ts', 'file02.ts', 'file09.ts', 'file10.ts', 'file12.ts'] },
+  ])('expands the complete numeric range $range', async ({ range, matches }) => {
+    for (const name of ['file1.ts', 'file2.ts', 'file9.ts', 'file10.ts', 'file12.ts', 'file13.ts', 'file01.ts', 'file02.ts', 'file09.ts']) {
+      writeFileSync(join(tempDir, name), 'content');
+    }
+
+    const files = await expandFileGlobs([`file${range}.ts`], tempDir);
+
+    expect(files).toEqual(matches.map(name => join(tempDir, name)).sort());
+  });
+
+  it('preserves escaped braces in file names', async () => {
+    writeFileSync(join(tempDir, 'file{1..12}.ts'), 'literal braces');
+    writeFileSync(join(tempDir, 'file1.ts'), 'range match');
+
+    const files = await expandFileGlobs(['file\\{1..12\\}.ts'], tempDir);
+
+    expect(files).toEqual([join(tempDir, 'file{1..12}.ts')]);
+  });
+
   describe('gitignore support', () => {
+    it('loads gitignore files when git cannot list them', async () => {
+      initGitRepo(tempDir);
+      writeFileSync(join(tempDir, '.gitignore'), 'ignored.ts\n');
+      writeFileSync(join(tempDir, 'ignored.ts'), 'ignored');
+      writeFileSync(join(tempDir, 'included.ts'), 'included');
+      const execGit = exec.execGitNonInteractive;
+      vi.spyOn(exec, 'execGitNonInteractive').mockImplementation((args, options) => {
+        if (args[0] === 'ls-files') throw new Error('Cannot list gitignore files');
+        return execGit(args, options);
+      });
+
+      const files = await expandFileGlobs(['*.ts'], tempDir);
+
+      expect(files).toEqual([join(tempDir, 'included.ts')]);
+    });
+
     it('excludes files matching .gitignore patterns by default', async () => {
       initGitRepo(tempDir);
       writeFileSync(join(tempDir, '.gitignore'), 'ignored.ts\nbuild/\n');
