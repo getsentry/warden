@@ -133,6 +133,7 @@ function loadGitignoreRules(gitRoot: string): Ignore {
       cwd: gitRoot,
       absolute: true,
       dot: true,
+      expandDirectories: false,
       ignore: ['**/.git/**', '**/node_modules/**'],
     });
   }
