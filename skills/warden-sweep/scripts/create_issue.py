@@ -80,7 +80,10 @@ def build_issue_body(
         lines.append("")
         lines.append("| Severity | Skill | File | Title |")
         lines.append("|----------|-------|------|-------|")
-        for f in verified:
+        # verified.jsonl holds verdict data only; take the details from all-findings.jsonl
+        by_id = {f["findingId"]: f for f in all_findings if "findingId" in f}
+        for v in verified:
+            f = {**by_id.get(v.get("findingId"), {}), **v}
             sev = severity_badge(f.get("severity", "info"))
             skill = f.get("skill", "")
             file_path = f.get("file", "")
