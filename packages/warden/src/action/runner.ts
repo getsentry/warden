@@ -13,13 +13,14 @@ import { parseActionInputs, setupAuthEnv, validateInputs } from './inputs.js';
 import { ActionFailedError, setFailed } from './workflow/base.js';
 import { runPRWorkflow } from './workflow/pr-workflow.js';
 import { runScheduleWorkflow } from './workflow/schedule.js';
+import { ActionCancellation } from './cancellation.js';
 
 function isPullRequestEvent(eventName: string): boolean {
   return eventName === 'pull_request';
 }
 
 /** Run the GitHub Action dispatcher once. */
-export async function runAction(): Promise<void> {
+export async function runAction(cancellation = new ActionCancellation()): Promise<void> {
   const eventName = process.env['GITHUB_EVENT_NAME'];
   const actionAttributes = setGitHubActionScope(eventName);
 
@@ -48,18 +49,27 @@ export async function runAction(): Promise<void> {
           if (inputs.mode !== 'run') {
             setFailed(`${inputs.mode} mode is only supported for pull request workflows`);
           }
-          await runScheduleWorkflow(octokit, inputs, repoPath);
+          await runScheduleWorkflow(octokit, inputs, repoPath, cancellation);
         } else {
           if (inputs.mode !== 'run' && !isPullRequestEvent(eventName)) {
             setFailed(`${inputs.mode} mode is only supported for pull request workflows`);
           }
-          await runPRWorkflow(octokit, inputs, eventName, eventPath, repoPath);
+          await runPRWorkflow(octokit, inputs, eventName, eventPath, repoPath, cancellation);
         }
 
-        span.setAttribute('warden.action.outcome', 'success');
+        const outcome = cancellation.requested ? 'cancelled' : 'success';
+        span.setAttribute('warden.action.outcome', outcome);
         span.setStatus({ code: SPAN_STATUS_OK });
-        emitActionRunMetric('success', stage);
+        emitActionRunMetric(outcome, stage);
       } catch (error) {
+        if (cancellation.requested) {
+          span.setAttribute('warden.action.outcome', 'cancelled');
+          span.setAttribute('warden.action.stage', stage);
+          span.setStatus({ code: SPAN_STATUS_OK });
+          emitActionRunMetric('cancelled', stage);
+          throw error;
+        }
+
         const { code } = classifyError(error);
         span.setAttribute('warden.action.outcome', 'failure');
         span.setAttribute('warden.action.stage', stage);
