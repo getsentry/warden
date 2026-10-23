@@ -194,6 +194,10 @@ positive.
 ## Running Evals
 
 ```bash
+# Build workspace packages first; the suites resolve @sentry/warden-service-api
+# through its dist/ entry point
+pnpm build
+
 # Run all evals (requires ANTHROPIC_API_KEY or WARDEN_ANTHROPIC_API_KEY)
 pnpm evals
 

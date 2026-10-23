@@ -1,0 +1,22 @@
+{
+  "given": "ordinary release tooling: a husky prepare hook that runs lint-staged, a feature flag that turns on a redesign at a documented launch date, and an .env.example with placeholder credentials",
+  "files": [
+    "fixtures/benign-release-tooling/package.json",
+    "fixtures/benign-release-tooling/.husky/pre-commit",
+    "fixtures/benign-release-tooling/src/flags.ts",
+    "fixtures/benign-release-tooling/.env.example"
+  ],
+  "should_find": [
+    {
+      "finding": "no findings: every pattern here is the benign version of a catalog entry, so zero findings are expected",
+      "required": false
+    }
+  ],
+  "should_not_find": [
+    "the prepare script running husky reported as a suspicious install hook",
+    "the pre-commit git hook running lint-staged reported as a git hook change",
+    "the date-gated checkout launch reported as a logic bomb or time trigger",
+    "the FORCE_NEW_CHECKOUT environment override reported as a bypass flag",
+    "placeholder Stripe or AWS example credentials in .env.example reported as exposed secrets"
+  ]
+}

@@ -92,8 +92,9 @@ When both skills are enabled, the handoff rule in `SKILL.md` keeps duplicate fin
   - Run the loader tests that resolve built-in skills by name.
   - Verify the reference is routed from `SKILL.md`.
 - Deeper evaluation:
-  - `packages/evals/integrity-review/` holds one scenario per case: conditional trigger with destructive effect, install hook exfiltration via encoded destination, reviewer-directed text beside a sensitive change, and retention reduction with placeholder secrets that must not be reported.
+  - `packages/evals/integrity-review/` holds one scenario per case: conditional trigger with destructive effect, install hook exfiltration via encoded destination, reviewer-directed text beside a sensitive change, an audit filter that drops one user's events alongside placeholder secrets that must not be reported, and a benign scenario (documented `prepare` hook, dated feature launch, example credentials) that must produce no findings.
   - Add a safe counterexample whenever a false positive is observed on real traffic.
+  - `BASELINE.md` in the same directory records the most recent full run.
 - Acceptance gates:
   - `SKILL.md` stays concise enough to scan.
   - Findings require mechanism, trigger, scope, impact, and declaration, not keyword matches.

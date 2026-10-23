@@ -72,8 +72,8 @@ Load only when the hunk touches a matching area:
 - Anything in `security-review`'s or `code-review`'s scope unless concealment is the finding.
 - Deletions or deprecations the PR explains, with removed code demonstrably unreferenced.
 - Migrations with a reversible `down`, retention changes the PR states, scheduled launches, license expiry checks, and certificate rotation logic.
-- Test-only bypasses that cannot run in production, feature flags documented in config, and fixtures, examples, or `.env.example` files.
-- Documented placeholder secrets such as `AKIAIOSFODNN7EXAMPLE`, `changeme`, `test-password`, or `example.com` endpoints.
+- Test-only bypasses that cannot run in production, and feature flags documented in config.
+- Documented placeholder secrets such as `AKIAIOSFODNN7EXAMPLE`, `changeme`, `test-password`, or `example.com` endpoints, wherever they appear, including fixtures, examples, and `.env.example` files. The files themselves stay in scope: executable content under `fixtures/`, `examples/`, or `vendor/` is reviewed like any other code, because those are the directories reviewers skip.
 - Lockfile changes that match a manifest change in the same directory, routine version bumps, and vendored libraries that match upstream.
 - Mutable action refs, broad workflow permissions, or style issues with no traced effect.
 - The author's identity, history, association, or usual area of work. These are never findings.

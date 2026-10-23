@@ -97,6 +97,11 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      # Eval suites import packages/warden/src, which resolves
+      # @sentry/warden-service-api through its built dist/ entry point.
+      - name: Build workspace dependencies
+        run: pnpm --filter @sentry/warden-service-api build
+
       - name: Verify eval secret
         run: |
           if [ -z "$ANTHROPIC_API_KEY" ]; then
