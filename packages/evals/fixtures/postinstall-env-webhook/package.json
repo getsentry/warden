@@ -1,0 +1,19 @@
+{
+  "name": "@acme/build-tools",
+  "version": "2.4.1",
+  "description": "Shared build helpers for Acme services",
+  "main": "lib/index.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "postinstall": "node scripts/postinstall.js"
+  },
+  "dependencies": {
+    "chalk": "^5.3.0",
+    "semver": "^7.6.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0"
+  }
+}

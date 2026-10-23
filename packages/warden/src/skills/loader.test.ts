@@ -53,6 +53,11 @@ describe('resolveSkillAsync', () => {
     const codeSkill = await resolveSkillAsync('code-review');
     expect(codeSkill.name).toBe('code-review');
     expect(codeSkill.rootDir).toContain('src/builtin-skills/code-review');
+
+    const integritySkill = await resolveSkillAsync('integrity-review');
+    expect(integritySkill.name).toBe('integrity-review');
+    expect(integritySkill.rootDir).toContain('src/builtin-skills/integrity-review');
+    expect(integritySkill.tools?.allowed).toEqual(['Read', 'Grep', 'Glob']);
   });
 
   it('lets repo-local skills override built-in skills', async () => {
@@ -176,6 +181,7 @@ describe('BUILTIN_SKILL_DIRECTORIES', () => {
   it('documents the built-in skill names trusted by fallback resolution', () => {
     expect(BUILTIN_SKILL_NAMES).toEqual([
       'code-review',
+      'integrity-review',
       'security-review',
     ]);
   });
@@ -184,6 +190,7 @@ describe('BUILTIN_SKILL_DIRECTORIES', () => {
     const skills = await discoverAllSkills();
     const skill = skills.get('security-review');
     const codeSkill = skills.get('code-review');
+    const integritySkill = skills.get('integrity-review');
 
     expect(skill).toBeDefined();
     expect(skill!.directory).toBe('built-in');
@@ -191,6 +198,9 @@ describe('BUILTIN_SKILL_DIRECTORIES', () => {
     expect(codeSkill).toBeDefined();
     expect(codeSkill!.directory).toBe('built-in');
     expect(codeSkill!.path).toContain('src/builtin-skills/code-review');
+    expect(integritySkill).toBeDefined();
+    expect(integritySkill!.directory).toBe('built-in');
+    expect(integritySkill!.path).toContain('src/builtin-skills/integrity-review');
   });
 
   it('includes the monorepo package root as an action-bundle fallback', () => {
