@@ -40,6 +40,10 @@ describe('npm package contents', () => {
     expect(ignored.ignores('src/builtin-skills/code-review/references/javascript-typescript.md')).toBe(false);
     expect(ignored.ignores('src/builtin-skills/code-review/references/github-workflows.md')).toBe(false);
     expect(ignored.ignores('src/builtin-skills/code-review/references/python.md')).toBe(false);
+    expect(ignored.ignores('src/builtin-skills/integrity-review/SKILL.md')).toBe(false);
+    expect(ignored.ignores('src/builtin-skills/integrity-review/SPEC.md')).toBe(false);
+    expect(ignored.ignores('src/builtin-skills/integrity-review/SOURCES.md')).toBe(false);
+    expect(ignored.ignores('src/builtin-skills/integrity-review/references/threat-catalog.md')).toBe(false);
     expect(ignored.ignores('skills/warden/SPEC.md')).toBe(false);
     expect(ignored.ignores('skills/warden-service/spec.md')).toBe(false);
     expect(ignored.ignores('src/internal-skills/skill-writer/scripts/quick_validate_test.py')).toBe(true);

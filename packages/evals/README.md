@@ -87,6 +87,8 @@ packages/evals/
 │   └── robots-prefix-blocks-public-metadata.json
 ├── security-review/            # One scenario per JSON file
 │   └── sentry-replay-delete-read-scope.json
+├── integrity-review/           # One scenario per integrity-review case
+│   └── postinstall-env-webhook.json
 ├── verification/               # Candidate findings for verifier-only evals
 │   └── workflow-open-periods-project-access-keep.json
 ├── skills/                     # Test skills (vehicles for exercising pipeline)
@@ -127,6 +129,7 @@ The Vitest entrypoints are intentionally split by eval layer:
 - `packages/evals/src/e2e.eval.ts`: generic YAML full-pipeline suites.
 - `packages/evals/src/code-review.eval.ts`: code-review correctness benchmark scenarios.
 - `packages/evals/src/security-review.eval.ts`: security-review benchmark scenarios.
+- `packages/evals/src/integrity-review.eval.ts`: integrity-review scenarios for destructive, concealed, or trigger-gated changes.
 - `packages/evals/src/verify.eval.ts`: verifier-only scenarios from `packages/evals/verification/`.
 
 ## YAML Schema
@@ -191,6 +194,10 @@ positive.
 ## Running Evals
 
 ```bash
+# Build workspace packages first; the suites resolve @sentry/warden-service-api
+# through its dist/ entry point
+pnpm build
+
 # Run all evals (requires ANTHROPIC_API_KEY or WARDEN_ANTHROPIC_API_KEY)
 pnpm evals
 
@@ -205,6 +212,9 @@ pnpm evals -t "security-review"
 
 # Run the code-review evals
 pnpm evals -t "code-review"
+
+# Run the integrity-review evals
+pnpm evals -t "integrity-review"
 
 # Run verifier-only evals
 pnpm evals -t "verification"
