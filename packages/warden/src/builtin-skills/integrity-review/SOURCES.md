@@ -7,6 +7,7 @@
 | `insider-threat-pr-review` skill, v1.2.0 (internal, 2026-10-20) | Internal prior art | High | Written for an agent that drives the whole review (`gh`, scanner, comment, label). Use the catalog and evidence stance; drop the workflow. | Catalog adapted to `references/threat-catalog.md`; workflow, verdicts, scanner, and CI publishing removed. |
 | Existing `security-review` and `code-review` built-ins | Local prior art | High | Use structure and evidence gating; do not import their scope. | Mirror the category table, severity rubric, exclusions, and finding format. Define an explicit boundary table. |
 | Source skill validation: 4 synthetic fixtures, 600 `getsentry/sentry` PRs | Internal measurement | Medium | Measured against a bare model, not against Warden's built-ins. | Treat the 99% clean rate on merged PRs as the noise budget. Treat detection gains as unproven until Warden evals show a delta. |
+| Backtest of this skill: 500 closed `getsentry/sentry` PRs (2026-10-23) | Internal measurement | Medium | Run on the pre-review-feedback version of `SKILL.md` (fixtures still excluded wholesale). 51 of 500 rows audited by hand. | 1 finding (medium, audit agreed; misleading-narrative rule says high). The source skill flagged 26 of the same PRs; the audit confirmed all 25 now-empty ones as correctly empty under a named rule. Three eval scenarios derived from the audited patterns. |
 
 ## Adaptation Decisions
 
@@ -41,5 +42,7 @@
 | False-positive controls | Complete | Exclusions cover declared deprecations, reversible migrations, test-only bypasses, placeholders, matching lockfile updates, and the other built-ins' scopes. |
 | Severity calibration | Complete | Tied to blast radius; raised for concealment, lowered for unconfirmed preconditions. |
 | PR-wide signals under per-hunk analysis | Partial | File-list guidance in the catalog. Deterministic PR-level leads would need a harness feature. |
-| Declaration-based findings in evals | Gap | Harness supplies no PR title or body. |
-| Real-world true positives | Gap | Source validation found no malicious PRs in 600 samples; only synthetic fixtures are true positives. |
+| Declaration-based findings in evals | Gap | Harness supplies no PR title or body. In-code narrative mismatch (docstring versus behavior) is covered by `misdescribed-gate-removal`. |
+| Real-traffic precision | Measured | 500 closed PRs: 1 finding, 0 audited disagreements, 25 of the source skill's 26 flags correctly silenced. Benign eval scenarios encode the recurring patterns: declared log downgrades, option-gated limits with safe fallback, encoded assets in fixtures. |
+| Real-traffic recall | Gap | 449 of 500 zero-finding rows are unaudited. The only true positive is one misdescribed gate removal; no malicious PRs were present in either sample. |
+| Severity calibration on real traffic | Partial | The one real finding was rated medium where the misleading-description modifier calls for high. `misdescribed-gate-removal` asserts `severity: high` to track this. |

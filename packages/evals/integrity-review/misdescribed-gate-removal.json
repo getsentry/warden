@@ -1,0 +1,20 @@
+{
+  "given": "a review gate whose docstring says bot authors are allowed only when their App installation has write access and that it fails closed, while the code returns True for any login ending in [bot] before any access check runs",
+  "files": [
+    "fixtures/misdescribed-gate-removal/review_webhook.py"
+  ],
+  "should_find": [
+    {
+      "finding": "any author whose login ends in [bot] bypasses the write-access check entirely, contradicting the docstring's claim of an installation-permission check that fails closed",
+      "severity": "high"
+    }
+  ],
+  "should_not_find": [
+    "the debug log line for accepted bot reviews is at the wrong level",
+    "the write-access check for human authors could be combined into one condition",
+    "missing type annotations or docstring formatting"
+  ],
+  "notes": {
+    "source": "Modeled on the one agreed finding from a 500-PR backtest of closed getsentry/sentry pull requests, where the PR body described an installation write-access check for bots and the diff skipped the gate for every bot-flagged author. The backtest run rated it medium; the misleading-description modifier in SKILL.md calls for high."
+  }
+}
