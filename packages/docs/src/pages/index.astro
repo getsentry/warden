@@ -1,7 +1,6 @@
 ---
 import Base from '../layouts/Base.astro';
 import Terminal from '../components/Terminal.astro';
-import PackageManagerTabs from '../components/PackageManagerTabs.astro';
 import HeroFlow from '../components/HeroFlow.astro';
 import { Code } from 'astro:components';
 
@@ -109,27 +108,25 @@ vulnerabilities in code changes for Warden's baseline security skill.
 
   <section class="quick-start">
     <div class="step">
-      <h3>Install Warden</h3>
-      <p>Install the CLI globally.</p>
-      <PackageManagerTabs
-        npm="npm install -g @sentry/warden"
-        pnpm="pnpm add -g @sentry/warden"
-        bun="bun add -g @sentry/warden"
-      />
+      <h3>Run Warden</h3>
+      <p>Run the CLI without installing it globally.</p>
+      <Terminal showCopy={true} copyText="npx @sentry/warden">
+        <pre class="cli-output"><span class="cli-dim">$</span> npx @sentry/warden</pre>
+      </Terminal>
     </div>
 
     <div class="step">
       <h3>Wire It In</h3>
       <p>Scaffold your project with config and GitHub workflow.</p>
-      <Terminal showCopy={true} copyText="warden init">
-        <pre class="cli-output"><span class="cli-dim">$</span> warden init
+      <Terminal showCopy={true} copyText="npx @sentry/warden init">
+        <pre class="cli-output"><span class="cli-dim">$</span> npx @sentry/warden init
 
 <span class="cli-green">Created</span> warden.toml
 <span class="cli-green">Created</span> .github/workflows/warden.yml
 
 <span class="cli-bold">Next steps:</span>
-  1. Add built-in reviews: <span class="cli-cyan">warden add security-review</span>
-     <span class="cli-cyan">warden add code-review</span>
+  1. Add built-in reviews: <span class="cli-cyan">npx @sentry/warden add security-review</span>
+     <span class="cli-cyan">npx @sentry/warden add code-review</span>
   2. Set <span class="cli-cyan">WARDEN_MODEL</span> and the provider API key for that model
   3. Add the same values to repository secrets
      <span class="cli-dim">https://github.com/your-org/your-repo/settings/secrets/actions</span>
@@ -140,9 +137,9 @@ vulnerabilities in code changes for Warden's baseline security skill.
     <div class="step">
       <h3>Load Skills</h3>
       <p>Start with baseline security and correctness reviews. Add more skills when your codebase needs deeper coverage.</p>
-      <Terminal showCopy={true} copyText={`warden add security-review\nwarden add code-review`}>
-        <pre class="cli-output"><span class="cli-dim">$</span> warden add security-review
-<span class="cli-dim">$</span> warden add code-review</pre>
+      <Terminal showCopy={true} copyText={`npx @sentry/warden add security-review\nnpx @sentry/warden add code-review`}>
+        <pre class="cli-output"><span class="cli-dim">$</span> npx @sentry/warden add security-review
+<span class="cli-dim">$</span> npx @sentry/warden add code-review</pre>
       </Terminal>
       <p>Keep adding skills for areas where your codebase needs specific coverage.</p>
     </div>
