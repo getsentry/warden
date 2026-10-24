@@ -16,7 +16,7 @@
     "@fontsource/ibm-plex-mono": "^5.2.7",
     "@sentry/starlight-theme": "^0.9.1",
     "@sentry/warden": "workspace:*",
-    "astro": "^7.2.9",
+    "astro": "^7.3.3",
     "astro-expressive-code": "^0.44.1",
     "shiki": "^4.1.0"
   },
