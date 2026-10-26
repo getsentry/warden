@@ -170,6 +170,7 @@ export interface CallHaikuOptions<T> {
   maxTokens?: number;
   timeout?: number;
   maxRetries?: number;
+  abortController?: AbortController;
 }
 
 /**
@@ -188,7 +189,7 @@ function inferPrefill(schema: z.ZodType): string | undefined {
  * Auto-prefills based on Zod schema type, extracts JSON, validates with Zod.
  */
 export async function callHaiku<T>(options: CallHaikuOptions<T>): Promise<HaikuResult<T>> {
-  const { apiKey, prompt, schema, agentName, task, model = HAIKU_MODEL, maxTokens = DEFAULT_MAX_TOKENS, timeout = DEFAULT_TIMEOUT_MS, maxRetries = DEFAULT_AUXILIARY_MAX_RETRIES } = options;
+  const { apiKey, prompt, schema, agentName, task, model = HAIKU_MODEL, maxTokens = DEFAULT_MAX_TOKENS, timeout = DEFAULT_TIMEOUT_MS, maxRetries = DEFAULT_AUXILIARY_MAX_RETRIES, abortController } = options;
 
   return startTracedSpan(
     {
@@ -218,11 +219,14 @@ export async function callHaiku<T>(options: CallHaikuOptions<T>): Promise<HaikuR
       setGenAiInputMessagesAttr(span, messages);
 
       try {
-        const response = await client.messages.create({
-          model,
-          max_tokens: maxTokens,
-          messages,
-        });
+        const response = await client.messages.create(
+          {
+            model,
+            max_tokens: maxTokens,
+            messages,
+          },
+          { signal: abortController?.signal },
+        );
 
         const usage = apiUsageToStats(model, response.usage);
 
