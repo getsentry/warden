@@ -78,6 +78,22 @@ vi.mock('../fix-evaluation/index.js', () => ({
   postThreadReply: vi.fn(() => Promise.resolve()),
 }));
 
+vi.mock('../service.js', async () => {
+  const actual: Record<string, unknown> = await vi.importActual('../service.js');
+  return {
+    ...actual,
+    recallActionMemoryFailOpen: vi.fn(),
+  };
+});
+
+vi.mock('@sentry/node', async () => {
+  const actual: Record<string, unknown> = await vi.importActual('@sentry/node');
+  return {
+    ...actual,
+    captureException: vi.fn(),
+  };
+});
+
 // Mock base utilities that call process.exit or need system access
 vi.mock('./base.js', async () => {
   const actual = await vi.importActual<typeof BaseWorkflow>('./base.js');
@@ -132,6 +148,9 @@ import { runPRWorkflow } from './pr-workflow.js';
 import { clearSkillsCache } from '../../skills/loader.js';
 import { AsyncWorkQueue } from '../../utils/index.js';
 import { buildFindingsOutput } from '../../reporting/output.js';
+import { ActionCancellation } from '../cancellation.js';
+import { recallActionMemoryFailOpen } from '../service.js';
+import { Sentry } from '../../sentry.js';
 
 // Type the mocks
 const mockRunSkillTask = vi.mocked(runSkillTask);
@@ -143,6 +162,7 @@ const mockSetFailed = vi.mocked(setFailed);
 const mockWriteFindingsOutput = vi.mocked(writeFindingsOutput);
 const mockWriteFindingsOutputLive = vi.mocked(writeFindingsOutputLive);
 const mockClearStaleFindingsOutput = vi.mocked(clearStaleFindingsOutput);
+const mockRecallActionMemoryFailOpen = vi.mocked(recallActionMemoryFailOpen);
 
 // Type helper for mocking Octokit responses
 type GetPullResponse = Awaited<ReturnType<Octokit['pulls']['get']>>;
@@ -362,6 +382,58 @@ describe('runPRWorkflow', () => {
   });
 
   describe('split action modes', () => {
+    it('does not publish when analyze mode is cancelled before execution', async () => {
+      const cancellation = new ActionCancellation();
+      cancellation.request('SIGINT');
+      const fetchSpy = vi.spyOn(globalThis, 'fetch');
+
+      await runPRWorkflow(
+        mockOctokit,
+        createDefaultInputs({
+          mode: 'analyze',
+          serviceUrl: 'https://warden.example.com',
+          serviceToken: 'service-token',
+          serviceData: 'metrics',
+          serviceMemory: false,
+        }),
+        'pull_request',
+        EVENT_PAYLOAD_PATH,
+        FIXTURES_DIR,
+        cancellation,
+      );
+
+      expect(fetchSpy).not.toHaveBeenCalled();
+      expect(mockWriteFindingsOutput.mock.calls.at(-1)?.[3]?.outcome).toBe('cancelled');
+    });
+
+    it('preserves recalled-memory linkage when analyze mode is cancelled after initialization', async () => {
+      const cancellation = new ActionCancellation();
+      mockRecallActionMemoryFailOpen.mockImplementationOnce(async () => {
+        cancellation.request('SIGINT');
+        return {
+          clientRecallId: 'recall-1',
+          memories: [{ id: 'memory-1', version: 2, kind: 'convention', content: 'Use stable identifiers.' }],
+        };
+      });
+
+      await runPRWorkflow(
+        mockOctokit,
+        createDefaultInputs({ mode: 'analyze' }),
+        'pull_request',
+        EVENT_PAYLOAD_PATH,
+        FIXTURES_DIR,
+        cancellation,
+      );
+
+      expect(mockWriteFindingsOutput.mock.calls.at(-1)?.[3]).toEqual(
+        expect.objectContaining({
+          outcome: 'cancelled',
+          recalledMemories: [{ id: 'memory-1', version: 2 }],
+          memoryRecallId: 'recall-1',
+        }),
+      );
+    });
+
     it('analyze mode writes findings without creating GitHub checks or reviews', async () => {
       const finding = createFinding();
       const report = createSkillReport({ findings: [finding] });
@@ -492,6 +564,33 @@ describe('runPRWorkflow', () => {
         expect.objectContaining({ skillExecutionId: expect.any(String), triggerName: 'test-skill' }),
       ]);
       expect(finalOptions?.resolvedDefaults).toBeDefined();
+    });
+
+    it('does not post checks or reviews from a cancelled analyze artifact', async () => {
+      const report = createSkillReport({ findings: [createFinding()] });
+      const findingsFile = writeFindingsArtifact(
+        [report],
+        [{ triggerName: 'test-skill', skillName: 'test-skill', report }],
+        (output) => {
+          output.outcome = 'cancelled';
+        },
+      );
+
+      try {
+        await runPRWorkflow(
+          mockOctokit,
+          createDefaultInputs({ mode: 'report', findingsFile }),
+          'pull_request',
+          EVENT_PAYLOAD_PATH,
+          FIXTURES_DIR,
+        );
+      } finally {
+        rmSync(dirname(findingsFile), { recursive: true, force: true });
+      }
+
+      expect(mockWriteFindingsOutput.mock.calls.at(-1)?.[3]?.outcome).toBe('cancelled');
+      expect(mockOctokit.checks.create).not.toHaveBeenCalled();
+      expect(mockOctokit.pulls.createReview).not.toHaveBeenCalled();
     });
 
     it('preserves the canonical analyze artifact when report mode starts', async () => {
@@ -1690,6 +1789,119 @@ describe('runPRWorkflow', () => {
       expect(finalOptions?.skillExecutions).toEqual([
         expect.objectContaining({ skillExecutionId: expect.any(String), triggerName: 'test-skill' }),
       ]);
+    });
+
+    it('flushes completed findings and finalizes as cancelled before posting reviews', async () => {
+      const cancellation = new ActionCancellation();
+      const finding = createFinding();
+      let notifyStarted!: () => void;
+      const started = new Promise<void>((resolve) => {
+        notifyStarted = resolve;
+      });
+      mockRunSkillTask.mockImplementation(async (taskOptions) => {
+        notifyStarted();
+        await new Promise<void>((resolve) => {
+          taskOptions.runnerOptions?.abortController?.signal.addEventListener('abort', () => resolve(), {
+            once: true,
+          });
+        });
+        return {
+          name: taskOptions.name,
+          report: createSkillReport({ skill: 'test-skill', findings: [finding] }),
+        };
+      });
+
+      const workflow = runPRWorkflow(
+        mockOctokit,
+        createDefaultInputs({ parallel: 1 }),
+        'pull_request',
+        EVENT_PAYLOAD_PATH,
+        DUPLICATE_TRIGGER_FIXTURES_DIR,
+        cancellation,
+      );
+      await started;
+      cancellation.request('SIGTERM');
+      await workflow;
+
+      const finalCall = mockWriteFindingsOutput.mock.calls.at(-1);
+      expect(finalCall?.[0]).toEqual([
+        expect.objectContaining({ findings: [finding] }),
+      ]);
+      expect(finalCall?.[3]?.outcome).toBe('cancelled');
+      expect(finalCall?.[3]?.triggerResults).toEqual(
+        expect.arrayContaining([expect.objectContaining({ pending: true })]),
+      );
+      expect(finalCall?.[3]?.skippedTriggers).toEqual(
+        expect.arrayContaining([expect.objectContaining({ reason: 'pending' })]),
+      );
+      expect(mockFetchExistingComments).not.toHaveBeenCalled();
+      expect(vi.mocked(mockOctokit.checks.update).mock.calls).toEqual(
+        expect.arrayContaining([
+          [expect.objectContaining({ conclusion: 'cancelled' })],
+          [expect.objectContaining({ conclusion: 'cancelled' })],
+        ]),
+      );
+    });
+
+    it('preserves memory linkage and captures a core-check failure when cancelled after setup', async () => {
+      const cancellation = new ActionCancellation();
+      const checkError = new Error('check update failed');
+      mockRecallActionMemoryFailOpen.mockResolvedValueOnce({
+        clientRecallId: 'recall-1',
+        memories: [{ id: 'memory-1', version: 2, kind: 'convention', content: 'Use stable identifiers.' }],
+      });
+      vi.mocked(mockOctokit.checks.create).mockImplementationOnce(async () => {
+        cancellation.request('SIGTERM');
+        return {
+          data: { id: 1, html_url: 'https://example.com/check/1' },
+        } as Awaited<ReturnType<Octokit['checks']['create']>>;
+      });
+      vi.mocked(mockOctokit.checks.update).mockRejectedValue(checkError);
+
+      await runPRWorkflow(
+        mockOctokit,
+        createDefaultInputs(),
+        'pull_request',
+        EVENT_PAYLOAD_PATH,
+        FIXTURES_DIR,
+        cancellation,
+      );
+      expect(mockWriteFindingsOutput.mock.calls.at(-1)?.[3]).toEqual(
+        expect.objectContaining({
+          outcome: 'cancelled',
+          recalledMemories: [{ id: 'memory-1', version: 2 }],
+          memoryRecallId: 'recall-1',
+        }),
+      );
+      expect(Sentry.captureException).toHaveBeenCalledWith(checkError, {
+        tags: { operation: 'cancel_core_check' },
+      });
+    });
+
+    it('finalizes as cancelled when cancellation arrives while skipped checks are created', async () => {
+      const cancellation = new ActionCancellation();
+      let nextCheckRunId = 1;
+      vi.mocked(mockOctokit.checks.create).mockImplementation(async () => {
+        const checkRunId = nextCheckRunId++;
+        if (checkRunId === 2) {
+          cancellation.request('SIGINT');
+        }
+        return {
+          data: { id: checkRunId, html_url: `https://example.com/check/${checkRunId}` },
+        } as Awaited<ReturnType<Octokit['checks']['create']>>;
+      });
+
+      await runPRWorkflow(
+        mockOctokit,
+        createDefaultInputs(),
+        'pull_request',
+        EVENT_PAYLOAD_PATH,
+        NO_MATCH_FIXTURES_DIR,
+        cancellation,
+      );
+
+      expect(mockWriteFindingsOutput.mock.calls.at(-1)?.[3]?.outcome).toBe('cancelled');
+      expect(mockFetchExistingComments).not.toHaveBeenCalled();
     });
 
     it('clears stale findings before the first trigger settles, not lazily on the first live write', async () => {
