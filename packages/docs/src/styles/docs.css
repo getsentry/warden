@@ -1,0 +1,21 @@
+.sl-markdown-content table {
+  table-layout: fixed;
+  white-space: normal;
+}
+
+.sl-markdown-content th,
+.sl-markdown-content td {
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.sl-markdown-content th:first-child,
+.sl-markdown-content td:first-child {
+  width: 9rem;
+}
+
+.sl-markdown-content th code,
+.sl-markdown-content td code {
+  overflow-wrap: anywhere;
+  white-space: normal;
+}

@@ -1,0 +1,38 @@
+{
+  "given": "Sentry resolves the next release among semver releases that share the same version but differ by build metadata",
+  "files": [
+    "fixtures/sentry-semver-build-ordering/release.py",
+    "fixtures/sentry-semver-build-ordering/util.py"
+  ],
+  "supporting_files": [
+    "fixtures/sentry-semver-build-ordering/LICENSE.md"
+  ],
+  "should_find": [
+    {
+      "finding": "semver release ordering ignores build_code and build_number, so resolving the next release can arbitrarily pick an older build and later mark a newer build as a regression"
+    }
+  ],
+  "should_not_find": [
+    "missing tests",
+    "style, formatting, or naming issues"
+  ],
+  "notes": {
+    "source": "https://github.com/getsentry/sentry/commit/971655528404953bf863ab65583dd4b7ab6e0148",
+    "repository": "getsentry/sentry",
+    "source_ref": "0e64601cae2c42aed03cfd685511c982019307a0",
+    "source_files": [
+      {
+        "fixturePath": "fixtures/sentry-semver-build-ordering/release.py",
+        "sourcePath": "src/sentry/models/release.py",
+        "ref": "0e64601cae2c42aed03cfd685511c982019307a0"
+      },
+      {
+        "fixturePath": "fixtures/sentry-semver-build-ordering/util.py",
+        "sourcePath": "src/sentry/models/releases/util.py",
+        "ref": "0e64601cae2c42aed03cfd685511c982019307a0"
+      }
+    ],
+    "side": "parent-of-fix",
+    "body": "Regression seed from Sentry fix 971655528404953bf863ab65583dd4b7ab6e0148. semver release ordering ignores build_code and build_number, so resolving the next release can arbitrarily pick an older build and later mark a newer build as a regression"
+  }
+}

@@ -1,0 +1,58 @@
+---
+title: GitHub Pull Requests
+description: Run Warden automatically on pull requests.
+editUrl: false
+---
+
+Warden runs on pull requests through GitHub Actions and reports findings in
+Checks. When findings can be tied to the current pull request diff, Warden also
+posts inline review comments.
+
+This page explains the pull request behavior. Setup lives in
+[Repository Setup](/github/repository/), and action inputs live in
+[Workflow](/github/workflow/).
+
+## What Happens on a PR
+
+1. A pull request is opened or updated.
+2. GitHub Actions runs the Warden workflow.
+3. Warden analyzes changed files against configured triggers.
+4. Findings are reported in Checks. Eligible findings are also posted as inline review comments.
+5. If `requestChanges` is enabled, Warden requests changes when findings exceed `failOn`.
+6. If `failCheck` is enabled, the check run fails when findings exceed `failOn`.
+
+Warden skips PR review feedback when the workflow run is no longer analyzing
+the current PR head. If the current head cannot be verified, Warden skips the
+write and fails the run rather than silently dropping a blocking review.
+Non-blocking findings without an inline diff location stay in Checks instead
+of creating timeline comments that cannot be resolved later.
+
+## What Comes From `warden.toml`
+
+Pull request behavior is still driven by `warden.toml`:
+
+| Concern | Where to configure it |
+| --- | --- |
+| Which skills run on PRs | [Triggers](/config/triggers/) |
+| Which files a skill sees | [Skill Entries](/config/skills/) |
+| What severity reports or fails | [Output and Defaults](/config/output/) |
+
+The GitHub workflow decides when the action starts and which credentials it can
+use. The config decides what Warden does once it is running.
+
+## Next
+
+<div class="api-link-grid">
+  <a class="api-link-card" href="/github/repository/">
+    <strong>Repository Setup</strong>
+    <span>Initialize one repository with config and a workflow.</span>
+  </a>
+  <a class="api-link-card" href="/github/org/">
+    <strong>Organization Setup</strong>
+    <span>Roll Warden out across many repositories.</span>
+  </a>
+  <a class="api-link-card" href="/github/workflow/">
+    <strong>Workflow Reference</strong>
+    <span>Review action inputs and layered config options.</span>
+  </a>
+</div>

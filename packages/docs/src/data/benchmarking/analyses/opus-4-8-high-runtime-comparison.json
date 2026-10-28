@@ -1,0 +1,514 @@
+{
+  "id": "opus-4-8-high-claude-sdk-vs-pi-runtime-comparison-2026-06-05",
+  "description": "Sanitized derived summary for the Claude Opus 4.8 high-effort Claude SDK versus Pi benchmark analysis.",
+  "notes": [
+    "Stable-row aggregates come from committed benchmark result JSON files generated from fresh traced runs on 2026-06-05.",
+    "Child-span counts come from Warden structured traces after runtime child-span capture was fixed.",
+    "Raw JSONL artifacts remain withheld pending sensitive-data review because spans can include prompts, source snippets, and tool results."
+  ],
+  "crossModelComparison": {
+    "description": "Opus 4.8 high versus Opus 4.6 high through Pi on the same traced Sentry corpus.",
+    "rows": {
+      "piOpus46High": {
+        "runId": "sentry-security-review-pi-opus-4-6-high-traced-corpus-2026-06-05-001",
+        "knownFound": 23,
+        "findingsTotal": 24,
+        "findingsWithoutKnownMatch": 5,
+        "scanCostUSD": 30.109423500000002,
+        "totalCostUSD": 36.86097775000001,
+        "scanInputTokens": 13557523,
+        "scanOutputTokens": 473445,
+        "traceTurns": 981,
+        "averageTurnsPerChunk": 6.29,
+        "toolExecutions": 1101,
+        "oneTurnChunks": 47,
+        "twoOrFewerTurnChunks": 50,
+        "maxTurnsInChunk": 51
+      },
+      "piOpus48High": {
+        "runId": "sentry-security-review-pi-opus-4-8-high-traced-corpus-2026-06-05-001",
+        "knownFound": 21,
+        "findingsTotal": 24,
+        "findingsWithoutKnownMatch": 4,
+        "scanCostUSD": 17.39247975,
+        "totalCostUSD": 21.312897000000003,
+        "scanInputTokens": 5170716,
+        "scanOutputTokens": 316284,
+        "traceTurns": 426,
+        "averageTurnsPerChunk": 2.73,
+        "toolExecutions": 371,
+        "oneTurnChunks": 60,
+        "twoOrFewerTurnChunks": 86,
+        "maxTurnsInChunk": 11
+      }
+    },
+    "overlap": {
+      "pi": {
+        "opus46KnownFound": 23,
+        "opus48KnownFound": 21,
+        "overlap": 12,
+        "opus46Only": 11,
+        "opus48Only": 9,
+        "opus46OnlyIds": [
+          "sentry-vuln-001",
+          "sentry-vuln-007",
+          "sentry-vuln-014",
+          "sentry-vuln-018",
+          "sentry-vuln-037",
+          "sentry-vuln-062",
+          "sentry-vuln-064",
+          "sentry-vuln-072",
+          "sentry-vuln-081",
+          "sentry-vuln-084",
+          "sentry-vuln-085"
+        ],
+        "opus48OnlyIds": [
+          "sentry-vuln-003",
+          "sentry-vuln-004",
+          "sentry-vuln-012",
+          "sentry-vuln-031",
+          "sentry-vuln-051",
+          "sentry-vuln-054",
+          "sentry-vuln-055",
+          "sentry-vuln-060",
+          "sentry-vuln-073"
+        ]
+      }
+    },
+    "traceAggregates": {
+      "piOpus46High": {
+        "chunks": 156,
+        "findings": 24,
+        "turns": 981,
+        "childSpans": 2238,
+        "chatSpans": 981,
+        "toolExecutions": 1101,
+        "toolCounts": {
+          "read": 621,
+          "grep": 472,
+          "find": 8
+        },
+        "withFinding": {
+          "count": 24,
+          "turns": 265,
+          "toolExecutions": 309,
+          "inputTokens": 3873774,
+          "outputTokens": 123968,
+          "costUSD": 7.4602924999999995,
+          "oneTurnScans": 0,
+          "twoOrFewerTurnScans": 1,
+          "maxTurns": 29,
+          "averages": {
+            "turns": 11.041666666666666,
+            "toolExecutions": 12.875,
+            "inputTokens": 161407.25,
+            "outputTokens": 5165.333333333333,
+            "costUSD": 0.31084552083333333
+          }
+        },
+        "noFinding": {
+          "count": 132,
+          "turns": 716,
+          "toolExecutions": 792,
+          "inputTokens": 9683749,
+          "outputTokens": 349477,
+          "costUSD": 22.64913100000001,
+          "oneTurnScans": 47,
+          "twoOrFewerTurnScans": 49,
+          "maxTurns": 51,
+          "averages": {
+            "turns": 5.424242424242424,
+            "toolExecutions": 6,
+            "inputTokens": 73361.73484848485,
+            "outputTokens": 2647.5530303030305,
+            "costUSD": 0.17158432575757585
+          }
+        },
+        "perTurn": {
+          "inputTokens": 13820.10499490316,
+          "outputTokens": 482.61467889908255,
+          "costUSD": 0.03069258256880735
+        }
+      },
+      "piOpus48High": {
+        "chunks": 156,
+        "findings": 24,
+        "turns": 426,
+        "childSpans": 953,
+        "chatSpans": 426,
+        "toolExecutions": 371,
+        "toolCounts": {
+          "read": 194,
+          "grep": 142,
+          "find": 29,
+          "ls": 6
+        },
+        "withFinding": {
+          "count": 23,
+          "turns": 126,
+          "toolExecutions": 138,
+          "inputTokens": 1737137,
+          "outputTokens": 103443,
+          "costUSD": 5.170680500000001,
+          "oneTurnScans": 1,
+          "twoOrFewerTurnScans": 1,
+          "maxTurns": 11,
+          "averages": {
+            "turns": 5.478260869565218,
+            "toolExecutions": 6,
+            "inputTokens": 75527.69565217392,
+            "outputTokens": 4497.521739130435,
+            "costUSD": 0.22481219565217397
+          }
+        },
+        "noFinding": {
+          "count": 133,
+          "turns": 300,
+          "toolExecutions": 233,
+          "inputTokens": 3433579,
+          "outputTokens": 212841,
+          "costUSD": 12.221799249999998,
+          "oneTurnScans": 59,
+          "twoOrFewerTurnScans": 85,
+          "maxTurns": 8,
+          "averages": {
+            "turns": 2.255639097744361,
+            "toolExecutions": 1.7518796992481203,
+            "inputTokens": 25816.38345864662,
+            "outputTokens": 1600.3082706766918,
+            "costUSD": 0.091893227443609
+          }
+        },
+        "perTurn": {
+          "inputTokens": 12137.830985915492,
+          "outputTokens": 742.4507042253521,
+          "costUSD": 0.04082741725352111
+        }
+      }
+    },
+    "interpretation": [
+      "Both rows scanned 156 chunks with zero failed chunks, Warden finding verification, --traces, and agent-verified scoring.",
+      "Opus 4.8 high emitted the same number of final findings as Opus 4.6 high, but fewer of those findings matched the known corpus: 21 versus 23.",
+      "The lower Opus 4.8 high score is best explained by shorter investigations and less tool exploration, not failed coverage. Opus 4.8 used 426 turns and 371 tool executions; Opus 4.6 used 981 turns and 1101 tool executions.",
+      "The known-match sets shifted substantially: the two rows overlap on 12 corpus IDs, while Opus 4.6 has 11 unique matches and Opus 4.8 has 9 unique matches.",
+      "Opus 4.6 found slightly more known issues, but paid for that with a much larger scan: 2.6x input tokens, 3.0x tool executions, 2.3x turns, and 1.7x scan cost."
+    ]
+  },
+  "stableRows": {
+    "claudeSdk": {
+      "runId": "sentry-security-review-claude-opus-4-8-high-traced-corpus-2026-06-05-001",
+      "runtime": "claude",
+      "model": "claude-opus-4-8",
+      "chunksAnalyzed": 156,
+      "chunksFailed": 0,
+      "knownFound": 17,
+      "knownFindingCount": 86,
+      "findingsTotal": 17,
+      "scan": {
+        "inputTokens": 22499304,
+        "outputTokens": 308283,
+        "cacheReadInputTokens": 15173116,
+        "cacheCreationInputTokens": 7321352,
+        "cacheCreation5mInputTokens": 7321352,
+        "cacheCreation1hInputTokens": 0,
+        "webSearchRequests": 0,
+        "costUSD": 61.07626299999999
+      },
+      "verification": {
+        "inputTokens": 9337610,
+        "outputTokens": 77793,
+        "cacheReadInputTokens": 7274219,
+        "cacheCreationInputTokens": 2062818,
+        "cacheCreation5mInputTokens": 2062818,
+        "cacheCreation1hInputTokens": 0,
+        "webSearchRequests": 0,
+        "costUSD": 18.477412
+      },
+      "merge": {
+        "inputTokens": 5593,
+        "outputTokens": 96,
+        "cacheReadInputTokens": 0,
+        "cacheCreationInputTokens": 0,
+        "cacheCreation5mInputTokens": 0,
+        "cacheCreation1hInputTokens": 0,
+        "webSearchRequests": 0,
+        "costUSD": 0.006073
+      },
+      "totalCostUSD": 79.559748
+    },
+    "pi": {
+      "runId": "sentry-security-review-pi-opus-4-8-high-traced-corpus-2026-06-05-001",
+      "runtime": "pi",
+      "model": "anthropic/claude-opus-4-8",
+      "chunksAnalyzed": 156,
+      "chunksFailed": 0,
+      "knownFound": 21,
+      "knownFindingCount": 86,
+      "findingsTotal": 24,
+      "scan": {
+        "inputTokens": 5170716,
+        "outputTokens": 316284,
+        "cacheReadInputTokens": 3970527,
+        "cacheCreationInputTokens": 1199337,
+        "cacheCreation5mInputTokens": 1199337,
+        "cacheCreation1hInputTokens": 0,
+        "webSearchRequests": 0,
+        "costUSD": 17.39247975
+      },
+      "verification": {
+        "inputTokens": 1339264,
+        "outputTokens": 59696,
+        "cacheReadInputTokens": 1046262,
+        "cacheCreationInputTokens": 292712,
+        "cacheCreation5mInputTokens": 292712,
+        "cacheCreation1hInputTokens": 0,
+        "webSearchRequests": 0,
+        "costUSD": 3.8464310000000004
+      },
+      "merge": {
+        "inputTokens": 10331,
+        "outputTokens": 377,
+        "cacheReadInputTokens": 0,
+        "cacheCreationInputTokens": 10325,
+        "cacheCreation5mInputTokens": 10325,
+        "cacheCreation1hInputTokens": 0,
+        "webSearchRequests": 0,
+        "costUSD": 0.07398625
+      },
+      "totalCostUSD": 21.312897000000003
+    }
+  },
+  "traceAggregates": {
+    "claudeSdk": {
+      "chunks": 156,
+      "findings": 17,
+      "turns": 375,
+      "childSpans": 1113,
+      "chatSpans": 738,
+      "toolExecutions": 219,
+      "toolCounts": {
+        "Read": 128,
+        "Grep": 71,
+        "Glob": 19,
+        "AskUserQuestion": 1
+      },
+      "withFinding": {
+        "count": 17,
+        "turns": 95,
+        "toolExecutions": 78,
+        "inputTokens": 6043104,
+        "outputTokens": 71669,
+        "costUSD": 13.004134999999998,
+        "averages": {
+          "turns": 5.588235294117647,
+          "toolExecutions": 4.588235294117647,
+          "inputTokens": 355476.70588235295,
+          "outputTokens": 4215.823529411765,
+          "costUSD": 0.7649491176470588
+        }
+      },
+      "noFinding": {
+        "count": 139,
+        "turns": 280,
+        "toolExecutions": 141,
+        "inputTokens": 16456200,
+        "outputTokens": 236614,
+        "costUSD": 48.07212799999997,
+        "oneTurnScans": 85,
+        "averages": {
+          "turns": 2.014388489208633,
+          "toolExecutions": 1.014388489208633,
+          "inputTokens": 118389.92805755396,
+          "outputTokens": 1702.2589928057555,
+          "costUSD": 0.34584264748201415
+        }
+      },
+      "perTurn": {
+        "inputTokens": 59998.144,
+        "outputTokens": 822.088,
+        "costUSD": 0.16287003466666664
+      }
+    },
+    "pi": {
+      "chunks": 156,
+      "findings": 24,
+      "turns": 426,
+      "childSpans": 953,
+      "chatSpans": 426,
+      "toolExecutions": 371,
+      "toolCounts": {
+        "grep": 142,
+        "read": 194,
+        "find": 29,
+        "ls": 6
+      },
+      "withFinding": {
+        "count": 23,
+        "turns": 126,
+        "toolExecutions": 138,
+        "inputTokens": 1737137,
+        "outputTokens": 103443,
+        "costUSD": 5.170680500000001,
+        "averages": {
+          "turns": 5.478260869565218,
+          "toolExecutions": 6,
+          "inputTokens": 75527.69565217392,
+          "outputTokens": 4497.521739130435,
+          "costUSD": 0.22481219565217397
+        }
+      },
+      "noFinding": {
+        "count": 133,
+        "turns": 300,
+        "toolExecutions": 233,
+        "inputTokens": 3433579,
+        "outputTokens": 212841,
+        "costUSD": 12.221799249999998,
+        "oneTurnScans": 59,
+        "averages": {
+          "turns": 2.255639097744361,
+          "toolExecutions": 1.7518796992481203,
+          "inputTokens": 25816.38345864662,
+          "outputTokens": 1600.3082706766918,
+          "costUSD": 0.091893227443609
+        }
+      },
+      "perTurn": {
+        "inputTokens": 12137.830985915492,
+        "outputTokens": 742.4507042253521,
+        "costUSD": 0.040827417253521125
+      }
+    }
+  },
+  "targetedChunks": [
+    {
+      "file": "src/sentry/api/endpoints/project_rules.py",
+      "lineRange": "607-808",
+      "claudeSdk": {
+        "sha": "9fc06de5",
+        "file": "src/sentry/api/endpoints/project_rules.py",
+        "lineRange": "607-808",
+        "findings": 0,
+        "turns": 1,
+        "toolExecutions": 0,
+        "toolCounts": {},
+        "inputTokens": 48368,
+        "outputTokens": 223,
+        "cacheReadInputTokens": 22178,
+        "cacheCreationInputTokens": 26186,
+        "costUSD": 0.18034650000000002,
+        "durationMs": 7336
+      },
+      "pi": {
+        "sha": "9fc06de5",
+        "file": "src/sentry/api/endpoints/project_rules.py",
+        "lineRange": "607-808",
+        "findings": 0,
+        "turns": 1,
+        "toolExecutions": 0,
+        "toolCounts": {},
+        "inputTokens": 8746,
+        "outputTokens": 108,
+        "cacheReadInputTokens": 4923,
+        "cacheCreationInputTokens": 3821,
+        "costUSD": 0.02905275,
+        "durationMs": 3874
+      }
+    },
+    {
+      "file": "src/sentry/replays/usecases/replay_counts.py",
+      "lineRange": "1-202",
+      "claudeSdk": {
+        "sha": "9fc06de5",
+        "file": "src/sentry/replays/usecases/replay_counts.py",
+        "lineRange": "1-202",
+        "findings": 0,
+        "turns": 1,
+        "toolExecutions": 0,
+        "toolCounts": {},
+        "inputTokens": 48328,
+        "outputTokens": 437,
+        "cacheReadInputTokens": 22178,
+        "cacheCreationInputTokens": 26146,
+        "costUSD": 0.18544650000000001,
+        "durationMs": 12570
+      },
+      "pi": {
+        "sha": "9fc06de5",
+        "file": "src/sentry/replays/usecases/replay_counts.py",
+        "lineRange": "1-202",
+        "findings": 0,
+        "turns": 1,
+        "toolExecutions": 0,
+        "toolCounts": {},
+        "inputTokens": 8726,
+        "outputTokens": 606,
+        "cacheReadInputTokens": 4923,
+        "cacheCreationInputTokens": 3801,
+        "costUSD": 0.04137775,
+        "durationMs": 12036
+      }
+    },
+    {
+      "file": "src/sentry/integrations/perforce/integration.py",
+      "claudeSdk": {
+        "chunks": 4,
+        "findings": 1,
+        "turns": 18,
+        "toolExecutions": 14,
+        "inputTokens": 1431053,
+        "outputTokens": 10473,
+        "costUSD": 2.66341525,
+        "toolCounts": {
+          "Read": 8,
+          "Grep": 4,
+          "AskUserQuestion": 1,
+          "Glob": 1
+        }
+      },
+      "pi": {
+        "chunks": 4,
+        "findings": 2,
+        "turns": 28,
+        "toolExecutions": 30,
+        "inputTokens": 460476,
+        "outputTokens": 18666,
+        "costUSD": 1.11360675,
+        "toolCounts": {
+          "ls": 3,
+          "read": 14,
+          "grep": 13
+        }
+      }
+    },
+    {
+      "file": "src/sentry/integrations/msteams/webhook.py",
+      "claudeSdk": {
+        "chunks": 4,
+        "findings": 0,
+        "turns": 15,
+        "toolExecutions": 11,
+        "inputTokens": 1399164,
+        "outputTokens": 15807,
+        "costUSD": 3.1293480000000007,
+        "toolCounts": {
+          "Read": 8,
+          "Grep": 3
+        }
+      },
+      "pi": {
+        "chunks": 4,
+        "findings": 1,
+        "turns": 17,
+        "toolExecutions": 13,
+        "inputTokens": 260495,
+        "outputTokens": 17176,
+        "costUSD": 0.85010075,
+        "toolCounts": {
+          "read": 9,
+          "grep": 4
+        }
+      }
+    }
+  ]
+}

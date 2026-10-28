@@ -1,0 +1,3018 @@
+{
+  "runId": "sentry-security-review-pi-openrouter-deepseek-v4-pro-xhigh-traced-corpus-2026-06-07-001",
+  "corpusId": "sentry-vulnerability-corpus",
+  "repository": "getsentry/sentry",
+  "wardenVersion": "0.37.0",
+  "skill": "security-review",
+  "model": "openrouter/deepseek/deepseek-v4-pro",
+  "runtime": "pi",
+  "reasoningLevel": "xhigh",
+  "reportOn": "low",
+  "minConfidence": "low",
+  "targetMode": "all-corpus-files-by-sha",
+  "shardCount": 6,
+  "findingVerification": {
+    "enabled": true,
+    "source": "benchmark-config",
+    "notes": "The benchmark warden.toml explicitly sets defaults.verification.enabled = true."
+  },
+  "traceCapture": {
+    "enabled": true,
+    "coverage": "complete",
+    "tracedShardCount": 6,
+    "tracedChunkCount": 156,
+    "notes": "Run used --traces on all shards. Failed provider/extraction records were repaired with traced targeted reruns before aggregation."
+  },
+  "runOptions": {
+    "runtime": "pi",
+    "model": "openrouter/deepseek/deepseek-v4-pro",
+    "effort": "xhigh",
+    "traces": true,
+    "parallel": 4,
+    "repairParallel": 1,
+    "reportOn": "low",
+    "minConfidence": "low",
+    "maxTurns": 100
+  },
+  "shards": [
+    {
+      "sha": "2d929588e20b931d2631ade31405f6ddbd34603a",
+      "wardenRunId": "e6acd477-59fb-4574-aa82-df1034766a61",
+      "corpusFindingCount": 7,
+      "targetFileCount": 6,
+      "filesAnalyzed": 6,
+      "chunksTotal": 6,
+      "chunksAnalyzed": 6,
+      "chunksFailed": 0,
+      "findingsTotal": 3,
+      "durationMs": 1138550,
+      "scanCostUSD": 0.27808767,
+      "auxiliaryCostUSD": 0.30845525000000007,
+      "costUSD": 0.5865429200000001,
+      "usageBreakdown": {
+        "scan": {
+          "usage": {
+            "inputTokens": 1695512,
+            "outputTokens": 43085,
+            "costUSD": 0.27808767,
+            "cacheReadInputTokens": 1152000,
+            "cacheCreationInputTokens": 0,
+            "cacheCreation5mInputTokens": 0,
+            "cacheCreation1hInputTokens": 0,
+            "webSearchRequests": 0
+          },
+          "model": "openrouter/deepseek/deepseek-v4-pro",
+          "runtime": "pi"
+        },
+        "auxiliary": {
+          "verification": {
+            "usage": {
+              "inputTokens": 86109,
+              "outputTokens": 3571,
+              "cacheReadInputTokens": 56703,
+              "cacheCreationInputTokens": 29386,
+              "cacheCreation5mInputTokens": 29386,
+              "cacheCreation1hInputTokens": 0,
+              "webSearchRequests": 0,
+              "costUSD": 0.301389
+            }
+          },
+          "merge": {
+            "usage": {
+              "inputTokens": 1115,
+              "outputTokens": 4,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 1113,
+              "cacheCreation5mInputTokens": 1113,
+              "cacheCreation1hInputTokens": 0,
+              "webSearchRequests": 0,
+              "costUSD": 0.0070662500000000005
+            }
+          }
+        },
+        "total": {
+          "usage": {
+            "inputTokens": 1782736,
+            "outputTokens": 46660,
+            "costUSD": 0.5865429200000001,
+            "cacheReadInputTokens": 1208703,
+            "cacheCreationInputTokens": 30499,
+            "cacheCreation5mInputTokens": 30499,
+            "cacheCreation1hInputTokens": 0,
+            "webSearchRequests": 0
+          },
+          "model": "openrouter/deepseek/deepseek-v4-pro",
+          "runtime": "pi"
+        }
+      },
+      "traceCount": 6,
+      "traceIds": [
+        "3b2a30fafb9c42019a1ea6b5d2e55966",
+        "55c07eeae3b05d96e9725abec9f91786",
+        "32626a822f491f7d4cdbaaa387236fc9",
+        "6603406d0fbd9b222e3b508fab1e4315",
+        "21bb14017eede6accf47cf207d895998",
+        "b94ea9c97b6785f90a1c1f9048f68673"
+      ],
+      "rawJsonl": "sentry-security-review-pi-openrouter-deepseek-v4-pro-xhigh-traced-corpus-2d929588.jsonl",
+      "rawArtifactStatus": "withheld-pending-sensitive-review",
+      "targetList": "targets-2d929588e20b931d2631ade31405f6ddbd34603a.txt"
+    },
+    {
+      "sha": "6993246259d0193a6a6aac49aa3763959b1126df",
+      "wardenRunId": "eaa34acc-2f78-499c-b6eb-e33ce87d14e8",
+      "corpusFindingCount": 1,
+      "targetFileCount": 1,
+      "filesAnalyzed": 1,
+      "chunksTotal": 2,
+      "chunksAnalyzed": 2,
+      "chunksFailed": 0,
+      "findingsTotal": 0,
+      "durationMs": 1271669,
+      "scanCostUSD": 0.165014002,
+      "auxiliaryCostUSD": 0.3272585,
+      "costUSD": 0.492272502,
+      "usageBreakdown": {
+        "scan": {
+          "usage": {
+            "inputTokens": 1471688,
+            "outputTokens": 47431,
+            "costUSD": 0.165014002,
+            "cacheReadInputTokens": 1197184,
+            "cacheCreationInputTokens": 0,
+            "cacheCreation5mInputTokens": 0,
+            "cacheCreation1hInputTokens": 0,
+            "webSearchRequests": 0
+          },
+          "model": "openrouter/deepseek/deepseek-v4-pro",
+          "runtime": "pi"
+        },
+        "auxiliary": {
+          "verification": {
+            "usage": {
+              "inputTokens": 73635,
+              "outputTokens": 6108,
+              "cacheReadInputTokens": 49677,
+              "cacheCreationInputTokens": 23944,
+              "cacheCreation5mInputTokens": 23944,
+              "cacheCreation1hInputTokens": 0,
+              "webSearchRequests": 0,
+              "costUSD": 0.3272585
+            }
+          }
+        },
+        "total": {
+          "usage": {
+            "inputTokens": 1545323,
+            "outputTokens": 53539,
+            "costUSD": 0.492272502,
+            "cacheReadInputTokens": 1246861,
+            "cacheCreationInputTokens": 23944,
+            "cacheCreation5mInputTokens": 23944,
+            "cacheCreation1hInputTokens": 0,
+            "webSearchRequests": 0
+          },
+          "model": "openrouter/deepseek/deepseek-v4-pro",
+          "runtime": "pi"
+        }
+      },
+      "traceCount": 2,
+      "traceIds": [
+        "8be044c991028c6fd6232999a01af9ce",
+        "dbe8bc2dbe6c8e3b740808237077d774"
+      ],
+      "rawJsonl": "sentry-security-review-pi-openrouter-deepseek-v4-pro-xhigh-traced-corpus-69932462.jsonl",
+      "rawArtifactStatus": "withheld-pending-sensitive-review",
+      "targetList": "targets-6993246259d0193a6a6aac49aa3763959b1126df.txt"
+    },
+    {
+      "sha": "788ba30f1aa42b00c02d64ed4b8b2515ff8ab8da",
+      "wardenRunId": "e2dbf7df-5db1-4213-90ef-c1084320c469",
+      "corpusFindingCount": 1,
+      "targetFileCount": 1,
+      "filesAnalyzed": 1,
+      "chunksTotal": 2,
+      "chunksAnalyzed": 2,
+      "chunksFailed": 0,
+      "findingsTotal": 1,
+      "durationMs": 1475103,
+      "scanCostUSD": 0.15629007700000003,
+      "auxiliaryCostUSD": 0.33723425,
+      "costUSD": 0.49352432700000004,
+      "usageBreakdown": {
+        "scan": {
+          "usage": {
+            "inputTokens": 1290157,
+            "outputTokens": 41537,
+            "costUSD": 0.15629007700000003,
+            "cacheReadInputTokens": 1022464,
+            "cacheCreationInputTokens": 0,
+            "cacheCreation5mInputTokens": 0,
+            "cacheCreation1hInputTokens": 0,
+            "webSearchRequests": 0
+          },
+          "model": "openrouter/deepseek/deepseek-v4-pro",
+          "runtime": "pi"
+        },
+        "auxiliary": {
+          "verification": {
+            "usage": {
+              "inputTokens": 83545,
+              "outputTokens": 6987,
+              "cacheReadInputTokens": 62536,
+              "cacheCreationInputTokens": 20997,
+              "cacheCreation5mInputTokens": 20997,
+              "cacheCreation1hInputTokens": 0,
+              "webSearchRequests": 0,
+              "costUSD": 0.33723425
+            }
+          }
+        },
+        "total": {
+          "usage": {
+            "inputTokens": 1373702,
+            "outputTokens": 48524,
+            "costUSD": 0.49352432700000004,
+            "cacheReadInputTokens": 1085000,
+            "cacheCreationInputTokens": 20997,
+            "cacheCreation5mInputTokens": 20997,
+            "cacheCreation1hInputTokens": 0,
+            "webSearchRequests": 0
+          },
+          "model": "openrouter/deepseek/deepseek-v4-pro",
+          "runtime": "pi"
+        }
+      },
+      "traceCount": 2,
+      "traceIds": [
+        "c6da43a0dbe291d619231c08a14a66c7",
+        "1d37e6eab7a66d60dc8652ecd7468578"
+      ],
+      "rawJsonl": "sentry-security-review-pi-openrouter-deepseek-v4-pro-xhigh-traced-corpus-788ba30f.jsonl",
+      "rawArtifactStatus": "withheld-pending-sensitive-review",
+      "targetList": "targets-788ba30f1aa42b00c02d64ed4b8b2515ff8ab8da.txt"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "wardenRunId": "2cc36206-54d3-4fb1-ad8c-f20695810fac",
+      "corpusFindingCount": 43,
+      "targetFileCount": 38,
+      "filesAnalyzed": 38,
+      "chunksTotal": 80,
+      "chunksAnalyzed": 80,
+      "chunksFailed": 0,
+      "findingsTotal": 10,
+      "durationMs": 26811555,
+      "scanCostUSD": 4.383847466,
+      "auxiliaryCostUSD": 3.0395097500000006,
+      "costUSD": 7.423357216,
+      "usageBreakdown": {
+        "scan": {
+          "model": "openrouter/deepseek/deepseek-v4-pro",
+          "usage": {
+            "inputTokens": 26797062,
+            "outputTokens": 842660,
+            "cacheReadInputTokens": 18559232,
+            "cacheCreationInputTokens": 0,
+            "cacheCreation5mInputTokens": 0,
+            "cacheCreation1hInputTokens": 0,
+            "webSearchRequests": 0,
+            "costUSD": 4.383847466
+          }
+        },
+        "total": {
+          "model": "openrouter/deepseek/deepseek-v4-pro",
+          "usage": {
+            "inputTokens": 27654719,
+            "outputTokens": 900622,
+            "cacheReadInputTokens": 19214824,
+            "cacheCreationInputTokens": 201871,
+            "cacheCreation5mInputTokens": 201871,
+            "cacheCreation1hInputTokens": 0,
+            "webSearchRequests": 0,
+            "costUSD": 7.423357216
+          }
+        },
+        "auxiliary": {
+          "verification": {
+            "usage": {
+              "inputTokens": 852619,
+              "outputTokens": 57694,
+              "cacheReadInputTokens": 655592,
+              "cacheCreationInputTokens": 196835,
+              "cacheCreation5mInputTokens": 196835,
+              "cacheCreation1hInputTokens": 0,
+              "webSearchRequests": 0,
+              "costUSD": 3.00132475
+            }
+          },
+          "merge": {
+            "usage": {
+              "inputTokens": 5038,
+              "outputTokens": 268,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 5036,
+              "cacheCreation5mInputTokens": 5036,
+              "cacheCreation1hInputTokens": 0,
+              "webSearchRequests": 0,
+              "costUSD": 0.038185000000000004
+            }
+          }
+        }
+      },
+      "traceCount": 80,
+      "traceIds": [
+        "18eabfa2c914031ced9c8e78da4497fd",
+        "b8c62fe1d641624bfeb54f2070d238b0",
+        "b342470dff2507609df62ba352a97460",
+        "b8c62fe1d641624bfeb54f2070d238b0",
+        "b8c62fe1d641624bfeb54f2070d238b0",
+        "b8c62fe1d641624bfeb54f2070d238b0",
+        "b8c62fe1d641624bfeb54f2070d238b0",
+        "b8c62fe1d641624bfeb54f2070d238b0",
+        "5490d9c8be28df1750d9df74443a6d55",
+        "5490d9c8be28df1750d9df74443a6d55",
+        "5490d9c8be28df1750d9df74443a6d55",
+        "5490d9c8be28df1750d9df74443a6d55",
+        "5490d9c8be28df1750d9df74443a6d55",
+        "09de58b213a9d4b19278c110f6a7a6ee",
+        "79b78f338918f5795d86a75a9bb2569e",
+        "79b78f338918f5795d86a75a9bb2569e",
+        "79b78f338918f5795d86a75a9bb2569e",
+        "a387a3db9295f317c2ff41e77fb6d85f",
+        "7ffc63330cf323a4ef631538444ecd4f",
+        "02fa474e55327e7b475944216f8a38fb",
+        "02fa474e55327e7b475944216f8a38fb",
+        "02fa474e55327e7b475944216f8a38fb",
+        "a684cefdf5c4229d6f02be78086ead25",
+        "a684cefdf5c4229d6f02be78086ead25",
+        "94f14f0fb291c9414d08e0d68cd4b8e6",
+        "f41a8f783b84a7f985b15494995c2c4e",
+        "f41a8f783b84a7f985b15494995c2c4e",
+        "75207c447d36282722be1e557c623047",
+        "75207c447d36282722be1e557c623047",
+        "6ef2526b83efcfb5ab50768c85b67d5a",
+        "7c1b7459925a2b43f2361838d10a2362",
+        "e74a916eaefe086fd9fcf120ca3a3f7a",
+        "2204fb3a0bc3737bcd4a6bc9ad8f36d6",
+        "314ed5179c0a0047fbe9caad4fc4dc50",
+        "b9198b3653a6e694114783f7124ceea1",
+        "c2deb00fa055d310c1c912e4b1c555a0",
+        "aea391dbd06ca6bccf712b631a364c0a",
+        "c708f2fc0fb25c7f0a0b29857b1b02fd",
+        "7195a0df281ce73b7553965980bd6fbb",
+        "85fb740fbe0d6847bc87f30eed10c3df",
+        "85fb740fbe0d6847bc87f30eed10c3df",
+        "348d1e0bb06418b7ee9442d472875858",
+        "348d1e0bb06418b7ee9442d472875858",
+        "348d1e0bb06418b7ee9442d472875858",
+        "348d1e0bb06418b7ee9442d472875858",
+        "348d1e0bb06418b7ee9442d472875858",
+        "a199a612e965232960bc1650b43d807b",
+        "a1e8d34b57c7cab95353cf4a6cc640d0",
+        "a1e8d34b57c7cab95353cf4a6cc640d0",
+        "984843d9291e9d4f76a7158f486e9a2f",
+        "a1e8d34b57c7cab95353cf4a6cc640d0",
+        "a1e8d34b57c7cab95353cf4a6cc640d0",
+        "a1e8d34b57c7cab95353cf4a6cc640d0",
+        "a1e8d34b57c7cab95353cf4a6cc640d0",
+        "a1e8d34b57c7cab95353cf4a6cc640d0",
+        "a1e8d34b57c7cab95353cf4a6cc640d0",
+        "80739d033d9b900e78b2b98aa8bea1db",
+        "6fb50aabdb8de1de561427c47eb1b7e6",
+        "9c819dad87b401feb975ef44f6235391",
+        "56f7e054b43c57f64900b1578d2bb8e0",
+        "4be540797d7732ba9624b341748d2f3f",
+        "4be540797d7732ba9624b341748d2f3f",
+        "35cb7c6f0072776f524ec2cf730ae042",
+        "5d899271c643df500a4c1d23141181b0",
+        "506993500a36e78a0df2faec00dbd60e",
+        "bbe088a0f829226b5f6ffe3931b5892d",
+        "bbe088a0f829226b5f6ffe3931b5892d",
+        "1be0e3a43281deb8b6b7213ff6fc90e5",
+        "827a24639017210a6cd4ecfd50fa8b58",
+        "827a24639017210a6cd4ecfd50fa8b58",
+        "827a24639017210a6cd4ecfd50fa8b58",
+        "827a24639017210a6cd4ecfd50fa8b58",
+        "6c9fbdba1fdd6a3836ceb48b28140602",
+        "6c9fbdba1fdd6a3836ceb48b28140602",
+        "b1db36f2cc3278d32a5c20af0dfd9fd7",
+        "b1db36f2cc3278d32a5c20af0dfd9fd7",
+        "b1db36f2cc3278d32a5c20af0dfd9fd7",
+        "4a59387e951b8818a7a554f1b6cc3f08",
+        "4a59387e951b8818a7a554f1b6cc3f08",
+        "4a59387e951b8818a7a554f1b6cc3f08"
+      ],
+      "rawJsonl": "sentry-security-review-pi-openrouter-deepseek-v4-pro-xhigh-traced-corpus-7f41cc50.jsonl",
+      "rawArtifactStatus": "withheld-pending-sensitive-review",
+      "targetList": "targets-7f41cc502faa1088108e896565409be72d92bc38.txt"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "wardenRunId": "c4f79d83-6c95-4d86-8889-0675d800f747",
+      "corpusFindingCount": 32,
+      "targetFileCount": 31,
+      "filesAnalyzed": 31,
+      "chunksTotal": 64,
+      "chunksAnalyzed": 64,
+      "chunksFailed": 0,
+      "findingsTotal": 15,
+      "durationMs": 31037574,
+      "scanCostUSD": 4.663297120999999,
+      "auxiliaryCostUSD": 4.82521,
+      "costUSD": 9.488507121,
+      "usageBreakdown": {
+        "scan": {
+          "model": "openrouter/deepseek/deepseek-v4-pro",
+          "usage": {
+            "inputTokens": 29735335,
+            "outputTokens": 709562,
+            "cacheReadInputTokens": 20605952,
+            "cacheCreationInputTokens": 0,
+            "cacheCreation5mInputTokens": 0,
+            "cacheCreation1hInputTokens": 0,
+            "webSearchRequests": 0,
+            "costUSD": 4.663297120999999
+          }
+        },
+        "total": {
+          "model": "openrouter/deepseek/deepseek-v4-pro",
+          "usage": {
+            "inputTokens": 31931882,
+            "outputTokens": 779039,
+            "cacheReadInputTokens": 22456347,
+            "cacheCreationInputTokens": 345862,
+            "cacheCreation5mInputTokens": 345862,
+            "cacheCreation1hInputTokens": 0,
+            "webSearchRequests": 0,
+            "costUSD": 9.488507121
+          }
+        },
+        "auxiliary": {
+          "verification": {
+            "usage": {
+              "inputTokens": 2191841,
+              "outputTokens": 69193,
+              "cacheReadInputTokens": 1850395,
+              "cacheCreationInputTokens": 341158,
+              "cacheCreation5mInputTokens": 341158,
+              "cacheCreation1hInputTokens": 0,
+              "webSearchRequests": 0,
+              "costUSD": 4.7886999999999995
+            }
+          },
+          "merge": {
+            "usage": {
+              "inputTokens": 4706,
+              "outputTokens": 284,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 4704,
+              "cacheCreation5mInputTokens": 4704,
+              "cacheCreation1hInputTokens": 0,
+              "webSearchRequests": 0,
+              "costUSD": 0.03651
+            }
+          }
+        }
+      },
+      "traceCount": 64,
+      "traceIds": [
+        "7c31f8cf18b9c31b50281269bd4935eb",
+        "af763342d6ef42731de79ec8a64784da",
+        "d9442d7754edde5ab85f2e6bbed542a4",
+        "bef19330db4178658a4a8fdfbb6863d4",
+        "bef19330db4178658a4a8fdfbb6863d4",
+        "bef19330db4178658a4a8fdfbb6863d4",
+        "bef19330db4178658a4a8fdfbb6863d4",
+        "bef19330db4178658a4a8fdfbb6863d4",
+        "bef19330db4178658a4a8fdfbb6863d4",
+        "614627498b7e8eef0ed9dbc99a3212e0",
+        "f10c097a9fd7fe71a553714aef498f87",
+        "081d4c15cf707846c28d0c0b3a724e6f",
+        "972989994a1d7e814491dd334ea59c80",
+        "fcdd96fcae92369c009d2aa5d53342f6",
+        "4fffb4ca42bf9a5ebf582164f4fdc412",
+        "ba7982920232a34e68d583a17f0ba42b",
+        "b1deb248579ab061138105eb153c76a2",
+        "b1deb248579ab061138105eb153c76a2",
+        "b1deb248579ab061138105eb153c76a2",
+        "b1deb248579ab061138105eb153c76a2",
+        "3c325bd13bb66a8ca5d3414401d46f3f",
+        "3c325bd13bb66a8ca5d3414401d46f3f",
+        "dbc3b559b510d13ba4d66594693accf1",
+        "dbc3b559b510d13ba4d66594693accf1",
+        "f68e64f97af73e909c6ba02031032faf",
+        "f68e64f97af73e909c6ba02031032faf",
+        "f68e64f97af73e909c6ba02031032faf",
+        "f68e64f97af73e909c6ba02031032faf",
+        "7e605f61445268e7cad2e3e153d42dba",
+        "7e605f61445268e7cad2e3e153d42dba",
+        "7e605f61445268e7cad2e3e153d42dba",
+        "7e605f61445268e7cad2e3e153d42dba",
+        "7e605f61445268e7cad2e3e153d42dba",
+        "7e605f61445268e7cad2e3e153d42dba",
+        "f05b2889f26d6b40726f40e048e8fb91",
+        "6f9bc1ee42f2a7a78de8fd41fecdf063",
+        "c42045c2acbf98f96a65d2057cb41374",
+        "86c46d9cd11b005f2377b8e94323df62",
+        "53a672072f42d2cb5ab8724c66e26226",
+        "53a672072f42d2cb5ab8724c66e26226",
+        "53a672072f42d2cb5ab8724c66e26226",
+        "53a672072f42d2cb5ab8724c66e26226",
+        "148c2ee35420f47fff277c121826b166",
+        "148c2ee35420f47fff277c121826b166",
+        "135382898b481a5864e88ff90e2cadc3",
+        "8ec8b0fc8a90e8444c799890e2d22648",
+        "070d4aaa2a740525739822bd417d0031",
+        "070d4aaa2a740525739822bd417d0031",
+        "55519495d69842c307926f084c139d3a",
+        "55519495d69842c307926f084c139d3a",
+        "55519495d69842c307926f084c139d3a",
+        "86977bd80f64db4edefd2eae763d774f",
+        "86977bd80f64db4edefd2eae763d774f",
+        "86977bd80f64db4edefd2eae763d774f",
+        "62d199bb749eefa62818487cc3b4c93e",
+        "0fd1612f5b7054245e29ba154a87369f",
+        "196cffff9a143dd02470e34e300ae31c",
+        "9db18264825a1d495ab1e08a9a7df885",
+        "9db18264825a1d495ab1e08a9a7df885",
+        "9db18264825a1d495ab1e08a9a7df885",
+        "fa9c759c08e2d4da1d0debde753628c1",
+        "1d4016ec9d7eddbdba3e0274d95505fc",
+        "2c01a6124d298d189433c5ea03459db4",
+        "2c01a6124d298d189433c5ea03459db4"
+      ],
+      "rawJsonl": "sentry-security-review-pi-openrouter-deepseek-v4-pro-xhigh-traced-corpus-9fc06de5.jsonl",
+      "rawArtifactStatus": "withheld-pending-sensitive-review",
+      "targetList": "targets-9fc06de579fbbee810565304efcc982e5dea1d1a.txt"
+    },
+    {
+      "sha": "fbecd17d210c2eacfad4bf17872be62320b8a110",
+      "wardenRunId": "346dd8d2-ff4b-4890-adec-1242e7e6eb77",
+      "corpusFindingCount": 2,
+      "targetFileCount": 2,
+      "filesAnalyzed": 2,
+      "chunksTotal": 2,
+      "chunksAnalyzed": 2,
+      "chunksFailed": 0,
+      "findingsTotal": 1,
+      "durationMs": 1681231,
+      "scanCostUSD": 0.112353975,
+      "auxiliaryCostUSD": 0.10554325,
+      "costUSD": 0.217897225,
+      "usageBreakdown": {
+        "scan": {
+          "usage": {
+            "inputTokens": 1202085,
+            "outputTokens": 24092,
+            "costUSD": 0.112353975,
+            "cacheReadInputTokens": 1000320,
+            "cacheCreationInputTokens": 0,
+            "cacheCreation5mInputTokens": 0,
+            "cacheCreation1hInputTokens": 0,
+            "webSearchRequests": 0
+          },
+          "model": "openrouter/deepseek/deepseek-v4-pro",
+          "runtime": "pi"
+        },
+        "auxiliary": {
+          "verification": {
+            "usage": {
+              "inputTokens": 20428,
+              "outputTokens": 1999,
+              "cacheReadInputTokens": 12539,
+              "cacheCreationInputTokens": 7883,
+              "cacheCreation5mInputTokens": 7883,
+              "cacheCreation1hInputTokens": 0,
+              "webSearchRequests": 0,
+              "costUSD": 0.10554325
+            }
+          }
+        },
+        "total": {
+          "usage": {
+            "inputTokens": 1222513,
+            "outputTokens": 26091,
+            "costUSD": 0.217897225,
+            "cacheReadInputTokens": 1012859,
+            "cacheCreationInputTokens": 7883,
+            "cacheCreation5mInputTokens": 7883,
+            "cacheCreation1hInputTokens": 0,
+            "webSearchRequests": 0
+          },
+          "model": "openrouter/deepseek/deepseek-v4-pro",
+          "runtime": "pi"
+        }
+      },
+      "traceCount": 2,
+      "traceIds": [
+        "17ee05fd4f341920d3c02716be7a0a45",
+        "3ddeaff6b89c979087f77c051eeeee43"
+      ],
+      "rawJsonl": "sentry-security-review-pi-openrouter-deepseek-v4-pro-xhigh-traced-corpus-fbecd17d.jsonl",
+      "rawArtifactStatus": "withheld-pending-sensitive-review",
+      "targetList": "targets-fbecd17d210c2eacfad4bf17872be62320b8a110.txt"
+    }
+  ],
+  "summary": {
+    "corpusFindingCount": 86,
+    "targetFileCount": 79,
+    "filesAnalyzed": 79,
+    "chunksTotal": 156,
+    "chunksAnalyzed": 156,
+    "chunksFailed": 0,
+    "findingsTotal": 30,
+    "durationMs": 63415682,
+    "inputTokens": 65510875,
+    "outputTokens": 1854475,
+    "cacheReadInputTokens": 46224594,
+    "cacheCreationInputTokens": 631056,
+    "analysisCostUSD": 9.758890310999998,
+    "auxiliaryCostUSD": 8.943211000000002,
+    "costUSD": 18.702101311,
+    "findingsBySeverity": {
+      "low": 11,
+      "medium": 17,
+      "high": 2
+    },
+    "findingsByConfidence": {
+      "high": 24,
+      "medium": 5,
+      "low": 1
+    }
+  },
+  "usageBreakdown": {
+    "scan": {
+      "usage": {
+        "inputTokens": 62191839,
+        "outputTokens": 1708367,
+        "costUSD": 9.758890310999998,
+        "cacheReadInputTokens": 43537152,
+        "cacheCreationInputTokens": 0,
+        "cacheCreation5mInputTokens": 0,
+        "cacheCreation1hInputTokens": 0,
+        "webSearchRequests": 0
+      },
+      "model": "openrouter/deepseek/deepseek-v4-pro",
+      "runtime": "pi"
+    },
+    "auxiliary": {
+      "verification": {
+        "usage": {
+          "inputTokens": 3308177,
+          "outputTokens": 145552,
+          "cacheReadInputTokens": 2687442,
+          "cacheCreationInputTokens": 620203,
+          "cacheCreation5mInputTokens": 620203,
+          "cacheCreation1hInputTokens": 0,
+          "webSearchRequests": 0,
+          "costUSD": 8.86144975
+        }
+      },
+      "merge": {
+        "usage": {
+          "inputTokens": 10859,
+          "outputTokens": 556,
+          "cacheReadInputTokens": 0,
+          "cacheCreationInputTokens": 10853,
+          "cacheCreation5mInputTokens": 10853,
+          "cacheCreation1hInputTokens": 0,
+          "webSearchRequests": 0,
+          "costUSD": 0.08176125000000001
+        }
+      }
+    },
+    "total": {
+      "usage": {
+        "inputTokens": 65510875,
+        "outputTokens": 1854475,
+        "costUSD": 18.702101311,
+        "cacheReadInputTokens": 46224594,
+        "cacheCreationInputTokens": 631056,
+        "cacheCreation5mInputTokens": 631056,
+        "cacheCreation1hInputTokens": 0,
+        "webSearchRequests": 0
+      },
+      "model": "openrouter/deepseek/deepseek-v4-pro",
+      "runtime": "pi"
+    }
+  },
+  "timing": {
+    "analysisChunkMs": {
+      "source": "raw-jsonl-durationMs",
+      "count": 156,
+      "p50": 230626,
+      "p75": 376301,
+      "p90": 1155080,
+      "p95": 1646388,
+      "max": 2340672
+    },
+    "shardWallMs": {
+      "source": "result-shard-durationMs-includes-repairs",
+      "count": 6,
+      "p50": 1475103,
+      "p75": 26811555,
+      "p90": 31037574,
+      "p95": 31037574,
+      "max": 31037574,
+      "total": 63415682
+    }
+  },
+  "auxiliaryUsage": {
+    "verification": {
+      "usage": {
+        "inputTokens": 3308177,
+        "outputTokens": 145552,
+        "cacheReadInputTokens": 2687442,
+        "cacheCreationInputTokens": 620203,
+        "cacheCreation5mInputTokens": 620203,
+        "cacheCreation1hInputTokens": 0,
+        "webSearchRequests": 0,
+        "costUSD": 8.86144975
+      }
+    },
+    "merge": {
+      "usage": {
+        "inputTokens": 10859,
+        "outputTokens": 556,
+        "cacheReadInputTokens": 0,
+        "cacheCreationInputTokens": 10853,
+        "cacheCreation5mInputTokens": 10853,
+        "cacheCreation1hInputTokens": 0,
+        "webSearchRequests": 0,
+        "costUSD": 0.08176125000000001
+      }
+    }
+  },
+  "traceSummaries": [
+    {
+      "sha": "2d929588e20b931d2631ade31405f6ddbd34603a",
+      "filename": "src/sentry/api/endpoints/internal_ea_features.py",
+      "lineRange": "1-41",
+      "traceId": "3b2a30fafb9c42019a1ea6b5d2e55966",
+      "spanId": "8601c774c061b65c",
+      "responseId": "gen-1780772575-kYIdzFc8U1gzwFsHNNL9",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019e9e4c-93e9-7e1b-95c9-833ee332c18a",
+      "durationMs": 310419,
+      "numTurns": 40,
+      "status": "success"
+    },
+    {
+      "sha": "2d929588e20b931d2631ade31405f6ddbd34603a",
+      "filename": "src/sentry/api/endpoints/oauth_userinfo.py",
+      "lineRange": "1-110",
+      "traceId": "55c07eeae3b05d96e9725abec9f91786",
+      "spanId": "c70ce380a95053f3",
+      "responseId": "gen-1780772771-l9qZIvBx9hAG1D0Uktk9",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019e9e51-50a4-7378-aa39-259a4d354881",
+      "durationMs": 191014,
+      "numTurns": 14,
+      "status": "success"
+    },
+    {
+      "sha": "2d929588e20b931d2631ade31405f6ddbd34603a",
+      "filename": "src/sentry/api/endpoints/organization_plugin_deprecation_info.py",
+      "lineRange": "1-87",
+      "traceId": "32626a822f491f7d4cdbaaa387236fc9",
+      "spanId": "d0b37d90446b3e08",
+      "responseId": "gen-1780772904-VN0zBMDtN2EaPsMjUr3s",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019e9e54-3ae7-75ae-819c-e87a0803308d",
+      "durationMs": 157386,
+      "numTurns": 11,
+      "status": "success"
+    },
+    {
+      "sha": "2d929588e20b931d2631ade31405f6ddbd34603a",
+      "filename": "src/sentry/api/endpoints/release_thresholds/release_threshold_index.py",
+      "lineRange": "1-69",
+      "traceId": "6603406d0fbd9b222e3b508fab1e4315",
+      "spanId": "7c16bdbd2cb30a57",
+      "responseId": "gen-1780773090-LQ8QFMZpZrlUfcEGLStz",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019e9e56-a1bd-71e5-bc87-782d970c7f50",
+      "durationMs": 160898,
+      "numTurns": 19,
+      "status": "success"
+    },
+    {
+      "sha": "2d929588e20b931d2631ade31405f6ddbd34603a",
+      "filename": "src/sentry/api/endpoints/system_options.py",
+      "lineRange": "1-138",
+      "traceId": "21bb14017eede6accf47cf207d895998",
+      "spanId": "b1c79d113af78021",
+      "responseId": "gen-1780773184-hUqISJ4dX0RsNLdXQtvE",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019e9e59-164c-7731-b79d-e9faa785bc79",
+      "durationMs": 98205,
+      "numTurns": 5,
+      "status": "success"
+    },
+    {
+      "sha": "2d929588e20b931d2631ade31405f6ddbd34603a",
+      "filename": "src/sentry/workflow_engine/endpoints/organization_alertrule_detector_index.py",
+      "lineRange": "1-99",
+      "traceId": "b94ea9c97b6785f90a1c1f9048f68673",
+      "spanId": "a44bca3d32326f9d",
+      "responseId": "gen-1780773370-2rMjIGOYGtsBQDSH58hy",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019e9e5a-95f2-7af5-9f61-0fcf3c266af6",
+      "durationMs": 180567,
+      "numTurns": 18,
+      "status": "success"
+    },
+    {
+      "sha": "6993246259d0193a6a6aac49aa3763959b1126df",
+      "filename": "src/sentry/api/endpoints/auth_index.py",
+      "lineRange": "1-189",
+      "traceId": "8be044c991028c6fd6232999a01af9ce",
+      "spanId": "c22da9982d6e79f3",
+      "responseId": "gen-1780774102-IGZBVck2aUicmX6PpH64",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019e9e5e-0682-778c-a383-a6e9085ee553",
+      "durationMs": 693593,
+      "numTurns": 26,
+      "status": "success"
+    },
+    {
+      "sha": "6993246259d0193a6a6aac49aa3763959b1126df",
+      "filename": "src/sentry/api/endpoints/auth_index.py",
+      "lineRange": "190-362",
+      "traceId": "dbe8bc2dbe6c8e3b740808237077d774",
+      "spanId": "b510dea8785ed393",
+      "responseId": "gen-1780774617-f7psav6NbkFqdx9Pl1kb",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019e9e68-9c02-7595-8bfd-ace8d5d1de6a",
+      "durationMs": 510627,
+      "numTurns": 29,
+      "status": "success"
+    },
+    {
+      "sha": "788ba30f1aa42b00c02d64ed4b8b2515ff8ab8da",
+      "filename": "src/sentry/api/endpoints/accept_organization_invite.py",
+      "lineRange": "1-218",
+      "traceId": "c6da43a0dbe291d619231c08a14a66c7",
+      "spanId": "e099670df6654d3e",
+      "responseId": "gen-1780775830-KKmb0BC15UD37Fxoaf1i",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019e9e71-76b2-7a5e-8370-c3734d0a2181",
+      "durationMs": 1155048,
+      "numTurns": 48,
+      "status": "success"
+    },
+    {
+      "sha": "788ba30f1aa42b00c02d64ed4b8b2515ff8ab8da",
+      "filename": "src/sentry/api/endpoints/accept_organization_invite.py",
+      "lineRange": "219-283",
+      "traceId": "1d37e6eab7a66d60dc8652ecd7468578",
+      "spanId": "729320c71ac6cb91",
+      "responseId": "gen-1780776058-DzipZpUPCmsxDjYeiI04",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019e9e83-16cc-7b54-ad37-a5e1b087bd18",
+      "durationMs": 221778,
+      "numTurns": 7,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": ".github/workflows/getsentry-dispatch.yml",
+      "lineRange": "1-97",
+      "traceId": "18eabfa2c914031ced9c8e78da4497fd",
+      "spanId": "964dc2d15fa6daeb",
+      "responseId": "gen-1780786438-f64C9USdB7iJ5ovnFyZe",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019e9f20-5bb9-7f5d-a57c-92aee9d06c36",
+      "durationMs": 297091,
+      "numTurns": 6,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "scripts/analyze-styled.ts",
+      "lineRange": "1-250",
+      "traceId": "b8c62fe1d641624bfeb54f2070d238b0",
+      "spanId": "bb4d7f7cd885fdfb",
+      "responseId": "gen-1780786158-NYC2h8Y6iNIjikbJzW9O",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019e9f20-5bba-72f6-85ac-8c8781948d43",
+      "durationMs": 75712,
+      "numTurns": 1,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "scripts/analyze-styled.ts",
+      "lineRange": "251-500",
+      "traceId": "b342470dff2507609df62ba352a97460",
+      "spanId": "c9db4f70fc2965fc",
+      "responseId": "gen-1780811947-wxl1INlUn9QDldSBZ03q",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019ea0a7-4451-779a-b313-95e89f753323",
+      "durationMs": 181016,
+      "numTurns": 13,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "scripts/analyze-styled.ts",
+      "lineRange": "501-750",
+      "traceId": "b8c62fe1d641624bfeb54f2070d238b0",
+      "spanId": "aace5564e01962a2",
+      "responseId": "gen-1780786358-WrRmseAzcIxMfGlAneRs",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019e9f23-4a00-7f7e-be53-36121150508e",
+      "durationMs": 26806,
+      "numTurns": 2,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "scripts/analyze-styled.ts",
+      "lineRange": "751-1000",
+      "traceId": "b8c62fe1d641624bfeb54f2070d238b0",
+      "spanId": "46bf825e39dab719",
+      "responseId": "gen-1780786377-J3PiblSBhHa7gZLI2aib",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019e9f23-b2c4-7749-a8c8-f7407c9d0d84",
+      "durationMs": 31887,
+      "numTurns": 1,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "scripts/analyze-styled.ts",
+      "lineRange": "1001-1250",
+      "traceId": "b8c62fe1d641624bfeb54f2070d238b0",
+      "spanId": "1284cf54f9af8a9a",
+      "responseId": "gen-1780786467-VCDIwNmnVwSEVkWbUFGm",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019e9f24-2f61-7ccf-b9ad-941e50a33fec",
+      "durationMs": 65221,
+      "numTurns": 5,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "scripts/analyze-styled.ts",
+      "lineRange": "1251-1500",
+      "traceId": "b8c62fe1d641624bfeb54f2070d238b0",
+      "spanId": "4d602e7a9d2c7c41",
+      "responseId": "gen-1780786594-JQQD2ImMT0P15bA6uvmy",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019e9f25-2e33-7a6c-ad72-3fa4e6665b2e",
+      "durationMs": 133983,
+      "numTurns": 11,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "scripts/analyze-styled.ts",
+      "lineRange": "1501-1656",
+      "traceId": "b8c62fe1d641624bfeb54f2070d238b0",
+      "spanId": "9514812e3c03e082",
+      "responseId": "gen-1780786640-yXmNhmpL8hMaDXyvZHkb",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019e9f27-399f-76b6-8951-7e1d03222f98",
+      "durationMs": 82454,
+      "numTurns": 4,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/api/authentication.py",
+      "lineRange": "1-202",
+      "traceId": "5490d9c8be28df1750d9df74443a6d55",
+      "spanId": "1fb2fc153b5bf342",
+      "responseId": "gen-1780786350-hDGfMlz5JG45pxFb3YCH",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019e9f20-5bba-72f6-85ac-914eec22e295",
+      "durationMs": 202557,
+      "numTurns": 11,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/api/authentication.py",
+      "lineRange": "203-404",
+      "traceId": "5490d9c8be28df1750d9df74443a6d55",
+      "spanId": "ebd4bdb0520fc25a",
+      "responseId": "gen-1780786613-n4tvpRYnftyC4EHuazkq",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019e9f23-7312-73a2-9f46-8fa84df8103d",
+      "durationMs": 258982,
+      "numTurns": 11,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/api/authentication.py",
+      "lineRange": "405-606",
+      "traceId": "5490d9c8be28df1750d9df74443a6d55",
+      "spanId": "f04fb0b76a1a3761",
+      "responseId": "gen-1780787546-RyjW1rNAj8bVCTenxyAW",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019e9f27-66cc-7328-a4a8-305e60d69119",
+      "durationMs": 943775,
+      "numTurns": 40,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/api/authentication.py",
+      "lineRange": "607-808",
+      "traceId": "5490d9c8be28df1750d9df74443a6d55",
+      "spanId": "ee594bac3c32d4ab",
+      "responseId": "gen-1780787964-JqNxQYCP0AgU8ZrNuu7p",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019e9f35-cda4-7c75-a9bb-09e12b9201f5",
+      "durationMs": 414840,
+      "numTurns": 28,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/api/authentication.py",
+      "lineRange": "809-864",
+      "traceId": "5490d9c8be28df1750d9df74443a6d55",
+      "spanId": "842afccd6270a98c",
+      "responseId": "gen-1780788205-dAuhHbkO4ue7Ul4zkTd2",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019e9f3c-2244-7129-a8ea-f9453712f82c",
+      "durationMs": 241154,
+      "numTurns": 17,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/api/endpoints/organization_pipeline.py",
+      "lineRange": "1-151",
+      "traceId": "09de58b213a9d4b19278c110f6a7a6ee",
+      "spanId": "56e581e37c00f89a",
+      "responseId": "gen-1780813325-dB4h1mpIPZ70LpfLwvcV",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019ea0b8-fb80-77de-adef-b9e2ad72f241",
+      "durationMs": 407739,
+      "numTurns": 33,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/api/endpoints/project_rule_details.py",
+      "lineRange": "1-170",
+      "traceId": "79b78f338918f5795d86a75a9bb2569e",
+      "spanId": "c6197c2e5fca949d",
+      "responseId": "gen-1780786705-sSEu5FB1NUapTaBMJTTG",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019e9f23-49ef-7bca-857a-4c9c3499e600",
+      "durationMs": 362725,
+      "numTurns": 47,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/api/endpoints/project_rule_details.py",
+      "lineRange": "171-340",
+      "traceId": "79b78f338918f5795d86a75a9bb2569e",
+      "spanId": "0bee19660c340f15",
+      "responseId": "gen-1780787076-lYGd35MIa8XwIBhcUYjP",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019e9f28-d304-73d1-8f34-e465419833d5",
+      "durationMs": 395577,
+      "numTurns": 38,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/api/endpoints/project_rule_details.py",
+      "lineRange": "341-439",
+      "traceId": "79b78f338918f5795d86a75a9bb2569e",
+      "spanId": "a1458e676be2ee4f",
+      "responseId": "gen-1780787439-fnRFUZHUm9O7JGUil6IX",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019e9f2e-dc69-7d29-b541-c86c2d8a3d9a",
+      "durationMs": 337779,
+      "numTurns": 27,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/api/serializers/models/apiapplication.py",
+      "lineRange": "1-28",
+      "traceId": "a387a3db9295f317c2ff41e77fb6d85f",
+      "spanId": "a256657b64fd4f37",
+      "responseId": "gen-1780786694-PYiqeTwOsdHlnlpSMvpo",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019e9f24-e44d-7767-b07e-f01c186966ec",
+      "durationMs": 249637,
+      "numTurns": 26,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/api/serializers/models/projectcodeowners.py",
+      "lineRange": "1-118",
+      "traceId": "7ffc63330cf323a4ef631538444ecd4f",
+      "spanId": "36b18bdaf9133f00",
+      "responseId": "gen-1780786866-9i6sVLmjvkarnEIrRCeJ",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019e9f28-7bc3-76ef-8923-a652a564f920",
+      "durationMs": 183569,
+      "numTurns": 16,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/flags/providers.py",
+      "lineRange": "1-235",
+      "traceId": "02fa474e55327e7b475944216f8a38fb",
+      "spanId": "707db0470258a6e8",
+      "responseId": "gen-1780786892-VewKBpxm2pMc4P6XPiCJ",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019e9f28-b38e-77dc-89b2-698e8cd00826",
+      "durationMs": 201554,
+      "numTurns": 10,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/flags/providers.py",
+      "lineRange": "236-470",
+      "traceId": "02fa474e55327e7b475944216f8a38fb",
+      "spanId": "ab6d16ded441f317",
+      "responseId": "gen-1780787171-Vf1b7lEugRalOSGFyCcr",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019e9f2b-c6f4-7a73-bb5c-3feaaa8a968c",
+      "durationMs": 278987,
+      "numTurns": 13,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/flags/providers.py",
+      "lineRange": "471-605",
+      "traceId": "02fa474e55327e7b475944216f8a38fb",
+      "spanId": "36173b15848259ba",
+      "responseId": "gen-1780787328-5gPAZE4rqN3WKqJ51YK6",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019e9f30-08d3-7347-9166-af3f60ecd5a9",
+      "durationMs": 152948,
+      "numTurns": 12,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/integrations/bitbucket/webhook.py",
+      "lineRange": "1-207",
+      "traceId": "a684cefdf5c4229d6f02be78086ead25",
+      "spanId": "c73f2178a9cb8ae2",
+      "responseId": "gen-1780787208-5KPVijUzHFhxF4cEEVsg",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019e9f2b-48ed-7261-ab77-f60e56dd29b3",
+      "durationMs": 347162,
+      "numTurns": 34,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/integrations/bitbucket/webhook.py",
+      "lineRange": "208-273",
+      "traceId": "a684cefdf5c4229d6f02be78086ead25",
+      "spanId": "6796fb9f98c7dfff",
+      "responseId": "gen-1780787895-aSilbTRFipwzwbUpMErk",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019e9f30-952e-7b05-966a-25a769b93513",
+      "durationMs": 702745,
+      "numTurns": 22,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/integrations/bitbucket_server/urls.py",
+      "lineRange": "1-12",
+      "traceId": "94f14f0fb291c9414d08e0d68cd4b8e6",
+      "spanId": "5321111b1b47993d",
+      "responseId": "gen-1780787542-fICnAOah5V2Cu5CLqRUC",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019e9f32-5e5c-751b-b501-369dad536cd9",
+      "durationMs": 239948,
+      "numTurns": 13,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/integrations/discord/requests/base.py",
+      "lineRange": "1-215",
+      "traceId": "f41a8f783b84a7f985b15494995c2c4e",
+      "spanId": "867f69e6251515c2",
+      "responseId": "gen-1780787579-2i3MQUyQbnMgDCEUsJdU",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019e9f34-0405-70e7-b8b2-c6c71cc7c855",
+      "durationMs": 141938,
+      "numTurns": 14,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/integrations/discord/requests/base.py",
+      "lineRange": "216-282",
+      "traceId": "f41a8f783b84a7f985b15494995c2c4e",
+      "spanId": "dc1df9d5f7de77f1",
+      "responseId": "gen-1780787773-hOErVt3bupW1iqT7CJuM",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019e9f36-2e88-79c9-8eab-4b658dd8353a",
+      "durationMs": 194937,
+      "numTurns": 18,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/integrations/github_enterprise/webhook.py",
+      "lineRange": "1-199",
+      "traceId": "75207c447d36282722be1e557c623047",
+      "spanId": "6c568aecdce64bbf",
+      "responseId": "gen-1780787796-MfaLIhu82UAgcwQppBp9",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019e9f36-07b8-7494-b726-077680a71c9d",
+      "durationMs": 235333,
+      "numTurns": 6,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/integrations/github_enterprise/webhook.py",
+      "lineRange": "200-386",
+      "traceId": "75207c447d36282722be1e557c623047",
+      "spanId": "96fd5c2231d410c1",
+      "responseId": "gen-1780788021-RRUo5Ak7SxaTbR6W7s4e",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019e9f39-9f0e-77a0-9d3f-4e5628844088",
+      "durationMs": 241454,
+      "numTurns": 10,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/integrations/jira_server/webhooks.py",
+      "lineRange": "1-106",
+      "traceId": "6ef2526b83efcfb5ab50768c85b67d5a",
+      "spanId": "fdef1021c083a002",
+      "responseId": "gen-1780788496-6d0386kb1XtTYV8Dlcg9",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019e9f39-281a-74dc-86b7-38981923cd05",
+      "durationMs": 725032,
+      "numTurns": 33,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/integrations/models/data_forwarder.py",
+      "lineRange": "1-39",
+      "traceId": "7c1b7459925a2b43f2361838d10a2362",
+      "spanId": "63b1a87a8900759a",
+      "responseId": "gen-1780787955-jQJzCRBcYe8UqmKwfvru",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019e9f3b-4e5d-7c59-a86c-7d421a1f1359",
+      "durationMs": 36694,
+      "numTurns": 3,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/integrations/utils/atlassian_connect.py",
+      "lineRange": "1-155",
+      "traceId": "e74a916eaefe086fd9fcf120ca3a3f7a",
+      "spanId": "91a7e49e52e2b9e9",
+      "responseId": "gen-1780788155-lPAVPsFMMjH17almMhSl",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019e9f3b-ddc0-7c96-9ed4-70f1a6c98040",
+      "durationMs": 277749,
+      "numTurns": 12,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/models/apiapplication.py",
+      "lineRange": "1-209",
+      "traceId": "2204fb3a0bc3737bcd4a6bc9ad8f36d6",
+      "spanId": "b06ad4030918aa96",
+      "responseId": "gen-1780788250-2NCIs00aBYw9sk2zidp1",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019e9f3d-4e50-7560-849a-af4ec131b895",
+      "durationMs": 204856,
+      "numTurns": 11,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/models/apiapplication.py",
+      "lineRange": "210-299",
+      "traceId": "314ed5179c0a0047fbe9caad4fc4dc50",
+      "spanId": "50128ebc8d9e470f",
+      "responseId": "gen-1780827287-6snCO7fFGbxbKeNym5Ep",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019ea190-0d85-7fc0-83d0-51a7232d83d0",
+      "durationMs": 275290,
+      "numTurns": 10,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/preprod/api/endpoints/pull_request/organization_pullrequest_size_analysis_download.py",
+      "lineRange": "1-76",
+      "traceId": "b9198b3653a6e694114783f7124ceea1",
+      "spanId": "8b4999a658243c58",
+      "responseId": "gen-1780788494-poWZ2Qh3Cg1n5Cy0ova8",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019e9f3f-d05f-7282-b95e-2e11feb70f97",
+      "durationMs": 277274,
+      "numTurns": 30,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/preprod/api/endpoints/size_analysis/project_preprod_size_analysis_compare_download.py",
+      "lineRange": "1-122",
+      "traceId": "c2deb00fa055d310c1c912e4b1c555a0",
+      "spanId": "1715269e91388988",
+      "responseId": "gen-1780788431-1ce6PcyxNrUsxeCzmS3f",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019e9f40-1aca-7afd-9f5f-7c17a1291290",
+      "durationMs": 230621,
+      "numTurns": 24,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/projects/services/project_key/impl.py",
+      "lineRange": "1-87",
+      "traceId": "aea391dbd06ca6bccf712b631a364c0a",
+      "spanId": "674db4982778cb06",
+      "responseId": "gen-1780788724-2DS2hzBDz7LkYfnz5rTs",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019e9f43-9fbf-77e9-9c6b-b3fdeabd8f68",
+      "durationMs": 262872,
+      "numTurns": 40,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/releases/endpoints/project_releases_token.py",
+      "lineRange": "1-66",
+      "traceId": "c708f2fc0fb25c7f0a0b29857b1b02fd",
+      "spanId": "bd6963e7706ee16f",
+      "responseId": "gen-1780788724-KVjC2LTGqRXTGKQmu0Pm",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019e9f44-0b9e-7cfb-81b0-4f44f48631f8",
+      "durationMs": 249244,
+      "numTurns": 16,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/relocation/api/endpoints/retry.py",
+      "lineRange": "1-148",
+      "traceId": "7195a0df281ce73b7553965980bd6fbb",
+      "spanId": "36fd0740276fae78",
+      "responseId": "gen-1780788633-7jpCGa3l9yOwLfLhpzAL",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019e9f44-3862-7782-a0af-6a051f124462",
+      "durationMs": 150426,
+      "numTurns": 5,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/seer/endpoints/organization_seer_rpc.py",
+      "lineRange": "1-186",
+      "traceId": "85fb740fbe0d6847bc87f30eed10c3df",
+      "spanId": "86d8db2113b432d6",
+      "responseId": "gen-1780788979-iQcFS3P2rzNcQneO7ShB",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019e9f46-840b-7066-8a90-f10f6d7354a2",
+      "durationMs": 331253,
+      "numTurns": 26,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/seer/endpoints/organization_seer_rpc.py",
+      "lineRange": "187-274",
+      "traceId": "85fb740fbe0d6847bc87f30eed10c3df",
+      "spanId": "df3a9add9a81a2c4",
+      "responseId": "gen-1780791211-3h0C0s5sSD25EOUySLr5",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019e9f4b-9223-7f0d-a4ff-3e6fb25db872",
+      "durationMs": 2236375,
+      "numTurns": 24,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/seer/endpoints/seer_rpc.py",
+      "lineRange": "1-215",
+      "traceId": "348d1e0bb06418b7ee9442d472875858",
+      "spanId": "6a019122aa9aebd2",
+      "responseId": "gen-1780788857-xdxTosbnFJNNtFk1wYvF",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019e9f47-a2b7-7350-867d-000a4c80be1f",
+      "durationMs": 139360,
+      "numTurns": 13,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/seer/endpoints/seer_rpc.py",
+      "lineRange": "216-430",
+      "traceId": "348d1e0bb06418b7ee9442d472875858",
+      "spanId": "d0a0e02f3c1e40f6",
+      "responseId": "gen-1780789048-iQHpDbZZzCcMB0uIRF3I",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019e9f49-c330-7b4a-bfae-eb8d0b0709d2",
+      "durationMs": 189007,
+      "numTurns": 13,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/seer/endpoints/seer_rpc.py",
+      "lineRange": "431-645",
+      "traceId": "348d1e0bb06418b7ee9442d472875858",
+      "spanId": "f49685fd6039fd71",
+      "responseId": "gen-1780791383-pKrhhHf62egH1CXrsXpn",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019e9f4c-a58f-7ff4-a1a1-762585ad200d",
+      "durationMs": 2340668,
+      "numTurns": 30,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/seer/endpoints/seer_rpc.py",
+      "lineRange": "646-860",
+      "traceId": "348d1e0bb06418b7ee9442d472875858",
+      "spanId": "6cfcfc7eb4a4c8e3",
+      "responseId": "gen-1780791602-NGlzsMcspSS0zn886OM1",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019e9f70-5ceb-7e65-9063-756f3b0de7b6",
+      "durationMs": 221787,
+      "numTurns": 18,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/seer/endpoints/seer_rpc.py",
+      "lineRange": "861-965",
+      "traceId": "348d1e0bb06418b7ee9442d472875858",
+      "spanId": "5fc9d182002d31f2",
+      "responseId": "gen-1780791878-1w4mZgCNOUqIyRiEJarg",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019e9f73-bf50-759e-9ec4-629105695905",
+      "durationMs": 265166,
+      "numTurns": 15,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/sentry_apps/api/endpoints/installation_external_issue_actions.py",
+      "lineRange": "1-67",
+      "traceId": "a199a612e965232960bc1650b43d807b",
+      "spanId": "84c9d4bb00446a2c",
+      "responseId": "gen-1780789026-18VUu8PCgLtHV9Fv4oh0",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019e9f47-d94d-774f-823f-4d46bf8dcfb5",
+      "durationMs": 301167,
+      "numTurns": 29,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/tasks/post_process.py",
+      "lineRange": "1-205",
+      "traceId": "a1e8d34b57c7cab95353cf4a6cc640d0",
+      "spanId": "f840698d979acaa2",
+      "responseId": "gen-1780791216-i87f4Wp4D3n6DsJ90sHZ",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019e9f4c-71d9-7528-9a91-8df0af7b7e49",
+      "durationMs": 2193996,
+      "numTurns": 17,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/tasks/post_process.py",
+      "lineRange": "206-410",
+      "traceId": "a1e8d34b57c7cab95353cf4a6cc640d0",
+      "spanId": "3f49ee854b11e7dd",
+      "responseId": "gen-1780791481-W4fW0XHfq3YIx52kXUp4",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019e9f6d-ec47-7bac-b87a-4b4c527712f7",
+      "durationMs": 247811,
+      "numTurns": 27,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/tasks/post_process.py",
+      "lineRange": "411-615",
+      "traceId": "984843d9291e9d4f76a7158f486e9a2f",
+      "spanId": "99ac119fd2ac139c",
+      "responseId": "gen-1780827875-diTl20PpazXycLXxWy2X",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019ea199-3829-75a2-8bbd-abf235f4a6ce",
+      "durationMs": 281420,
+      "numTurns": 19,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/tasks/post_process.py",
+      "lineRange": "616-820",
+      "traceId": "a1e8d34b57c7cab95353cf4a6cc640d0",
+      "spanId": "641d8ea399d27df7",
+      "responseId": "gen-1780791989-k17ksubCvAcDLWMOQA0b",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019e9f76-52d5-7150-ac6e-21112553ba8a",
+      "durationMs": 207505,
+      "numTurns": 24,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/tasks/post_process.py",
+      "lineRange": "821-1025",
+      "traceId": "a1e8d34b57c7cab95353cf4a6cc640d0",
+      "spanId": "e8324e1723cb89bf",
+      "responseId": "gen-1780792220-oMfVGyp9VfUVlDME65B5",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019e9f79-7d81-715d-b120-eec07db07433",
+      "durationMs": 274918,
+      "numTurns": 24,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/tasks/post_process.py",
+      "lineRange": "1026-1230",
+      "traceId": "a1e8d34b57c7cab95353cf4a6cc640d0",
+      "spanId": "68bf9b09d248b25a",
+      "responseId": "gen-1780792516-fMjA6SnifSWYf20fB8np",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019e9f7d-af84-7cf1-9a69-0cbd778253b1",
+      "durationMs": 251096,
+      "numTurns": 18,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/tasks/post_process.py",
+      "lineRange": "1231-1435",
+      "traceId": "a1e8d34b57c7cab95353cf4a6cc640d0",
+      "spanId": "776755354e1d14db",
+      "responseId": "gen-1780792724-TAnhKjbrlT6J3oyE92xx",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019e9f81-8475-7898-af25-799f1ca68545",
+      "durationMs": 207817,
+      "numTurns": 16,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/tasks/post_process.py",
+      "lineRange": "1436-1640",
+      "traceId": "a1e8d34b57c7cab95353cf4a6cc640d0",
+      "spanId": "c17bc25d8a1525af",
+      "responseId": "gen-1780792872-SQDhRY4uvmmYH99eE4pI",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019e9f84-b057-73e1-832c-97e0c333dd82",
+      "durationMs": 172287,
+      "numTurns": 11,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/tasks/post_process.py",
+      "lineRange": "1641-1672",
+      "traceId": "a1e8d34b57c7cab95353cf4a6cc640d0",
+      "spanId": "8b40840d9c3d1654",
+      "responseId": "gen-1780793024-pEYHYhwLFCYhLzM0e9M6",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019e9f87-5167-7ffb-875b-9c95d8d43854",
+      "durationMs": 127211,
+      "numTurns": 14,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/web/frontend/mailgun_inbound_webhook.py",
+      "lineRange": "1-92",
+      "traceId": "80739d033d9b900e78b2b98aa8bea1db",
+      "spanId": "68ae2a55c82369e9",
+      "responseId": "gen-1780791217-mskOepieIWJMVIhgIfyV",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019e9f4d-20ec-77a5-aa2d-742da9b33ae3",
+      "durationMs": 2152665,
+      "numTurns": 16,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/web/frontend/release_webhook.py",
+      "lineRange": "1-124",
+      "traceId": "6fb50aabdb8de1de561427c47eb1b7e6",
+      "spanId": "86e436dbf536c994",
+      "responseId": "gen-1780830125-rXWUV99I8oDFbfOspiaK",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019ea1b5-ff44-7303-b776-ecea5fea0ac4",
+      "durationMs": 632248,
+      "numTurns": 69,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/workflow_engine/endpoints/organization_alertrule_detector_index.py",
+      "lineRange": "1-99",
+      "traceId": "9c819dad87b401feb975ef44f6235391",
+      "spanId": "96c1eb56018d36d3",
+      "responseId": "gen-1780791366-IfClJML7QgN3LHdvxP9v",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019e9f6d-f9d5-7528-97f6-5bc4a5453198",
+      "durationMs": 130031,
+      "numTurns": 11,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry/workflow_engine/endpoints/organization_detector_anomaly_data.py",
+      "lineRange": "1-179",
+      "traceId": "56f7e054b43c57f64900b1578d2bb8e0",
+      "spanId": "01e453e6f6c7317c",
+      "responseId": "gen-1780791574-ncPxrzyJmWSY398zFY9E",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019e9f6f-f5cf-73a8-aead-2360ef1b6f77",
+      "durationMs": 204544,
+      "numTurns": 17,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry_plugins/heroku/plugin.py",
+      "lineRange": "1-211",
+      "traceId": "4be540797d7732ba9624b341748d2f3f",
+      "spanId": "0acf064e26f2b34b",
+      "responseId": "gen-1780791808-nQczxQglf3Syiqtd1Bla",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019e9f73-14e5-727b-b609-a96e01dda8da",
+      "durationMs": 238425,
+      "numTurns": 21,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry_plugins/heroku/plugin.py",
+      "lineRange": "212-213",
+      "traceId": "4be540797d7732ba9624b341748d2f3f",
+      "spanId": "6bc383887f81aa32",
+      "responseId": "gen-1780791966-S1dldzBVysjUmyzpVHGb",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019e9f76-b852-7f38-9ac9-16139a624bc7",
+      "durationMs": 159076,
+      "numTurns": 20,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "src/sentry_plugins/jira/client.py",
+      "lineRange": "1-98",
+      "traceId": "35cb7c6f0072776f524ec2cf730ae042",
+      "spanId": "7830ae7eefea56f5",
+      "responseId": "gen-1780791986-GYVyusDnommBWWxA9bqE",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019e9f73-6e4d-7a9e-aa68-516f688e3aac",
+      "durationMs": 395680,
+      "numTurns": 26,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "static/app/components/events/autofix/insights/autofixInsightSources.tsx",
+      "lineRange": "1-275",
+      "traceId": "5d899271c643df500a4c1d23141181b0",
+      "spanId": "2c43673b27ce3ee9",
+      "responseId": "gen-1780791918-OcGGb8ZgF2S7BCQg85gT",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019e9f77-cb35-73e4-8cc7-4b8b42a3805a",
+      "durationMs": 53433,
+      "numTurns": 6,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "static/app/components/events/autofix/insights/autofixInsightSources.tsx",
+      "lineRange": "276-447",
+      "traceId": "506993500a36e78a0df2faec00dbd60e",
+      "spanId": "06d5158d9f4753b0",
+      "responseId": "gen-1780830455-1GCZTcd8qF34Nju8AEOe",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019ea1c2-e57c-73ff-99e5-c50124359e42",
+      "durationMs": 138674,
+      "numTurns": 9,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "static/app/components/events/interfaces/utils.tsx",
+      "lineRange": "1-279",
+      "traceId": "bbe088a0f829226b5f6ffe3931b5892d",
+      "spanId": "2e4994eb895fc0ee",
+      "responseId": "gen-1780792152-AXYWQJTfEHAZ072ebRpd",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019e9f79-25cb-76b4-abcc-46369f63330c",
+      "durationMs": 187731,
+      "numTurns": 8,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "static/app/components/events/interfaces/utils.tsx",
+      "lineRange": "280-392",
+      "traceId": "bbe088a0f829226b5f6ffe3931b5892d",
+      "spanId": "71ee71644126b4b2",
+      "responseId": "gen-1780792165-ZbtlYOkk9MNbeqHb2bSf",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019e9f7c-032b-7717-b6f2-558781f0895d",
+      "durationMs": 24033,
+      "numTurns": 1,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "static/app/components/featureFlags/hooks/useFlagSeries.tsx",
+      "lineRange": "1-84",
+      "traceId": "1be0e3a43281deb8b6b7213ff6fc90e5",
+      "spanId": "a2ea265aa2beef19",
+      "responseId": "gen-1780792160-jWdpwPxGFnE2GDzTAjne",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019e9f79-780c-7105-830a-7a8819378c02",
+      "durationMs": 173349,
+      "numTurns": 25,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "static/app/views/discover/utils.tsx",
+      "lineRange": "1-254",
+      "traceId": "827a24639017210a6cd4ecfd50fa8b58",
+      "spanId": "d913072a3254fe28",
+      "responseId": "gen-1780792283-YRbbvzYfkx3meLUYkNG4",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019e9f7c-1d47-72ee-85b9-759ccaddf635",
+      "durationMs": 124305,
+      "numTurns": 7,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "static/app/views/discover/utils.tsx",
+      "lineRange": "255-508",
+      "traceId": "827a24639017210a6cd4ecfd50fa8b58",
+      "spanId": "5c020fb7d10f9a2b",
+      "responseId": "gen-1780792486-DAA1XEqYXEHvoR7GendJ",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019e9f7e-02e7-7bcb-aa70-a97394fa7e5c",
+      "durationMs": 193911,
+      "numTurns": 18,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "static/app/views/discover/utils.tsx",
+      "lineRange": "509-762",
+      "traceId": "827a24639017210a6cd4ecfd50fa8b58",
+      "spanId": "8a56fe9f93b3ced6",
+      "responseId": "gen-1780792698-UVb7ugb4xcQQLG4giPJa",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019e9f80-f879-79d6-927f-e9e0db6194ba",
+      "durationMs": 215800,
+      "numTurns": 26,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "static/app/views/discover/utils.tsx",
+      "lineRange": "763-908",
+      "traceId": "827a24639017210a6cd4ecfd50fa8b58",
+      "spanId": "e13859bb82b727ed",
+      "responseId": "gen-1780792924-Cn3byF87Aw2ISPKOpLWk",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019e9f84-4383-7abf-a750-a8106be9ebfb",
+      "durationMs": 236605,
+      "numTurns": 19,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "static/app/views/explore/releases/list/mobileBuildsChart.tsx",
+      "lineRange": "1-243",
+      "traceId": "6c9fbdba1fdd6a3836ceb48b28140602",
+      "spanId": "9cdb243403a6fa29",
+      "responseId": "gen-1780792393-Lr4N0QAmklwYz10SJ0g4",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019e9f7c-6116-7201-9028-9806d2de3449",
+      "durationMs": 215619,
+      "numTurns": 19,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "static/app/views/explore/releases/list/mobileBuildsChart.tsx",
+      "lineRange": "244-274",
+      "traceId": "6c9fbdba1fdd6a3836ceb48b28140602",
+      "spanId": "282796df4d4dbbd5",
+      "responseId": "gen-1780792538-NAr09hvMEGGDiOIorUpp",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019e9f7f-ab6f-7195-986f-36844276b087",
+      "durationMs": 146637,
+      "numTurns": 15,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "static/app/views/preprod/components/visualizations/appSizeTreemap.tsx",
+      "lineRange": "1-242",
+      "traceId": "b1db36f2cc3278d32a5c20af0dfd9fd7",
+      "spanId": "4c407f4ba8e94322",
+      "responseId": "gen-1780792388-2iS4mksuzhwC4KuFVayo",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019e9f7c-a244-77c5-85b2-d88365a6e613",
+      "durationMs": 194688,
+      "numTurns": 14,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "static/app/views/preprod/components/visualizations/appSizeTreemap.tsx",
+      "lineRange": "243-484",
+      "traceId": "b1db36f2cc3278d32a5c20af0dfd9fd7",
+      "spanId": "03d9a93694f560eb",
+      "responseId": "gen-1780792565-4uzalmHMG9B8KbfmrRuF",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019e9f7f-9adc-7ccb-84da-baac1a5d057f",
+      "durationMs": 183667,
+      "numTurns": 13,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "static/app/views/preprod/components/visualizations/appSizeTreemap.tsx",
+      "lineRange": "485-559",
+      "traceId": "b1db36f2cc3278d32a5c20af0dfd9fd7",
+      "spanId": "9988734a171385c5",
+      "responseId": "gen-1780792774-FEt3XMjh4h0GVvLz6gWP",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019e9f82-6866-7e7d-af98-f1913fd6f6a4",
+      "durationMs": 194806,
+      "numTurns": 21,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "static/app/views/settings/organizationIntegrations/integrationDetailedView.tsx",
+      "lineRange": "1-234",
+      "traceId": "4a59387e951b8818a7a554f1b6cc3f08",
+      "spanId": "f160706df60494ac",
+      "responseId": "gen-1780792605-HLghTqD6YS9Xr2YrlxFN",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019e9f81-e84f-7dc3-b92a-ad847806a52b",
+      "durationMs": 78513,
+      "numTurns": 3,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "static/app/views/settings/organizationIntegrations/integrationDetailedView.tsx",
+      "lineRange": "235-468",
+      "traceId": "4a59387e951b8818a7a554f1b6cc3f08",
+      "spanId": "bbb7c98ef48f1fb7",
+      "responseId": "gen-1780792724-CvOZTsAUo6RwTt0AabxH",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019e9f83-1b0c-7ec1-88fd-a174dc2d2343",
+      "durationMs": 124191,
+      "numTurns": 8,
+      "status": "success"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "filename": "static/app/views/settings/organizationIntegrations/integrationDetailedView.tsx",
+      "lineRange": "469-554",
+      "traceId": "4a59387e951b8818a7a554f1b6cc3f08",
+      "spanId": "081722cfa7a0695a",
+      "responseId": "gen-1780792836-UV20vndSN9HlhDWVfr3r",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019e9f85-003a-7b0f-b1a3-64d12865a5d6",
+      "durationMs": 104001,
+      "numTurns": 11,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/api/endpoints/accept_organization_invite.py",
+      "lineRange": "1-218",
+      "traceId": "7c31f8cf18b9c31b50281269bd4935eb",
+      "spanId": "f2dec26ce941e38c",
+      "responseId": "gen-1780848275-8cpQC5iazG3ZfyoMfYGe",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019ea2b5-f018-7f67-a2a4-35b0d307a4a4",
+      "durationMs": 1990748,
+      "numTurns": 41,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/api/endpoints/accept_organization_invite.py",
+      "lineRange": "219-283",
+      "traceId": "af763342d6ef42731de79ec8a64784da",
+      "spanId": "4e04bb8d4060d5a0",
+      "responseId": "gen-1780864720-UgxKFo0FoZNJKAIttj4w",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019ea3c9-4aaa-792f-a1c6-1af7b22f0dea",
+      "durationMs": 393249,
+      "numTurns": 32,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/api/endpoints/organization_pinned_searches.py",
+      "lineRange": "1-113",
+      "traceId": "d9442d7754edde5ab85f2e6bbed542a4",
+      "spanId": "fd390e54eb5e2473",
+      "responseId": "gen-1780846493-ZS7StJBDIsfnkivvVjze",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019ea2b5-f019-74eb-a5bc-368c67bc6e75",
+      "durationMs": 238590,
+      "numTurns": 18,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/api/endpoints/project_rules.py",
+      "lineRange": "1-202",
+      "traceId": "bef19330db4178658a4a8fdfbb6863d4",
+      "spanId": "a106a1f5944847f8",
+      "responseId": "gen-1780846342-7TtmC8Tp9DHcnV7B0Bjw",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019ea2b5-f019-74eb-a5bc-39bc9e137b41",
+      "durationMs": 78742,
+      "numTurns": 4,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/api/endpoints/project_rules.py",
+      "lineRange": "203-404",
+      "traceId": "bef19330db4178658a4a8fdfbb6863d4",
+      "spanId": "c1997e5e75b55996",
+      "responseId": "gen-1780846473-mRUTpBPNvM2jaGyStvIY",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019ea2b7-23bb-7257-be33-819173f120ac",
+      "durationMs": 166947,
+      "numTurns": 14,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/api/endpoints/project_rules.py",
+      "lineRange": "405-606",
+      "traceId": "bef19330db4178658a4a8fdfbb6863d4",
+      "spanId": "4f37c32c9e58f15c",
+      "responseId": "gen-1780846556-n4VjOnLu0bjiBQYLXdzA",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019ea2b9-afec-7810-ba86-0ea4e66a428a",
+      "durationMs": 32061,
+      "numTurns": 4,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/api/endpoints/project_rules.py",
+      "lineRange": "607-808",
+      "traceId": "bef19330db4178658a4a8fdfbb6863d4",
+      "spanId": "a55cb4abab87a23f",
+      "responseId": "gen-1780848205-eoWCL9nzKRAJDF9S613x",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019ea2ba-2d32-7bbb-9bb4-0df30e6cc785",
+      "durationMs": 1655657,
+      "numTurns": 20,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/api/endpoints/project_rules.py",
+      "lineRange": "809-1010",
+      "traceId": "bef19330db4178658a4a8fdfbb6863d4",
+      "spanId": "f09e9b7892f45519",
+      "responseId": "gen-1780848684-V3qcr7esPBoeF1XoDzin",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019ea2d3-70ac-7002-b8d5-c90d95a06348",
+      "durationMs": 472021,
+      "numTurns": 39,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/api/endpoints/project_rules.py",
+      "lineRange": "1011-1083",
+      "traceId": "bef19330db4178658a4a8fdfbb6863d4",
+      "spanId": "2d1f3115cced1a74",
+      "responseId": "gen-1780849012-cm8wAtSp9RzOSGRilfiI",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019ea2da-a4ac-741e-8042-533d2725b343",
+      "durationMs": 340403,
+      "numTurns": 35,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/auth/services/access/impl.py",
+      "lineRange": "1-125",
+      "traceId": "614627498b7e8eef0ed9dbc99a3212e0",
+      "spanId": "3f06cd62efbf48da",
+      "responseId": "gen-1780847273-pgcIR28uLvSVOx3SHDip",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019ea2b5-f019-74eb-a5bc-3d6736986745",
+      "durationMs": 994583,
+      "numTurns": 16,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/codecov/endpoints/repository_token_regenerate/repository_token_regenerate.py",
+      "lineRange": "1-68",
+      "traceId": "f10c097a9fd7fe71a553714aef498f87",
+      "spanId": "2d065a6f473576f2",
+      "responseId": "gen-1780848176-aPz904YYPoF3bLZFGFAQ",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019ea2b9-941d-72bf-b185-23e3d75ad360",
+      "durationMs": 1660102,
+      "numTurns": 19,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/discover/endpoints/discover_saved_query_detail.py",
+      "lineRange": "1-191",
+      "traceId": "081d4c15cf707846c28d0c0b3a724e6f",
+      "spanId": "767ca8ada4f4d78b",
+      "responseId": "gen-1780848185-W8KbzSBwcM5Z1OjHux3Q",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019ea2c5-1d3f-71a5-aa94-0bb3512975ae",
+      "durationMs": 908533,
+      "numTurns": 12,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/explore/endpoints/explore_saved_query_detail.py",
+      "lineRange": "1-195",
+      "traceId": "972989994a1d7e814491dd334ea59c80",
+      "spanId": "0da858b2e2b625c3",
+      "responseId": "gen-1780848569-XfrKjr4jS6NBkQQf06zg",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019ea2d2-e8f5-7d81-8eb3-e9bbf82f6647",
+      "durationMs": 387649,
+      "numTurns": 23,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/flags/endpoints/secrets.py",
+      "lineRange": "1-140",
+      "traceId": "fcdd96fcae92369c009d2aa5d53342f6",
+      "spanId": "b971a28415a6358e",
+      "responseId": "gen-1780848400-xhj2ASmv5AIfS6SuOKPy",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019ea2d2-fa45-7573-8e57-a3da433191ec",
+      "durationMs": 243151,
+      "numTurns": 14,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/integrations/api/endpoints/external_team_details.py",
+      "lineRange": "1-113",
+      "traceId": "4fffb4ca42bf9a5ebf582164f4fdc412",
+      "spanId": "7d196332d00824dc",
+      "responseId": "gen-1780848567-RbHWfJ9lcldzjKDW4hZC",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019ea2d6-a63e-7d38-b95f-23d6fa92f46c",
+      "durationMs": 138413,
+      "numTurns": 10,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/integrations/jira/webhooks/installed.py",
+      "lineRange": "1-110",
+      "traceId": "ba7982920232a34e68d583a17f0ba42b",
+      "spanId": "b4ddea46fab1181a",
+      "responseId": "gen-1780848897-Ry9NBM6gwOSid6b6tgxV",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019ea2d6-b01e-76d2-8c6b-2c7da99ac030",
+      "durationMs": 470023,
+      "numTurns": 27,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/integrations/messaging/linkage.py",
+      "lineRange": "1-198",
+      "traceId": "b1deb248579ab061138105eb153c76a2",
+      "spanId": "0735c06c289135ae",
+      "responseId": "gen-1780848773-aBBPSuS7ubdckEOamdAd",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019ea2d8-c2fb-7972-a4a8-fa09c354f8b8",
+      "durationMs": 220821,
+      "numTurns": 13,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/integrations/messaging/linkage.py",
+      "lineRange": "199-396",
+      "traceId": "b1deb248579ab061138105eb153c76a2",
+      "spanId": "e02b80505ff0b0d0",
+      "responseId": "gen-1780848981-yFUpronqsH2GpfzkVDlF",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019ea2dc-219f-7b2f-b948-8283a3ae99f4",
+      "durationMs": 197357,
+      "numTurns": 12,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/integrations/messaging/linkage.py",
+      "lineRange": "397-594",
+      "traceId": "b1deb248579ab061138105eb153c76a2",
+      "spanId": "dbb335036ad21ead",
+      "responseId": "gen-1780849283-0TwBFWb9JAeehfnexewA",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019ea2df-249a-7360-bde1-ce1b8f68286d",
+      "durationMs": 317805,
+      "numTurns": 19,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/integrations/messaging/linkage.py",
+      "lineRange": "595-677",
+      "traceId": "b1deb248579ab061138105eb153c76a2",
+      "spanId": "6645d5828e64bba4",
+      "responseId": "gen-1780850074-VhhGkb5n9WQ1mzGYgLNe",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019ea2e3-fe1c-75ae-b956-c14c7131cfd9",
+      "durationMs": 775139,
+      "numTurns": 14,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/integrations/msteams/webhook.py",
+      "lineRange": "1-197",
+      "traceId": "3c325bd13bb66a8ca5d3414401d46f3f",
+      "spanId": "521461f45088c7ba",
+      "responseId": "gen-1780848739-dMETvGTr2vZCiORNz6Zs",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019ea2d8-d34a-71f1-bf48-56942347abdd",
+      "durationMs": 189920,
+      "numTurns": 12,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/integrations/msteams/webhook.py",
+      "lineRange": "198-394",
+      "traceId": "3c325bd13bb66a8ca5d3414401d46f3f",
+      "spanId": "0d45e6c4fe9e69b4",
+      "responseId": "gen-1780848979-s5yZ2SrRdH71OXduzVzA",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019ea2db-b936-7c85-a95b-7828d488dd2c",
+      "durationMs": 218246,
+      "numTurns": 14,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/integrations/msteams/webhook.py",
+      "lineRange": "395-591",
+      "traceId": "dbc3b559b510d13ba4d66594693accf1",
+      "spanId": "394605ee8c5cfde1",
+      "responseId": "gen-1780861660-tr6s9dustk6UHOIU2VcX",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019ea38a-4938-7b64-8c1a-fc046a87f468",
+      "durationMs": 1475447,
+      "numTurns": 53,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/integrations/msteams/webhook.py",
+      "lineRange": "592-747",
+      "traceId": "dbc3b559b510d13ba4d66594693accf1",
+      "spanId": "0c0a093c341d3c62",
+      "responseId": "gen-1780861979-c91mATxnVylXCw3iUqb9",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019ea3a0-cce5-73e7-b6e9-d6202e3abb5f",
+      "durationMs": 304235,
+      "numTurns": 14,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/integrations/perforce/integration.py",
+      "lineRange": "1-202",
+      "traceId": "f68e64f97af73e909c6ba02031032faf",
+      "spanId": "4ff6c18d9c16b8fd",
+      "responseId": "gen-1780849158-OopcwxyEZSWZyuObr5uM",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019ea2dd-dc46-7341-b29b-582d977df833",
+      "durationMs": 259041,
+      "numTurns": 25,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/integrations/perforce/integration.py",
+      "lineRange": "203-404",
+      "traceId": "f68e64f97af73e909c6ba02031032faf",
+      "spanId": "822ee97581f06e59",
+      "responseId": "gen-1780849416-kjlpY4PKsOGmoEh3z0AY",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019ea2e1-d045-751f-a6e9-4fc6a2e87479",
+      "durationMs": 257029,
+      "numTurns": 27,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/integrations/perforce/integration.py",
+      "lineRange": "405-606",
+      "traceId": "f68e64f97af73e909c6ba02031032faf",
+      "spanId": "a9026738b41b29fe",
+      "responseId": "gen-1780850432-vAS145UXJVJV32rLuSmQ",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019ea2e5-bc62-74f5-afd1-cdefe5e88086",
+      "durationMs": 1013818,
+      "numTurns": 34,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/integrations/perforce/integration.py",
+      "lineRange": "607-681",
+      "traceId": "f68e64f97af73e909c6ba02031032faf",
+      "spanId": "0cccd307eb5c5de6",
+      "responseId": "gen-1780850802-1eLTqI9O2GhX7xbMvKmE",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019ea2f5-34ca-7275-b908-517f6d2a918f",
+      "durationMs": 376297,
+      "numTurns": 41,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/integrations/slack/webhooks/action.py",
+      "lineRange": "1-202",
+      "traceId": "7e605f61445268e7cad2e3e153d42dba",
+      "spanId": "f5e7d3f187856721",
+      "responseId": "gen-1780849260-8vnuOdl8FMaMu5Dd0hVd",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019ea2df-d67f-73ab-9421-72a24903636c",
+      "durationMs": 237531,
+      "numTurns": 20,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/integrations/slack/webhooks/action.py",
+      "lineRange": "203-404",
+      "traceId": "7e605f61445268e7cad2e3e153d42dba",
+      "spanId": "f9358522252b75a4",
+      "responseId": "gen-1780850209-ruNxpemRbctoy1RjxPJn",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019ea2e3-7671-7e9d-8957-7c11666a45eb",
+      "durationMs": 940323,
+      "numTurns": 28,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/integrations/slack/webhooks/action.py",
+      "lineRange": "405-606",
+      "traceId": "7e605f61445268e7cad2e3e153d42dba",
+      "spanId": "fcb3e12b45e96ec8",
+      "responseId": "gen-1780850412-oZWHDrewrRyydMu1wodV",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019ea2f1-cfb3-737f-aa82-d49ceee32674",
+      "durationMs": 204360,
+      "numTurns": 14,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/integrations/slack/webhooks/action.py",
+      "lineRange": "607-808",
+      "traceId": "7e605f61445268e7cad2e3e153d42dba",
+      "spanId": "272e6ce84f088189",
+      "responseId": "gen-1780850635-A8vwv28vCJam2DG4ww18",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019ea2f4-ee0b-7530-b62c-53b018648634",
+      "durationMs": 218877,
+      "numTurns": 23,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/integrations/slack/webhooks/action.py",
+      "lineRange": "809-1010",
+      "traceId": "7e605f61445268e7cad2e3e153d42dba",
+      "spanId": "e8507f492ac1ee63",
+      "responseId": "gen-1780850840-VpJt7v0AWc6NwB4VZSYS",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019ea2f8-451f-7b5c-9008-9a7c3bc40251",
+      "durationMs": 225665,
+      "numTurns": 24,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/integrations/slack/webhooks/action.py",
+      "lineRange": "1011-1037",
+      "traceId": "7e605f61445268e7cad2e3e153d42dba",
+      "spanId": "c7542034410e366f",
+      "responseId": "gen-1780850896-YxfMmebu6iiN8ZthfWlo",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019ea2fb-b6bc-775e-83c0-041bba40c003",
+      "durationMs": 111385,
+      "numTurns": 6,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/integrations/slack/webhooks/options_load.py",
+      "lineRange": "1-115",
+      "traceId": "f05b2889f26d6b40726f40e048e8fb91",
+      "spanId": "8f00ae4c1a895b5f",
+      "responseId": "gen-1780850213-ZE1ZxGGj69L9yaMIaXQB",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019ea2ef-d216-7b34-b5e1-a9971ce901b5",
+      "durationMs": 137316,
+      "numTurns": 19,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/notifications/notification_action/group_type_notification_registry/handlers/metric_alert_registry_handler.py",
+      "lineRange": "1-108",
+      "traceId": "6f9bc1ee42f2a7a78de8fd41fecdf063",
+      "spanId": "3238a09e68a02b4c",
+      "responseId": "gen-1780850577-2y3tOc5GH1nORpFIg5nr",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019ea2f0-e6b7-71ac-a942-9c5378c27f08",
+      "durationMs": 429991,
+      "numTurns": 49,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/notifications/platform/api/endpoints/internal_registered_templates.py",
+      "lineRange": "1-128",
+      "traceId": "c42045c2acbf98f96a65d2057cb41374",
+      "spanId": "c9d9b029f275ab95",
+      "responseId": "gen-1780850536-BC4XrOLH0qM8go8WYKAN",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019ea2f1-ea98-7321-9a71-b2882f6e4196",
+      "durationMs": 332019,
+      "numTurns": 23,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/preprod/api/endpoints/preprod_artifact_approve.py",
+      "lineRange": "1-104",
+      "traceId": "86c46d9cd11b005f2377b8e94323df62",
+      "spanId": "19d48f6cbc5ec4d9",
+      "responseId": "gen-1780850944-KqpnSYLpEKsDoQG4YdRk",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019ea2f6-fba3-744d-815a-ee398819d2a7",
+      "durationMs": 402260,
+      "numTurns": 44,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/preprod/api/endpoints/preprod_artifact_snapshot.py",
+      "lineRange": "1-191",
+      "traceId": "53a672072f42d2cb5ab8724c66e26226",
+      "spanId": "aca881825eca2263",
+      "responseId": "gen-1780850793-CKKO8ch8jfbLJ435LgBI",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019ea2f7-769e-7a3f-8980-99b1092c6806",
+      "durationMs": 230613,
+      "numTurns": 22,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/preprod/api/endpoints/preprod_artifact_snapshot.py",
+      "lineRange": "192-382",
+      "traceId": "53a672072f42d2cb5ab8724c66e26226",
+      "spanId": "7c2d900a711d8487",
+      "responseId": "gen-1780850956-HsCO6k11BiYuYru4V2ZJ",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019ea2fa-fb94-73ea-9433-3d5abd716966",
+      "durationMs": 148599,
+      "numTurns": 20,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/preprod/api/endpoints/preprod_artifact_snapshot.py",
+      "lineRange": "383-573",
+      "traceId": "53a672072f42d2cb5ab8724c66e26226",
+      "spanId": "9af6854718d3b268",
+      "responseId": "gen-1780851134-VO6Yjio5LQGu4bxiO7UA",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019ea2fd-401d-71ad-9859-a78108e7b916",
+      "durationMs": 177325,
+      "numTurns": 21,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/preprod/api/endpoints/preprod_artifact_snapshot.py",
+      "lineRange": "574-754",
+      "traceId": "53a672072f42d2cb5ab8724c66e26226",
+      "spanId": "e6b76b15d57bbe1e",
+      "responseId": "gen-1780852311-Ze8xuVd0V8dOQ2tUztCG",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019ea2ff-f4e4-7af8-b56d-c266c86f19e7",
+      "durationMs": 1191145,
+      "numTurns": 19,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/preprod/api/endpoints/public/organization_preprod_size_analysis.py",
+      "lineRange": "1-199",
+      "traceId": "148c2ee35420f47fff277c121826b166",
+      "spanId": "6fd7844a4b2571da",
+      "responseId": "gen-1780850928-WBa8y5Sz5U75mwRvRHfj",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019ea2fa-f2dd-7d85-a6a1-bc0c2354299d",
+      "durationMs": 130961,
+      "numTurns": 10,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/preprod/api/endpoints/public/organization_preprod_size_analysis.py",
+      "lineRange": "200-291",
+      "traceId": "148c2ee35420f47fff277c121826b166",
+      "spanId": "798411252be3ed8e",
+      "responseId": "gen-1780851189-fm1668ZhIGIK0WPW9ypU",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019ea2fc-f282-7011-97bb-ed5cc7b47cea",
+      "durationMs": 251117,
+      "numTurns": 30,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/replays/endpoints/data_export_notifications.py",
+      "lineRange": "1-26",
+      "traceId": "135382898b481a5864e88ff90e2cadc3",
+      "spanId": "ac84cd8a32a109aa",
+      "responseId": "gen-1780851190-cDWcXtOKDw8GVQsRwO79",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019ea2fd-1f35-7c4c-9c7f-89045a473abe",
+      "durationMs": 243682,
+      "numTurns": 31,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/replays/endpoints/project_replay_details.py",
+      "lineRange": "1-103",
+      "traceId": "8ec8b0fc8a90e8444c799890e2d22648",
+      "spanId": "6dec422ac2f6c16b",
+      "responseId": "gen-1780851092-wNwweLso7V4kmsKVzwlP",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019ea2fd-69e0-797c-abb2-d911af949d4d",
+      "durationMs": 138651,
+      "numTurns": 7,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/replays/usecases/replay_counts.py",
+      "lineRange": "1-202",
+      "traceId": "070d4aaa2a740525739822bd417d0031",
+      "spanId": "a9b0ac8800b4064b",
+      "responseId": "gen-1780851249-4O4ZzYM8TuSfKogrAauS",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019ea2ff-878e-7dfc-847c-85797a533b47",
+      "durationMs": 174258,
+      "numTurns": 21,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/replays/usecases/replay_counts.py",
+      "lineRange": "203-229",
+      "traceId": "070d4aaa2a740525739822bd417d0031",
+      "spanId": "ee8afe17630ce88c",
+      "responseId": "gen-1780851575-lK3EuvK14dA8SifrbBlF",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019ea302-3051-786e-9daf-54291025fa9f",
+      "durationMs": 315183,
+      "numTurns": 21,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/seer/autofix/autofix_agent.py",
+      "lineRange": "1-231",
+      "traceId": "55519495d69842c307926f084c139d3a",
+      "spanId": "b3534a16df05a1d9",
+      "responseId": "gen-1780851337-HCvst9AfJIGMGBloocYz",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019ea300-c792-7279-a6b7-77b997efb045",
+      "durationMs": 149840,
+      "numTurns": 13,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/seer/autofix/autofix_agent.py",
+      "lineRange": "232-462",
+      "traceId": "55519495d69842c307926f084c139d3a",
+      "spanId": "b4328ea1d249df5d",
+      "responseId": "gen-1780852710-qS1T5vbJ3y5fx6PntlYQ",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019ea303-10f4-7497-816d-914f39e4f684",
+      "durationMs": 1367032,
+      "numTurns": 35,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/seer/autofix/autofix_agent.py",
+      "lineRange": "463-671",
+      "traceId": "55519495d69842c307926f084c139d3a",
+      "spanId": "3f390240e957af6b",
+      "responseId": "gen-1780854094-rawWCUH6shER6hCae3tD",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019ea317-ed14-7eaf-b5b8-cb8ed2369dad",
+      "durationMs": 1389888,
+      "numTurns": 27,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/seer/endpoints/organization_autofix_automation_settings.py",
+      "lineRange": "1-192",
+      "traceId": "86977bd80f64db4edefd2eae763d774f",
+      "spanId": "eecd374ccb3f415f",
+      "responseId": "gen-1780851339-r2KBgoadfNpZ6uH3xH1D",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019ea300-d734-7aec-ad5b-989b8891ca05",
+      "durationMs": 145882,
+      "numTurns": 7,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/seer/endpoints/organization_autofix_automation_settings.py",
+      "lineRange": "193-384",
+      "traceId": "86977bd80f64db4edefd2eae763d774f",
+      "spanId": "6c2a918511783a5a",
+      "responseId": "gen-1780852408-8PIKHv1d5zePytznkW6H",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019ea303-1118-7d61-a2c9-2c69170d65d4",
+      "durationMs": 1284053,
+      "numTurns": 25,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/seer/endpoints/organization_autofix_automation_settings.py",
+      "lineRange": "385-405",
+      "traceId": "86977bd80f64db4edefd2eae763d774f",
+      "spanId": "14686b4cd1b9fe6b",
+      "responseId": "gen-1780852695-xN48u8rwBxIuzyIHpMj7",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019ea316-a901-7eff-8223-674cf8ffeeae",
+      "durationMs": 71680,
+      "numTurns": 8,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/seer/supergroups/endpoints/organization_supergroups_by_group.py",
+      "lineRange": "1-103",
+      "traceId": "62d199bb749eefa62818487cc3b4c93e",
+      "spanId": "88062ef12de38a1f",
+      "responseId": "gen-1780851784-RANbtJ03tYBVMRp6yy9G",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019ea306-ff8d-7e5c-990e-8fd08c9dfda4",
+      "durationMs": 188363,
+      "numTurns": 22,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/sentry_apps/api/endpoints/installation_external_issue_actions.py",
+      "lineRange": "1-67",
+      "traceId": "0fd1612f5b7054245e29ba154a87369f",
+      "spanId": "6d0109c4dc34a0d7",
+      "responseId": "gen-1780852265-hbo53zs3hIXKN9cWGENe",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019ea309-df66-792f-a757-a7fa070cf824",
+      "durationMs": 481280,
+      "numTurns": 19,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/sentry_apps/services/cell/impl.py",
+      "lineRange": "1-207",
+      "traceId": "196cffff9a143dd02470e34e300ae31c",
+      "spanId": "61f3700d177ab6bb",
+      "responseId": "gen-1780862146-utICu2Eej3WKs1rDsbZW",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019ea3a5-7164-7762-b34c-a1b1e6051f6c",
+      "durationMs": 164891,
+      "numTurns": 15,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/sentry_apps/services/cell/impl.py",
+      "lineRange": "208-414",
+      "traceId": "9db18264825a1d495ab1e08a9a7df885",
+      "spanId": "687e8a7cc31c3608",
+      "responseId": "gen-1780852690-XAxaqQ5F9a5y7DiE2B4H",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019ea314-9a86-700d-9f37-e72f1fb809cd",
+      "durationMs": 209194,
+      "numTurns": 16,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/sentry_apps/services/cell/impl.py",
+      "lineRange": "415-621",
+      "traceId": "9db18264825a1d495ab1e08a9a7df885",
+      "spanId": "94459bcca7550313",
+      "responseId": "gen-1780854279-quTilH7PFuF8FC2PnLJM",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019ea317-cbc0-7095-86d1-b49a38814ac8",
+      "durationMs": 1581894,
+      "numTurns": 38,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/sentry_apps/services/cell/impl.py",
+      "lineRange": "622",
+      "traceId": "9db18264825a1d495ab1e08a9a7df885",
+      "spanId": "69306b3ec68e7cd2",
+      "responseId": "gen-1780854303-ySZoYefsgEmyR95ik6Cs",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019ea32f-ef26-7dd7-9052-58fc8ceefa66",
+      "durationMs": 20024,
+      "numTurns": 5,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/users/models/user_merge_verification_code.py",
+      "lineRange": "1-77",
+      "traceId": "fa9c759c08e2d4da1d0debde753628c1",
+      "spanId": "870828a3a9137f31",
+      "responseId": "gen-1780862693-43thkhoJTpLRMZA7Bm2u",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019ea3ae-74c2-7ac1-92a6-7b31d0e73a5b",
+      "durationMs": 131238,
+      "numTurns": 6,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/workflow_engine/endpoints/organization_open_periods.py",
+      "lineRange": "1-173",
+      "traceId": "1d4016ec9d7eddbdba3e0274d95505fc",
+      "spanId": "0df42e70b33beb3b",
+      "responseId": "gen-1780852513-ZTDmLEpZ0oUaEfSlhrnz",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019ea313-8903-7440-8d09-6f6707c5da7a",
+      "durationMs": 93619,
+      "numTurns": 9,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/workflow_engine/endpoints/validators/utils.py",
+      "lineRange": "1-208",
+      "traceId": "2c01a6124d298d189433c5ea03459db4",
+      "spanId": "6fd499c7438148e0",
+      "responseId": "gen-1780853088-1pSXy4AJ2GGLiCOt0Zpv",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019ea314-f6c0-742e-a5fc-5c978864c70b",
+      "durationMs": 576521,
+      "numTurns": 26,
+      "status": "success"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "filename": "src/sentry/workflow_engine/endpoints/validators/utils.py",
+      "lineRange": "209-371",
+      "traceId": "2c01a6124d298d189433c5ea03459db4",
+      "spanId": "6994e92c15155137",
+      "responseId": "gen-1780854253-uO2udRCsSCMfmPLVghzY",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019ea31d-c2e9-7de6-b2be-8765a29f26b3",
+      "durationMs": 1164535,
+      "numTurns": 11,
+      "status": "success"
+    },
+    {
+      "sha": "fbecd17d210c2eacfad4bf17872be62320b8a110",
+      "filename": "src/sentry/api/endpoints/system_options.py",
+      "lineRange": "1-138",
+      "traceId": "17ee05fd4f341920d3c02716be7a0a45",
+      "spanId": "6c85b0882b32410a",
+      "responseId": "gen-1780864928-J8yuTjCVf2XXzqvp34Jd",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019ea3d1-6216-728a-a8ea-3aef6f1bb93e",
+      "durationMs": 68980,
+      "numTurns": 3,
+      "status": "success"
+    },
+    {
+      "sha": "fbecd17d210c2eacfad4bf17872be62320b8a110",
+      "filename": "src/sentry/api/endpoints/organization_events_root_cause_analysis.py",
+      "lineRange": "1-218",
+      "traceId": "3ddeaff6b89c979087f77c051eeeee43",
+      "spanId": "8bca62f54d623352",
+      "responseId": "gen-1780866503-U7eEPZ28kKaah9mSXHCF",
+      "responseModel": "deepseek/deepseek-v4-pro-20260423",
+      "sessionId": "019ea3d1-6214-7b07-b203-78c0fca4eee5",
+      "durationMs": 1646349,
+      "numTurns": 45,
+      "status": "success"
+    }
+  ],
+  "notes": "Full benchmark result stitched from one Warden run per corpus SHA using --runtime pi --model openrouter/deepseek/deepseek-v4-pro --effort xhigh --traces. Each shard analyzes every unique corpus path for that SHA, not the whole Sentry repository. The 7f41cc50 and 9fc06de5 shards required targeted repair reruns after provider/extraction failures; the committed aggregate includes only clean traced records plus the repair costs needed to make those shards complete. Earlier abandoned failed attempts are excluded. Raw JSONL artifacts are withheld pending sensitive-data review; committed traceSummaries retain sanitized per-chunk metadata only.",
+  "scoring": {
+    "reviewer": "agent-semantic-match-pass",
+    "scoredAt": "2026-06-07",
+    "knownFindingCount": 86,
+    "knownFound": 23,
+    "knownMissed": 63,
+    "knownPartial": 0,
+    "knownFoundRate": 0.2674,
+    "notes": "Agent-verified semantic matches. A finding counts when it identifies the same bug in roughly the same location as an existing corpus finding. Same-file findings about different bugs do not count; duplicate findings map to one unique corpus ID."
+  },
+  "scores": [
+    {
+      "findingId": "APG-ZJR",
+      "matchedCorpusIds": [
+        "sentry-vuln-003"
+      ],
+      "verdict": "known-found",
+      "notes": "Internal EA features endpoint auth bypass."
+    },
+    {
+      "findingId": "7BA-XA7",
+      "matchedCorpusIds": [
+        "sentry-vuln-004"
+      ],
+      "verdict": "known-found",
+      "notes": "OAuth userinfo inactive-user/app bypass."
+    },
+    {
+      "findingId": "4CH-WVK",
+      "matchedCorpusIds": [],
+      "verdict": "not-known",
+      "notes": "Finds cleartext option logging on an earlier shard, not the 2d allowlist-comma corpus bug."
+    },
+    {
+      "findingId": "BBS-ZA2",
+      "matchedCorpusIds": [
+        "sentry-vuln-001"
+      ],
+      "verdict": "known-found",
+      "notes": "Accept-invite token validation/delete fall-through."
+    },
+    {
+      "findingId": "XQF-UK4",
+      "matchedCorpusIds": [
+        "sentry-vuln-056"
+      ],
+      "verdict": "known-found",
+      "notes": "OAuth app client secret exposed to non-owner grantees."
+    },
+    {
+      "findingId": "8J2-KKL",
+      "matchedCorpusIds": [],
+      "verdict": "not-known",
+      "notes": "Timing-unsafe compare finding is not the Statsig timestamp freshness corpus bug."
+    },
+    {
+      "findingId": "F9Q-WV7",
+      "matchedCorpusIds": [
+        "sentry-vuln-070"
+      ],
+      "verdict": "known-found",
+      "notes": "Validated Jira Server webhook JWT logged."
+    },
+    {
+      "findingId": "8ZP-4QE",
+      "matchedCorpusIds": [
+        "sentry-vuln-073"
+      ],
+      "verdict": "known-found",
+      "notes": "Release webhook token uses uuid1."
+    },
+    {
+      "findingId": "HPF-6WU",
+      "matchedCorpusIds": [
+        "sentry-vuln-055"
+      ],
+      "verdict": "known-found",
+      "notes": "Organization-level Seer RPC skips project access."
+    },
+    {
+      "findingId": "PCG-S3W",
+      "matchedCorpusIds": [
+        "sentry-vuln-074"
+      ],
+      "verdict": "known-found",
+      "notes": "Seer RPC HMAC omits URL binding."
+    },
+    {
+      "findingId": "9Z7-6JW",
+      "matchedCorpusIds": [],
+      "verdict": "not-known",
+      "notes": "External issue action host injection is not the corpus event-scope bug."
+    },
+    {
+      "findingId": "Z9B-RY6",
+      "matchedCorpusIds": [
+        "sentry-vuln-079"
+      ],
+      "verdict": "known-found",
+      "notes": "Jira JQL autocomplete escapes quotes but not backslashes."
+    },
+    {
+      "findingId": "KRJ-CYL",
+      "matchedCorpusIds": [
+        "sentry-vuln-081"
+      ],
+      "verdict": "known-found",
+      "notes": "Copy-as-curl escapes values but not header names."
+    },
+    {
+      "findingId": "BNW-G9K",
+      "matchedCorpusIds": [
+        "sentry-vuln-082"
+      ],
+      "verdict": "known-found",
+      "notes": "Feature flag ECharts tooltip XSS."
+    },
+    {
+      "findingId": "3YD-5QP",
+      "matchedCorpusIds": [
+        "sentry-vuln-021"
+      ],
+      "verdict": "known-found",
+      "notes": "Codecov token regeneration accepts org:read."
+    },
+    {
+      "findingId": "7ZE-QCX",
+      "matchedCorpusIds": [
+        "sentry-vuln-041"
+      ],
+      "verdict": "known-found",
+      "notes": "Discover saved-query visit skips object permissions."
+    },
+    {
+      "findingId": "AA2-WS2",
+      "matchedCorpusIds": [
+        "sentry-vuln-025"
+      ],
+      "verdict": "known-found",
+      "notes": "External team lookup scopes only by org."
+    },
+    {
+      "findingId": "C9E-GDM",
+      "matchedCorpusIds": [
+        "sentry-vuln-026"
+      ],
+      "verdict": "known-found",
+      "notes": "Unlink identity deletes by external_id without ownership."
+    },
+    {
+      "findingId": "TKM-ZL9",
+      "matchedCorpusIds": [],
+      "verdict": "not-known",
+      "notes": "Shared Slack-channel unlink authorization issue is not in the corpus."
+    },
+    {
+      "findingId": "3RP-UQL",
+      "matchedCorpusIds": [
+        "sentry-vuln-013"
+      ],
+      "verdict": "known-found",
+      "notes": "Perforce config data exposes password."
+    },
+    {
+      "findingId": "LL3-ABQ",
+      "matchedCorpusIds": [
+        "sentry-vuln-014"
+      ],
+      "verdict": "known-found",
+      "notes": "Slack options load leaks cross-org teams/users."
+    },
+    {
+      "findingId": "3NQ-VV2",
+      "matchedCorpusIds": [
+        "sentry-vuln-029"
+      ],
+      "verdict": "known-found",
+      "notes": "Metric-alert team target lookup is unscoped."
+    },
+    {
+      "findingId": "8CH-RLG",
+      "matchedCorpusIds": [
+        "sentry-vuln-030"
+      ],
+      "verdict": "known-found",
+      "notes": "Preprod artifact approval misses project access."
+    },
+    {
+      "findingId": "FDM-V6N",
+      "matchedCorpusIds": [
+        "sentry-vuln-015"
+      ],
+      "verdict": "known-found",
+      "notes": "Data export notification endpoint lacks PubSub verification."
+    },
+    {
+      "findingId": "8PV-ZE2",
+      "matchedCorpusIds": [
+        "sentry-vuln-034"
+      ],
+      "verdict": "known-found",
+      "notes": "Seer autofix run_id is not bound to group."
+    },
+    {
+      "findingId": "UFM-47M",
+      "matchedCorpusIds": [],
+      "verdict": "not-known",
+      "notes": "Sentry App issue-action SSRF/host injection is not the corpus event JSON access bug."
+    },
+    {
+      "findingId": "U9V-Y8M",
+      "matchedCorpusIds": [
+        "sentry-vuln-037"
+      ],
+      "verdict": "known-found",
+      "notes": "Sentry App cell service user optionality drops project access."
+    },
+    {
+      "findingId": "LAC-VRP",
+      "matchedCorpusIds": [
+        "sentry-vuln-037"
+      ],
+      "verdict": "known-found",
+      "notes": "Duplicate adjacent-chunk report for the same cell-service corpus bug."
+    },
+    {
+      "findingId": "GZC-F9P",
+      "matchedCorpusIds": [],
+      "verdict": "not-known",
+      "notes": "Workflow connection auth issue differs from the corpus disconnect-permission bug."
+    },
+    {
+      "findingId": "TZB-DX8",
+      "matchedCorpusIds": [
+        "sentry-vuln-010"
+      ],
+      "verdict": "known-found",
+      "notes": "System options PUT logs cleartext credential values."
+    }
+  ]
+}

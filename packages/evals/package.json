@@ -1,0 +1,26 @@
+{
+  "name": "warden-evals",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "evals": "vitest run --config vitest.config.ts",
+    "scaffold": "tsx scripts/scaffold-eval.ts",
+    "test": "vitest run --config vitest.unit.config.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.98.0",
+    "@octokit/rest": "^22.0.1",
+    "@sentry/warden": "workspace:*",
+    "dotenv": "^17.4.2",
+    "vitest-evals": "0.11.0",
+    "yaml": "^2.9.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^25.9.1",
+    "tsx": "^4.23.12",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.11"
+  }
+}

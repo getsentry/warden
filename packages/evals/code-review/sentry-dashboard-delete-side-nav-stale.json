@@ -1,0 +1,44 @@
+{
+  "given": "Sentry dashboards landing page deletes a starred dashboard shown in the side navigation",
+  "files": [
+    "fixtures/sentry-dashboard-delete-side-nav-stale/dashboards.tsx",
+    "fixtures/sentry-dashboard-delete-side-nav-stale/detail.tsx",
+    "fixtures/sentry-dashboard-delete-side-nav-stale/useDeleteDashboard.tsx"
+  ],
+  "supporting_files": [
+    "fixtures/sentry-dashboard-delete-side-nav-stale/LICENSE.md"
+  ],
+  "should_find": [
+    {
+      "finding": "deleting a dashboard from the landing page does not update the side navigation, so a starred deleted dashboard remains visible until refresh"
+    }
+  ],
+  "should_not_find": [
+    "missing tests",
+    "style, formatting, or naming issues"
+  ],
+  "notes": {
+    "source": "https://github.com/getsentry/sentry/commit/86872f4f1491c4392a25f4d3fcba31a12726fa63",
+    "repository": "getsentry/sentry",
+    "source_ref": "14170bd6ae28abe4d4f0b5807185b116f777a1a0",
+    "source_files": [
+      {
+        "fixturePath": "fixtures/sentry-dashboard-delete-side-nav-stale/dashboards.tsx",
+        "sourcePath": "static/app/actionCreators/dashboards.tsx",
+        "ref": "14170bd6ae28abe4d4f0b5807185b116f777a1a0"
+      },
+      {
+        "fixturePath": "fixtures/sentry-dashboard-delete-side-nav-stale/detail.tsx",
+        "sourcePath": "static/app/views/dashboards/detail.tsx",
+        "ref": "14170bd6ae28abe4d4f0b5807185b116f777a1a0"
+      },
+      {
+        "fixturePath": "fixtures/sentry-dashboard-delete-side-nav-stale/useDeleteDashboard.tsx",
+        "sourcePath": "static/app/views/dashboards/hooks/useDeleteDashboard.tsx",
+        "ref": "14170bd6ae28abe4d4f0b5807185b116f777a1a0"
+      }
+    ],
+    "side": "parent-of-fix",
+    "body": "Regression seed from Sentry fix 86872f4f1491c4392a25f4d3fcba31a12726fa63. deleting a dashboard from the landing page does not update the side navigation, so a starred deleted dashboard remains visible until refresh"
+  }
+}

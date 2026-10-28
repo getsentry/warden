@@ -1,0 +1,55 @@
+{
+  "id": "getsentry-org-warden",
+  "asOf": "2026-08-21",
+  "skill": "security-review",
+  "source": {
+    "repository": "getsentry/.github",
+    "ref": "main",
+    "path": "warden.toml",
+    "lastConfigCommit": "7cdd503f30fe20e024894507380753ed7131d099",
+    "blobSha": "3b66325a1231b0309a8e39cb84171526eeaef6bc"
+  },
+  "action": {
+    "ref": "getsentry/warden@v0",
+    "resolvedVersion": "0.46.2",
+    "resolvedCommit": "d282ec2b47f016ad41c5bfed3e08a347fa75c632"
+  },
+  "agent": {
+    "runtime": "pi",
+    "model": "openrouter/x-ai/grok-4.5",
+    "effort": "high",
+    "maxTurns": 50
+  },
+  "auxiliary": {
+    "runtime": "pi",
+    "model": "openrouter/openai/gpt-5.6-luna",
+    "effort": "high"
+  },
+  "review": {
+    "reportOn": "low",
+    "failOn": "off",
+    "failCheck": false,
+    "requestChanges": false,
+    "ignorePaths": [
+      "**/*.md",
+      "**/*.mdx",
+      "**/docs/**",
+      "**/CHANGELOG*",
+      "**/README*",
+      "**/tests/**",
+      "**/test/**",
+      "**/__tests__/**",
+      "**/__mocks__/**",
+      "**/e2e/**",
+      "**/fixtures/**",
+      "**/*.test.*",
+      "**/*.spec.*",
+      "**/test_*.py",
+      "**/*_test.py",
+      "**/*_test.go",
+      "**/*.snap",
+      "**/migrations/meta/**",
+      "**/*_snapshot.json"
+    ]
+  }
+}

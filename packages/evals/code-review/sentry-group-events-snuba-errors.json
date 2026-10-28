@@ -1,0 +1,32 @@
+{
+  "given": "Sentry group events endpoint receives a Snuba timeout or query error",
+  "files": [
+    "fixtures/sentry-group-events-snuba-errors/group_events.py"
+  ],
+  "supporting_files": [
+    "fixtures/sentry-group-events-snuba-errors/LICENSE.md"
+  ],
+  "should_find": [
+    {
+      "finding": "the group events endpoint does not wrap the Snuba query with handle_query_errors, so Snuba timeouts surface as unhandled 500s instead of API error responses such as 504"
+    }
+  ],
+  "should_not_find": [
+    "missing tests",
+    "style, formatting, or naming issues"
+  ],
+  "notes": {
+    "source": "https://github.com/getsentry/sentry/commit/fd0299d864ff7b2b0a5ff69595eb679ea2f97471",
+    "repository": "getsentry/sentry",
+    "source_ref": "35b57a1df7c042e7927de5a19e36c6496ee30f62",
+    "source_files": [
+      {
+        "fixturePath": "fixtures/sentry-group-events-snuba-errors/group_events.py",
+        "sourcePath": "src/sentry/issues/endpoints/group_events.py",
+        "ref": "35b57a1df7c042e7927de5a19e36c6496ee30f62"
+      }
+    ],
+    "side": "parent-of-fix",
+    "body": "Regression seed from Sentry fix fd0299d864ff7b2b0a5ff69595eb679ea2f97471. the group events endpoint does not wrap the Snuba query with handle_query_errors, so Snuba timeouts surface as unhandled 500s instead of API error responses such as 504"
+  }
+}

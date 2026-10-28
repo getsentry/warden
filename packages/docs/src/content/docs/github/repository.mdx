@@ -1,0 +1,93 @@
+---
+title: Repository Setup
+description: Configure Warden for one GitHub repository.
+editUrl: false
+---
+
+Initialize Warden in each repository:
+
+```bash
+npx @sentry/warden init
+```
+
+This creates:
+
+| File | Purpose |
+| --- | --- |
+| `warden.toml` | Configuration with skills and triggers. |
+| `.github/workflows/warden.yml` | GitHub Actions workflow. |
+
+## Secrets
+
+Add the provider credentials used by your configured model. `WARDEN_MODEL` is a
+fallback when `warden.toml` does not set a model; see [Models and Runtimes](/config/models/).
+
+<dl class="sentry-key-value-list">
+  <div>
+    <dt>
+      <code>WARDEN_MODEL</code>
+      <span class="sentry-property-meta">string</span>
+    </dt>
+    <dd>Fallback model selector.</dd>
+  </div>
+  <div>
+    <dt>
+      <code>WARDEN_OPENAI_API_KEY</code>
+      <span class="sentry-property-meta">secret</span>
+    </dt>
+    <dd>OpenAI key for OpenAI Pi models.</dd>
+  </div>
+  <div>
+    <dt>
+      <code>WARDEN_ANTHROPIC_API_KEY</code>
+      <span class="sentry-property-meta">secret</span>
+    </dt>
+    <dd>Anthropic key for Anthropic Pi models or Claude runtime.</dd>
+  </div>
+  <div>
+    <dt>
+      <code>WARDEN_OPENROUTER_API_KEY</code>
+      <span class="sentry-property-meta">secret</span>
+    </dt>
+    <dd>OpenRouter key for OpenRouter Pi models.</dd>
+  </div>
+  <div>
+    <dt>
+      <code>WARDEN_SENTRY_DSN</code>
+      <span class="sentry-property-meta">optional</span>
+    </dt>
+    <dd>Optional telemetry DSN.</dd>
+  </div>
+</dl>
+
+## GitHub App
+
+By default, comments come from `github-actions`. Use a GitHub App for a branded
+bot identity:
+
+```bash
+npx @sentry/warden setup-app --org your-org
+```
+
+Add the generated app secrets:
+
+<dl class="sentry-key-value-list">
+  <div>
+    <dt>
+      <code>WARDEN_APP_ID</code>
+      <span class="sentry-property-meta">string</span>
+    </dt>
+    <dd>GitHub App ID.</dd>
+  </div>
+  <div>
+    <dt>
+      <code>WARDEN_PRIVATE_KEY</code>
+      <span class="sentry-property-meta">secret</span>
+    </dt>
+    <dd>Full PEM private key contents.</dd>
+  </div>
+</dl>
+
+Then use the split workflow from [Workflow](/github/workflow/): run
+`mode: analyze`, create the GitHub App token, then pass that token to
+`mode: report`.

@@ -1,0 +1,195 @@
+/**
+ * Action Input Parsing and Validation
+ *
+ * Handles parsing inputs from GitHub Actions environment and validates them.
+ */
+
+import { DataProfileSchema } from '@sentry/warden-service-api';
+import type { DataProfile } from '@sentry/warden-service-api';
+import { SeverityThresholdSchema } from '../types/index.js';
+import type { SeverityThreshold } from '../types/index.js';
+import { DEFAULT_CONCURRENCY } from '../utils/index.js';
+
+// -----------------------------------------------------------------------------
+// Types
+// -----------------------------------------------------------------------------
+
+export type ActionMode = 'run' | 'analyze' | 'report';
+
+export interface ActionInputs {
+  /** API key for Anthropic API (empty if using OAuth) */
+  anthropicApiKey: string;
+  /** OAuth token for Claude Code (empty if using API key) */
+  oauthToken: string;
+  githubToken: string;
+  /** Action execution mode */
+  mode: ActionMode;
+  /** Structured findings file used by report mode */
+  findingsFile?: string;
+  /** Optional org-wide base config that is loaded before the repo config */
+  baseConfigPath?: string;
+  /** Optional repo root containing org-shared local skills for the base config */
+  baseSkillRoot?: string;
+  /** Optional repo-local config that extends the base config in the same run */
+  configPath: string;
+  failOn?: SeverityThreshold;
+  reportOn?: SeverityThreshold;
+  maxFindings: number;
+  /** Whether to use REQUEST_CHANGES review event when findings exceed failOn */
+  requestChanges?: boolean;
+  /** Whether to fail the check run when findings exceed failOn */
+  failCheck?: boolean;
+  /** Whether to create/update GitHub Check runs. Default true; explicit false disables the core check and all per-skill checks. */
+  postChecks: boolean;
+  /** Max concurrent trigger executions */
+  parallel: number;
+  /** The action ref that produced this run, surfaced in the findings output harness field */
+  actionRef?: string;
+  serviceUrl?: string;
+  serviceToken?: string;
+  serviceData?: DataProfile;
+  serviceMemory?: boolean;
+  serviceTimeoutMs?: number;
+}
+
+// -----------------------------------------------------------------------------
+// Input Parsing
+// -----------------------------------------------------------------------------
+
+/**
+ * Get an input value from GitHub Actions environment.
+ * Checks both hyphenated (native) and underscored (composite action) formats.
+ */
+function getInput(name: string, required = false): string {
+  // Check both hyphenated (native GitHub Actions) and underscored (composite action) formats
+  const hyphenEnv = `INPUT_${name.toUpperCase()}`;
+  const underscoreEnv = `INPUT_${name.toUpperCase().replace(/-/g, '_')}`;
+  const value = process.env[hyphenEnv] ?? process.env[underscoreEnv] ?? '';
+  if (required && !value) {
+    throw new Error(`Input required and not supplied: ${name}`);
+  }
+  return value;
+}
+
+/**
+ * Parse a string input as a boolean, returning undefined for unrecognized values.
+ */
+function parseBooleanInput(value: string): boolean | undefined {
+  if (value === 'true') return true;
+  if (value === 'false') return false;
+  return undefined;
+}
+
+function parseModeInput(value: string): ActionMode {
+  const mode = value || 'run';
+  if (mode === 'run' || mode === 'analyze' || mode === 'report') {
+    return mode;
+  }
+  throw new Error(`Invalid mode "${mode}". Expected run, analyze, or report.`);
+}
+
+/**
+ * Parse action inputs from the GitHub Actions environment.
+ * Runtime-specific auth can be absent here; runtime setup validates it when needed.
+ */
+export function parseActionInputs(): ActionInputs {
+  // Check for auth token: supports both API keys and OAuth tokens
+  // Priority: input > WARDEN_ANTHROPIC_API_KEY > ANTHROPIC_API_KEY > CLAUDE_CODE_OAUTH_TOKEN
+  const authToken =
+    getInput('anthropic-api-key') ||
+    process.env['WARDEN_ANTHROPIC_API_KEY'] ||
+    process.env['ANTHROPIC_API_KEY'] ||
+    process.env['CLAUDE_CODE_OAUTH_TOKEN'] ||
+    '';
+
+  // Detect token type: OAuth tokens start with 'sk-ant-oat', API keys are other 'sk-ant-' prefixes
+  const isOAuthToken = authToken.startsWith('sk-ant-oat');
+  const anthropicApiKey = isOAuthToken ? '' : authToken;
+  const oauthToken = isOAuthToken ? authToken : '';
+
+  const failOnInput = getInput('fail-on');
+  const failOn = SeverityThresholdSchema.safeParse(failOnInput).success
+    ? (failOnInput as SeverityThreshold)
+    : undefined;
+
+  const reportOnInput = getInput('report-on');
+  const reportOn = SeverityThresholdSchema.safeParse(reportOnInput).success
+    ? (reportOnInput as SeverityThreshold)
+    : undefined;
+
+  const maxFindingsParsed = parseInt(getInput('max-findings') || '50', 10);
+  const parallelParsed = parseInt(getInput('parallel') || String(DEFAULT_CONCURRENCY), 10);
+
+  const requestChanges = parseBooleanInput(getInput('request-changes'));
+  const failCheck = parseBooleanInput(getInput('fail-check'));
+  const serviceDataInput = getInput('service-data');
+  const serviceData = DataProfileSchema.safeParse(serviceDataInput);
+  const serviceTimeoutInput = getInput('service-timeout-ms');
+  const serviceTimeoutParsed = serviceTimeoutInput ? Number(serviceTimeoutInput) : undefined;
+  const postChecks = parseBooleanInput(getInput('post-checks')) ?? true;
+
+  return {
+    anthropicApiKey,
+    oauthToken,
+    githubToken: getInput('github-token') || process.env['GITHUB_TOKEN'] || '',
+    mode: parseModeInput(getInput('mode')),
+    findingsFile: getInput('findings-file') || undefined,
+    baseConfigPath: getInput('base-config-path') || undefined,
+    baseSkillRoot: getInput('base-skill-root') || undefined,
+    configPath: getInput('config-path') || 'warden.toml',
+    failOn,
+    reportOn,
+    maxFindings: Number.isNaN(maxFindingsParsed) ? 50 : maxFindingsParsed,
+    requestChanges,
+    failCheck,
+    postChecks,
+    parallel: Number.isNaN(parallelParsed) ? DEFAULT_CONCURRENCY : parallelParsed,
+    actionRef: getInput('action-ref') || undefined,
+    serviceUrl: getInput('service-url') || undefined,
+    serviceToken: getInput('service-token') || process.env['WARDEN_SERVICE_TOKEN'] || undefined,
+    serviceData: serviceData.success ? serviceData.data : undefined,
+    serviceMemory: parseBooleanInput(getInput('service-memory')),
+    serviceTimeoutMs: serviceTimeoutParsed === undefined || Number.isNaN(serviceTimeoutParsed)
+      ? undefined
+      : serviceTimeoutParsed,
+  };
+}
+
+/**
+ * Validate that required inputs are present.
+ * Throws with a descriptive error if validation fails.
+ */
+export function validateInputs(inputs: ActionInputs): void {
+  if (!inputs.githubToken) {
+    throw new Error('GitHub token is required');
+  }
+  if (inputs.baseSkillRoot && !inputs.baseConfigPath) {
+    throw new Error('base-skill-root requires base-config-path');
+  }
+  if (inputs.mode === 'report' && !inputs.findingsFile) {
+    throw new Error('findings-file is required when mode is report');
+  }
+  if (inputs.serviceMemory && inputs.serviceData === 'metrics') {
+    throw new Error('service-memory requires service-data findings or code');
+  }
+}
+
+/**
+ * Set up environment variables for authentication.
+ * Sets appropriate env vars based on token type (API key vs OAuth).
+ */
+export function setupAuthEnv(inputs: ActionInputs): void {
+  delete process.env['CLAUDE_CODE_OAUTH_TOKEN'];
+  delete process.env['WARDEN_ANTHROPIC_API_KEY'];
+  delete process.env['ANTHROPIC_API_KEY'];
+
+  if (inputs.oauthToken) {
+    process.env['CLAUDE_CODE_OAUTH_TOKEN'] = inputs.oauthToken;
+    return;
+  }
+
+  if (inputs.anthropicApiKey) {
+    process.env['WARDEN_ANTHROPIC_API_KEY'] = inputs.anthropicApiKey;
+    process.env['ANTHROPIC_API_KEY'] = inputs.anthropicApiKey;
+  }
+}

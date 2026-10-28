@@ -1,0 +1,2537 @@
+{
+  "runId": "sentry-security-review-pi-openrouter-glm-5-2-high-traced-corpus-2026-07-02-001",
+  "corpusId": "sentry-vulnerability-corpus",
+  "repository": "getsentry/sentry",
+  "wardenVersion": "0.38.1",
+  "skill": "security-review",
+  "model": "openrouter/z-ai/glm-5.2",
+  "runtime": "pi",
+  "reasoningLevel": "high",
+  "reportOn": "low",
+  "minConfidence": "low",
+  "targetMode": "all-corpus-files-by-sha",
+  "shardCount": 6,
+  "findingVerification": {
+    "enabled": true,
+    "source": "benchmark-config",
+    "notes": "The benchmark warden.toml explicitly sets defaults.verification.enabled = true."
+  },
+  "traceCapture": {
+    "enabled": true,
+    "coverage": "complete",
+    "tracedShardCount": 6,
+    "tracedChunkCount": 156,
+    "notes": "Run used --traces on all shards. Four shards required combined-clean artifacts because GLM 5.2 frequently returned prose for no-finding chunks instead of the required {\"findings\":[]} JSON. Raw JSONL artifacts are withheld pending sensitive-data review; committed traceSummaries retain sanitized per-chunk metadata only."
+  },
+  "runOptions": {
+    "runtime": "pi",
+    "model": "openrouter/z-ai/glm-5.2",
+    "effort": "high",
+    "traces": true,
+    "parallel": 4,
+    "repairParallel": 1,
+    "reportOn": "low",
+    "minConfidence": "low",
+    "maxTurns": 100
+  },
+  "shards": [
+    {
+      "sha": "2d929588e20b931d2631ade31405f6ddbd34603a",
+      "wardenRunId": "b0b44e89-efa1-4836-86c4-cc37aac7c93a",
+      "corpusFindingCount": 7,
+      "targetFileCount": 6,
+      "filesAnalyzed": 6,
+      "chunksTotal": 6,
+      "chunksAnalyzed": 6,
+      "chunksFailed": 0,
+      "findingsTotal": 1,
+      "durationMs": 269185,
+      "scanCostUSD": 0.3579964500000001,
+      "auxiliaryCostUSD": 0,
+      "costUSD": 0.3579964500000001,
+      "usageBreakdown": {
+        "scan": {
+          "usage": {
+            "inputTokens": 799715,
+            "outputTokens": 23875,
+            "costUSD": 0.3579964500000001,
+            "cacheReadInputTokens": 609818,
+            "cacheCreationInputTokens": 0,
+            "cacheCreation5mInputTokens": 0,
+            "cacheCreation1hInputTokens": 0,
+            "webSearchRequests": 0
+          },
+          "model": "openrouter/z-ai/glm-5.2",
+          "runtime": "pi"
+        },
+        "total": {
+          "usage": {
+            "inputTokens": 799715,
+            "outputTokens": 23875,
+            "cacheReadInputTokens": 609818,
+            "cacheCreationInputTokens": 0,
+            "cacheCreation5mInputTokens": 0,
+            "cacheCreation1hInputTokens": 0,
+            "webSearchRequests": 0,
+            "costUSD": 0.3579964500000001
+          },
+          "model": "openrouter/z-ai/glm-5.2",
+          "runtime": "pi"
+        },
+        "auxiliary": {
+          "combinedPostProcessing": {
+            "usage": {
+              "inputTokens": 0,
+              "outputTokens": 0,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 0,
+              "cacheCreation5mInputTokens": 0,
+              "cacheCreation1hInputTokens": 0,
+              "webSearchRequests": 0,
+              "costUSD": 0
+            }
+          }
+        }
+      },
+      "traceCount": 6,
+      "traceIds": [
+        "d3a2ffc5e8b4bde27d5d328c5fff9d94",
+        "a44fe25c62797594c2ea9c091b3c8d77",
+        "41c4dc04d18b6f964a8acdb591742e14",
+        "e3eee78d495a725b6a682581b3720120",
+        "6024aee3671dfa5850e1d8af27b6ee20",
+        "a650efe281f7f11839acd8216e2f165c"
+      ],
+      "rawJsonl": "sentry-security-review-pi-openrouter-glm-5-2-high-corpus-2d929588-combined-clean.jsonl",
+      "rawArtifactStatus": "withheld-pending-sensitive-review",
+      "targetList": "targets-2d929588e20b931d2631ade31405f6ddbd34603a.txt"
+    },
+    {
+      "sha": "6993246259d0193a6a6aac49aa3763959b1126df",
+      "wardenRunId": "097567c5-e9ff-4fbe-a106-63156936463f",
+      "corpusFindingCount": 1,
+      "targetFileCount": 1,
+      "filesAnalyzed": 1,
+      "chunksTotal": 2,
+      "chunksAnalyzed": 2,
+      "chunksFailed": 0,
+      "findingsTotal": 0,
+      "durationMs": 606455,
+      "scanCostUSD": 0.14268156,
+      "auxiliaryCostUSD": 0.11928825000000001,
+      "costUSD": 0.26196981,
+      "usageBreakdown": {
+        "scan": {
+          "usage": {
+            "inputTokens": 292692,
+            "outputTokens": 15754,
+            "costUSD": 0.14268156,
+            "cacheReadInputTokens": 235712,
+            "cacheCreationInputTokens": 0,
+            "cacheCreation5mInputTokens": 0,
+            "cacheCreation1hInputTokens": 0,
+            "webSearchRequests": 0
+          },
+          "model": "openrouter/z-ai/glm-5.2",
+          "runtime": "pi"
+        },
+        "total": {
+          "usage": {
+            "inputTokens": 332856,
+            "outputTokens": 17233,
+            "costUSD": 0.26196981,
+            "cacheReadInputTokens": 265051,
+            "cacheCreationInputTokens": 10815,
+            "cacheCreation5mInputTokens": 10815,
+            "cacheCreation1hInputTokens": 0,
+            "webSearchRequests": 0
+          },
+          "model": "openrouter/z-ai/glm-5.2",
+          "runtime": "pi"
+        },
+        "auxiliary": {
+          "combinedPostProcessing": {
+            "usage": {
+              "inputTokens": 40164,
+              "outputTokens": 1479,
+              "costUSD": 0.11928825000000001,
+              "cacheReadInputTokens": 29339,
+              "cacheCreationInputTokens": 10815,
+              "cacheCreation5mInputTokens": 10815,
+              "cacheCreation1hInputTokens": 0,
+              "webSearchRequests": 0
+            }
+          }
+        }
+      },
+      "traceCount": 2,
+      "traceIds": [
+        "63be22e203df901fbcf45db98184ec7d",
+        "e1cff727c99c3068cdad1dcb26616444"
+      ],
+      "rawJsonl": "sentry-security-review-pi-openrouter-glm-5-2-high-corpus-69932462.jsonl",
+      "rawArtifactStatus": "withheld-pending-sensitive-review",
+      "targetList": "targets-6993246259d0193a6a6aac49aa3763959b1126df.txt"
+    },
+    {
+      "sha": "788ba30f1aa42b00c02d64ed4b8b2515ff8ab8da",
+      "wardenRunId": "35ccbe54-ea1d-4e11-858f-d0f06e36ec9e",
+      "corpusFindingCount": 1,
+      "targetFileCount": 1,
+      "filesAnalyzed": 1,
+      "chunksTotal": 2,
+      "chunksAnalyzed": 2,
+      "chunksFailed": 0,
+      "findingsTotal": 1,
+      "durationMs": 609847,
+      "scanCostUSD": 0.10980396,
+      "auxiliaryCostUSD": 0.19986099999999998,
+      "costUSD": 0.30966496,
+      "usageBreakdown": {
+        "scan": {
+          "usage": {
+            "inputTokens": 99872,
+            "outputTokens": 12825,
+            "costUSD": 0.10980396,
+            "cacheReadInputTokens": 28736,
+            "cacheCreationInputTokens": 0,
+            "cacheCreation5mInputTokens": 0,
+            "cacheCreation1hInputTokens": 0,
+            "webSearchRequests": 0
+          },
+          "model": "openrouter/z-ai/glm-5.2",
+          "runtime": "pi"
+        },
+        "total": {
+          "usage": {
+            "inputTokens": 163803,
+            "outputTokens": 15757,
+            "costUSD": 0.30966496,
+            "cacheReadInputTokens": 76213,
+            "cacheCreationInputTokens": 16442,
+            "cacheCreation5mInputTokens": 16442,
+            "cacheCreation1hInputTokens": 0,
+            "webSearchRequests": 0
+          },
+          "model": "openrouter/z-ai/glm-5.2",
+          "runtime": "pi"
+        },
+        "auxiliary": {
+          "combinedPostProcessing": {
+            "usage": {
+              "inputTokens": 63931,
+              "outputTokens": 2932,
+              "costUSD": 0.19986099999999998,
+              "cacheReadInputTokens": 47477,
+              "cacheCreationInputTokens": 16442,
+              "cacheCreation5mInputTokens": 16442,
+              "cacheCreation1hInputTokens": 0,
+              "webSearchRequests": 0
+            }
+          }
+        }
+      },
+      "traceCount": 2,
+      "traceIds": [
+        "36fd9a00f19404d6b204eeea2e675edb",
+        "fec65b882ac00f5f20b79fe96e775ec8"
+      ],
+      "rawJsonl": "sentry-security-review-pi-openrouter-glm-5-2-high-corpus-788ba30f.jsonl",
+      "rawArtifactStatus": "withheld-pending-sensitive-review",
+      "targetList": "targets-788ba30f1aa42b00c02d64ed4b8b2515ff8ab8da.txt"
+    },
+    {
+      "sha": "7f41cc502faa1088108e896565409be72d92bc38",
+      "wardenRunId": "cc003f34-9abe-4d10-af5b-debb95a066ec",
+      "corpusFindingCount": 43,
+      "targetFileCount": 38,
+      "filesAnalyzed": 38,
+      "chunksTotal": 80,
+      "chunksAnalyzed": 80,
+      "chunksFailed": 0,
+      "findingsTotal": 15,
+      "durationMs": 8034779,
+      "scanCostUSD": 3.7104244500000005,
+      "auxiliaryCostUSD": 0,
+      "costUSD": 3.7104244500000005,
+      "usageBreakdown": {
+        "scan": {
+          "usage": {
+            "inputTokens": 6246565,
+            "outputTokens": 322933,
+            "costUSD": 3.7104244500000005,
+            "cacheReadInputTokens": 4090240,
+            "cacheCreationInputTokens": 0,
+            "cacheCreation5mInputTokens": 0,
+            "cacheCreation1hInputTokens": 0,
+            "webSearchRequests": 0
+          },
+          "model": "openrouter/z-ai/glm-5.2",
+          "runtime": "pi"
+        },
+        "total": {
+          "usage": {
+            "inputTokens": 6246565,
+            "outputTokens": 322933,
+            "cacheReadInputTokens": 4090240,
+            "cacheCreationInputTokens": 0,
+            "cacheCreation5mInputTokens": 0,
+            "cacheCreation1hInputTokens": 0,
+            "webSearchRequests": 0,
+            "costUSD": 3.7104244500000005
+          },
+          "model": "openrouter/z-ai/glm-5.2",
+          "runtime": "pi"
+        },
+        "auxiliary": {
+          "combinedPostProcessing": {
+            "usage": {
+              "inputTokens": 0,
+              "outputTokens": 0,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 0,
+              "cacheCreation5mInputTokens": 0,
+              "cacheCreation1hInputTokens": 0,
+              "webSearchRequests": 0,
+              "costUSD": 0
+            }
+          }
+        }
+      },
+      "traceCount": 80,
+      "traceIds": [
+        "a704d23286f5027f8c39835b77a97efa",
+        "a704d23286f5027f8c39835b77a97efa",
+        "6a491f59080ef6d67d68703e9e9043d7",
+        "a704d23286f5027f8c39835b77a97efa",
+        "a704d23286f5027f8c39835b77a97efa",
+        "a704d23286f5027f8c39835b77a97efa",
+        "10ddd4a23daf6cca33d2b1db4770bf25",
+        "b2828da16d891c06d80a820ec3b424ec",
+        "c7cb7445d77da3cdf2743dc5ec42df92",
+        "a704d23286f5027f8c39835b77a97efa",
+        "a704d23286f5027f8c39835b77a97efa",
+        "c7cb7445d77da3cdf2743dc5ec42df92",
+        "91f08c07cccc57ea1d553c80f23cf847",
+        "c7cb7445d77da3cdf2743dc5ec42df92",
+        "7f1fee7ef7d7b782ff8d4ceeefc9cfcf",
+        "ce1318e3757b490eb883220741152519",
+        "ce46b45de7b82e03619ea890e5b830c7",
+        "b2828da16d891c06d80a820ec3b424ec",
+        "a32fd7649af867f350805ed2735f1372",
+        "ce1318e3757b490eb883220741152519",
+        "b2828da16d891c06d80a820ec3b424ec",
+        "ce1318e3757b490eb883220741152519",
+        "a32fd7649af867f350805ed2735f1372",
+        "13ac8d39e6fcd277dd4d24509a636b43",
+        "b2828da16d891c06d80a820ec3b424ec",
+        "21f648cd4673a85b2e8eb2929df729ea",
+        "3b0317e56fbe7806003b2aa95a40dc6b",
+        "bde2f8e7c5fc8836739bf217aee7ec31",
+        "b2828da16d891c06d80a820ec3b424ec",
+        "21f648cd4673a85b2e8eb2929df729ea",
+        "6deb06c5402a25399835776b3005e9d0",
+        "34647f3c1dcb3dbd771b82bd89566dc7",
+        "996d3e26a7efabc8b9237f0f68327eed",
+        "59a08ce45ac97247751116ec77318eb1",
+        "13ac8d39e6fcd277dd4d24509a636b43",
+        "c04cacfc8495e528a8131dd9be64c525",
+        "2d5fcc8d551b929a03ee54f7ead0d778",
+        "fa1babae163d1488df43aa66d17f0e30",
+        "996d3e26a7efabc8b9237f0f68327eed",
+        "a21453ac1ed0c3607b444f8f00d71aca",
+        "9bb4cf73131cd292a54e065be17fd0ae",
+        "9bb4cf73131cd292a54e065be17fd0ae",
+        "9bb4cf73131cd292a54e065be17fd0ae",
+        "4aa745061e29939d142d448197070f3a",
+        "4aa745061e29939d142d448197070f3a",
+        "9bb4cf73131cd292a54e065be17fd0ae",
+        "4e91fc5954bc97402d08b06e548ed05a",
+        "a21453ac1ed0c3607b444f8f00d71aca",
+        "9bb4cf73131cd292a54e065be17fd0ae",
+        "25d2f80e2d276315d534c7bbf536621a",
+        "9bb4cf73131cd292a54e065be17fd0ae",
+        "c3c78aeaab0546a349679c43b22c1ea0",
+        "9bb4cf73131cd292a54e065be17fd0ae",
+        "cf5e3295f1eb8bdb05506077e7ecffaf",
+        "5417f218a67fcf2aa5653aaeee3b77da",
+        "c627dc3240019dc8be4400709e3114c0",
+        "5417f218a67fcf2aa5653aaeee3b77da",
+        "4168806f85261985ccb91e11ca4a0d07",
+        "4168806f85261985ccb91e11ca4a0d07",
+        "4f9ed80ed17e51f28f24d22377b63053",
+        "b0c5e6979c5475717f4c62a76b9ef711",
+        "b0c5e6979c5475717f4c62a76b9ef711",
+        "c78dc7cc640696442bb0e1101be492a8",
+        "51fafb6bf4e8edd336d25527f434ea6c",
+        "82633d6f081137ba91267636a8df4e63",
+        "95b4de6d8558dbc0ab068f7726c32811",
+        "a2d9b911d3f782e1eca6f93bcd98c7e5",
+        "a2d9b911d3f782e1eca6f93bcd98c7e5",
+        "a2d9b911d3f782e1eca6f93bcd98c7e5",
+        "a2d9b911d3f782e1eca6f93bcd98c7e5",
+        "51fafb6bf4e8edd336d25527f434ea6c",
+        "51fafb6bf4e8edd336d25527f434ea6c",
+        "95b4de6d8558dbc0ab068f7726c32811",
+        "92c77269fb84b2771d3ff8e87f01ef33",
+        "5a7a36e9ea0d57c8447ca5e8eb84628b",
+        "5a7a36e9ea0d57c8447ca5e8eb84628b",
+        "4165845a598a9d39b2e999542e0f278a",
+        "4165845a598a9d39b2e999542e0f278a",
+        "82633d6f081137ba91267636a8df4e63",
+        "4165845a598a9d39b2e999542e0f278a"
+      ],
+      "rawJsonl": "sentry-security-review-pi-openrouter-glm-5-2-high-corpus-7f41cc50-combined-clean.jsonl",
+      "rawArtifactStatus": "withheld-pending-sensitive-review",
+      "targetList": "targets-7f41cc502faa1088108e896565409be72d92bc38.txt"
+    },
+    {
+      "sha": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "wardenRunId": "04aff50c-05c6-4df5-b731-e167b518af07",
+      "corpusFindingCount": 32,
+      "targetFileCount": 31,
+      "filesAnalyzed": 31,
+      "chunksTotal": 64,
+      "chunksAnalyzed": 64,
+      "chunksFailed": 0,
+      "findingsTotal": 1,
+      "durationMs": 861126,
+      "scanCostUSD": 0.5867418000000001,
+      "auxiliaryCostUSD": 0,
+      "costUSD": 0.5867418000000001,
+      "usageBreakdown": {
+        "scan": {
+          "usage": {
+            "inputTokens": 793060,
+            "outputTokens": 42436,
+            "costUSD": 0.5867418000000001,
+            "cacheReadInputTokens": 370816,
+            "cacheCreationInputTokens": 0,
+            "cacheCreation5mInputTokens": 0,
+            "cacheCreation1hInputTokens": 0,
+            "webSearchRequests": 0
+          },
+          "model": "openrouter/z-ai/glm-5.2",
+          "runtime": "pi"
+        },
+        "total": {
+          "usage": {
+            "inputTokens": 793060,
+            "outputTokens": 42436,
+            "cacheReadInputTokens": 370816,
+            "cacheCreationInputTokens": 0,
+            "cacheCreation5mInputTokens": 0,
+            "cacheCreation1hInputTokens": 0,
+            "webSearchRequests": 0,
+            "costUSD": 0.5867418000000001
+          },
+          "model": "openrouter/z-ai/glm-5.2",
+          "runtime": "pi"
+        },
+        "auxiliary": {
+          "combinedPostProcessing": {
+            "usage": {
+              "inputTokens": 0,
+              "outputTokens": 0,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 0,
+              "cacheCreation5mInputTokens": 0,
+              "cacheCreation1hInputTokens": 0,
+              "webSearchRequests": 0,
+              "costUSD": 0
+            }
+          }
+        }
+      },
+      "traceCount": 64,
+      "traceIds": [
+        "35eee1450babf7bfb3ebd31b39ce3b03",
+        "88021e7e5d7ad1a28b46f4bc1fbd1f93",
+        "b7cec6aff9ccb300743bc07449115589",
+        "4bf4ed07311fbaffead317200e4f51ab",
+        "e2bcc1db59f77147057acd7c70efdc58",
+        "c94b0973838ccc98e93c3b47176300fb",
+        "58c0252744a411b8e92da9ead9f932e8",
+        "72d65f2721d9080d627c5c62022dae83",
+        "040c569aa940127db7834a3552681a99",
+        "88a8be2f743033c687722ef7661d652a",
+        "35eee1450babf7bfb3ebd31b39ce3b03",
+        "35eee1450babf7bfb3ebd31b39ce3b03",
+        "241a077db0c08a5a9a4b081d4495fcdc",
+        "2dfcc25da721be55d05126b57103400c",
+        "8b722c8aa12bb59f46b579f88862a8fa",
+        "35eee1450babf7bfb3ebd31b39ce3b03",
+        "2dfcc25da721be55d05126b57103400c",
+        "35eee1450babf7bfb3ebd31b39ce3b03",
+        "2dfcc25da721be55d05126b57103400c",
+        "2dfcc25da721be55d05126b57103400c",
+        "35eee1450babf7bfb3ebd31b39ce3b03",
+        "4674ba351400640ad792ff0b1e4169bb",
+        "75d3eb4abe6d6ed835149ffd367fa97a",
+        "4674ba351400640ad792ff0b1e4169bb",
+        "4674ba351400640ad792ff0b1e4169bb",
+        "86b64f401fa1ea199f75b80c4981d192",
+        "4674ba351400640ad792ff0b1e4169bb",
+        "4674ba351400640ad792ff0b1e4169bb",
+        "4674ba351400640ad792ff0b1e4169bb",
+        "28f69bccd2600c299784f6da8c9d1592",
+        "be57d36bf848ced416f046a1aa523089",
+        "6f6b7addddd97dba5411e7cddc0268ab",
+        "1fb30b94c8167445810e26ad5e8b742f",
+        "1fb30b94c8167445810e26ad5e8b742f",
+        "13454a72018dec1a50a7e68471b75441",
+        "86b64f401fa1ea199f75b80c4981d192",
+        "91a84c97f4a0f7a1bc79afb2627c5c55",
+        "86b64f401fa1ea199f75b80c4981d192",
+        "5e9173d6c8e383bc753f03c66f6ed7a5",
+        "86b64f401fa1ea199f75b80c4981d192",
+        "a2fa68461c7be0ab02198579c86da7ac",
+        "bd4a737ad5d5f3dc8b4389c7989e578c",
+        "88a8be2f743033c687722ef7661d652a",
+        "5e9173d6c8e383bc753f03c66f6ed7a5",
+        "5344b143586787d3ed1e5fcc11f91b49",
+        "bd4a737ad5d5f3dc8b4389c7989e578c",
+        "5344b143586787d3ed1e5fcc11f91b49",
+        "bd4a737ad5d5f3dc8b4389c7989e578c",
+        "5344b143586787d3ed1e5fcc11f91b49",
+        "88a8be2f743033c687722ef7661d652a",
+        "4ff2f37c6041f220c69f71d2c6b8d4c0",
+        "0701c3c095191764586783943ab720ea",
+        "0ee124226d6070c0e0e81f068973be09",
+        "0ee124226d6070c0e0e81f068973be09",
+        "0ee124226d6070c0e0e81f068973be09",
+        "0ee124226d6070c0e0e81f068973be09",
+        "256a366f68a7083205a564906fb55c05",
+        "0ad67b3909b489027625b4ea30a6c69e",
+        "88a8be2f743033c687722ef7661d652a",
+        "d585c82fa81b6d5beec60f2615c442a6",
+        "d585c82fa81b6d5beec60f2615c442a6",
+        "bd4a737ad5d5f3dc8b4389c7989e578c",
+        "a2fa68461c7be0ab02198579c86da7ac",
+        "a2fa68461c7be0ab02198579c86da7ac"
+      ],
+      "rawJsonl": "sentry-security-review-pi-openrouter-glm-5-2-high-corpus-9fc06de5-combined-clean.jsonl",
+      "rawArtifactStatus": "withheld-pending-sensitive-review",
+      "targetList": "targets-9fc06de579fbbee810565304efcc982e5dea1d1a.txt"
+    },
+    {
+      "sha": "fbecd17d210c2eacfad4bf17872be62320b8a110",
+      "wardenRunId": "b5cf6605-265e-4b26-8658-7165200e61ba",
+      "corpusFindingCount": 2,
+      "targetFileCount": 2,
+      "filesAnalyzed": 2,
+      "chunksTotal": 2,
+      "chunksAnalyzed": 2,
+      "chunksFailed": 0,
+      "findingsTotal": 0,
+      "durationMs": 51009,
+      "scanCostUSD": 0.02933511,
+      "auxiliaryCostUSD": 0,
+      "costUSD": 0.02933511,
+      "usageBreakdown": {
+        "scan": {
+          "usage": {
+            "inputTokens": 37527,
+            "outputTokens": 4001,
+            "costUSD": 0.02933511,
+            "cacheReadInputTokens": 23424,
+            "cacheCreationInputTokens": 0,
+            "cacheCreation5mInputTokens": 0,
+            "cacheCreation1hInputTokens": 0,
+            "webSearchRequests": 0
+          },
+          "model": "openrouter/z-ai/glm-5.2",
+          "runtime": "pi"
+        },
+        "total": {
+          "usage": {
+            "inputTokens": 37527,
+            "outputTokens": 4001,
+            "cacheReadInputTokens": 23424,
+            "cacheCreationInputTokens": 0,
+            "cacheCreation5mInputTokens": 0,
+            "cacheCreation1hInputTokens": 0,
+            "webSearchRequests": 0,
+            "costUSD": 0.02933511
+          },
+          "model": "openrouter/z-ai/glm-5.2",
+          "runtime": "pi"
+        },
+        "auxiliary": {
+          "combinedPostProcessing": {
+            "usage": {
+              "inputTokens": 0,
+              "outputTokens": 0,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 0,
+              "cacheCreation5mInputTokens": 0,
+              "cacheCreation1hInputTokens": 0,
+              "webSearchRequests": 0,
+              "costUSD": 0
+            }
+          }
+        }
+      },
+      "traceCount": 2,
+      "traceIds": [
+        "b748b7ebe94a312e1d9346877611ef05",
+        "a31872367dde6e152b7c25eb6e824a70"
+      ],
+      "rawJsonl": "sentry-security-review-pi-openrouter-glm-5-2-high-corpus-fbecd17d-combined-clean.jsonl",
+      "rawArtifactStatus": "withheld-pending-sensitive-review",
+      "targetList": "targets-fbecd17d210c2eacfad4bf17872be62320b8a110.txt"
+    }
+  ],
+  "summary": {
+    "corpusFindingCount": 86,
+    "targetFileCount": 79,
+    "filesAnalyzed": 79,
+    "skippedFileCount": 0,
+    "chunksTotal": 156,
+    "chunksAnalyzed": 156,
+    "chunksFailed": 0,
+    "findingsTotal": 18,
+    "findingsBySeverity": {
+      "low": 5,
+      "medium": 12,
+      "high": 1
+    },
+    "findingsByConfidence": {
+      "high": 14,
+      "medium": 4
+    },
+    "analysisCostUSD": 4.936983330000001,
+    "auxiliaryCostUSD": 0.31914925,
+    "costUSD": 5.256132580000001,
+    "inputTokens": 8373526,
+    "outputTokens": 426235,
+    "cacheReadInputTokens": 5435562,
+    "cacheCreationInputTokens": 27257,
+    "durationMs": 10432401
+  },
+  "usageBreakdown": {
+    "scan": {
+      "usage": {
+        "inputTokens": 8269431,
+        "outputTokens": 421824,
+        "costUSD": 4.936983330000001,
+        "cacheReadInputTokens": 5358746,
+        "cacheCreationInputTokens": 0,
+        "cacheCreation5mInputTokens": 0,
+        "cacheCreation1hInputTokens": 0,
+        "webSearchRequests": 0
+      },
+      "model": "openrouter/z-ai/glm-5.2",
+      "runtime": "pi"
+    },
+    "auxiliary": {
+      "combinedPostProcessing": {
+        "usage": {
+          "inputTokens": 104095,
+          "outputTokens": 4411,
+          "costUSD": 0.31914925,
+          "cacheReadInputTokens": 76816,
+          "cacheCreationInputTokens": 27257,
+          "cacheCreation5mInputTokens": 27257,
+          "cacheCreation1hInputTokens": 0,
+          "webSearchRequests": 0
+        }
+      }
+    },
+    "total": {
+      "usage": {
+        "inputTokens": 8373526,
+        "outputTokens": 426235,
+        "costUSD": 5.256132580000001,
+        "cacheReadInputTokens": 5435562,
+        "cacheCreationInputTokens": 27257,
+        "cacheCreation5mInputTokens": 27257,
+        "cacheCreation1hInputTokens": 0,
+        "webSearchRequests": 0
+      },
+      "model": "openrouter/z-ai/glm-5.2",
+      "runtime": "pi"
+    }
+  },
+  "timing": {
+    "analysisChunkMs": {
+      "count": 156,
+      "min": 843,
+      "p50": 39378,
+      "p90": 395169,
+      "max": 2617300
+    },
+    "shardWallMs": {
+      "total": 10432401
+    }
+  },
+  "traceSummaries": [
+    {
+      "filename": "src/sentry/api/endpoints/organization_plugin_deprecation_info.py",
+      "lineRange": "1-87",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "d3a2ffc5e8b4bde27d5d328c5fff9d94",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 35156,
+      "numTurns": 4,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/api/endpoints/system_options.py",
+      "lineRange": "1-138",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "a44fe25c62797594c2ea9c091b3c8d77",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 83699,
+      "numTurns": 6,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/api/endpoints/oauth_userinfo.py",
+      "lineRange": "1-110",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "41c4dc04d18b6f964a8acdb591742e14",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 210837,
+      "numTurns": 14,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/workflow_engine/endpoints/organization_alertrule_detector_index.py",
+      "lineRange": "1-99",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "e3eee78d495a725b6a682581b3720120",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 34375,
+      "numTurns": 3,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/api/endpoints/internal_ea_features.py",
+      "lineRange": "1-41",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "6024aee3671dfa5850e1d8af27b6ee20",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 237524,
+      "numTurns": 32,
+      "findingCount": 1
+    },
+    {
+      "filename": "src/sentry/api/endpoints/release_thresholds/release_threshold_index.py",
+      "lineRange": "1-69",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "a650efe281f7f11839acd8216e2f165c",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 251497,
+      "numTurns": 18,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/api/endpoints/auth_index.py",
+      "lineRange": "1-189",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "63be22e203df901fbcf45db98184ec7d",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 88587,
+      "numTurns": 6,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/api/endpoints/auth_index.py",
+      "lineRange": "190-362",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "e1cff727c99c3068cdad1dcb26616444",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 484878,
+      "numTurns": 14,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/api/endpoints/accept_organization_invite.py",
+      "lineRange": "1-218",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "36fd9a00f19404d6b204eeea2e675edb",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 37143,
+      "numTurns": 2,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/api/endpoints/accept_organization_invite.py",
+      "lineRange": "219-283",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "fec65b882ac00f5f20b79fe96e775ec8",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 520950,
+      "numTurns": 8,
+      "findingCount": 1
+    },
+    {
+      "filename": "scripts/analyze-styled.ts",
+      "lineRange": "1-250",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "a704d23286f5027f8c39835b77a97efa",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 59145,
+      "numTurns": 2,
+      "findingCount": 0
+    },
+    {
+      "filename": "scripts/analyze-styled.ts",
+      "lineRange": "251-500",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "a704d23286f5027f8c39835b77a97efa",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 17338,
+      "numTurns": 1,
+      "findingCount": 0
+    },
+    {
+      "filename": ".github/workflows/getsentry-dispatch.yml",
+      "lineRange": "1-97",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "6a491f59080ef6d67d68703e9e9043d7",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 1609,
+      "numTurns": 1,
+      "findingCount": 0
+    },
+    {
+      "filename": "scripts/analyze-styled.ts",
+      "lineRange": "501-750",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "a704d23286f5027f8c39835b77a97efa",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 12899,
+      "numTurns": 1,
+      "findingCount": 0
+    },
+    {
+      "filename": "scripts/analyze-styled.ts",
+      "lineRange": "751-1000",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "a704d23286f5027f8c39835b77a97efa",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 11387,
+      "numTurns": 1,
+      "findingCount": 0
+    },
+    {
+      "filename": "scripts/analyze-styled.ts",
+      "lineRange": "1001-1250",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "a704d23286f5027f8c39835b77a97efa",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 9086,
+      "numTurns": 1,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/api/endpoints/organization_pipeline.py",
+      "lineRange": "1-151",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "10ddd4a23daf6cca33d2b1db4770bf25",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 112924,
+      "numTurns": 5,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/api/authentication.py",
+      "lineRange": "1-202",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "b2828da16d891c06d80a820ec3b424ec",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 117262,
+      "numTurns": 7,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/api/endpoints/project_rule_details.py",
+      "lineRange": "1-170",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "c7cb7445d77da3cdf2743dc5ec42df92",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 38290,
+      "numTurns": 3,
+      "findingCount": 0
+    },
+    {
+      "filename": "scripts/analyze-styled.ts",
+      "lineRange": "1251-1500",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "a704d23286f5027f8c39835b77a97efa",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 21540,
+      "numTurns": 1,
+      "findingCount": 0
+    },
+    {
+      "filename": "scripts/analyze-styled.ts",
+      "lineRange": "1501-1656",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "a704d23286f5027f8c39835b77a97efa",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 36086,
+      "numTurns": 5,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/api/endpoints/project_rule_details.py",
+      "lineRange": "171-340",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "c7cb7445d77da3cdf2743dc5ec42df92",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 77901,
+      "numTurns": 6,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/api/serializers/models/projectcodeowners.py",
+      "lineRange": "1-118",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "91f08c07cccc57ea1d553c80f23cf847",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 50932,
+      "numTurns": 2,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/api/endpoints/project_rule_details.py",
+      "lineRange": "341-439",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "c7cb7445d77da3cdf2743dc5ec42df92",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 30956,
+      "numTurns": 3,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/api/serializers/models/apiapplication.py",
+      "lineRange": "1-28",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "7f1fee7ef7d7b782ff8d4ceeefc9cfcf",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 163879,
+      "numTurns": 12,
+      "findingCount": 1
+    },
+    {
+      "filename": "src/sentry/flags/providers.py",
+      "lineRange": "1-235",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "ce1318e3757b490eb883220741152519",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 223613,
+      "numTurns": 8,
+      "findingCount": 1
+    },
+    {
+      "filename": "src/sentry/integrations/bitbucket_server/urls.py",
+      "lineRange": "1-12",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "ce46b45de7b82e03619ea890e5b830c7",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 235115,
+      "numTurns": 16,
+      "findingCount": 1
+    },
+    {
+      "filename": "src/sentry/api/authentication.py",
+      "lineRange": "203-404",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "b2828da16d891c06d80a820ec3b424ec",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 539688,
+      "numTurns": 16,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/integrations/discord/requests/base.py",
+      "lineRange": "1-215",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "a32fd7649af867f350805ed2735f1372",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 247899,
+      "numTurns": 6,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/flags/providers.py",
+      "lineRange": "236-470",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "ce1318e3757b490eb883220741152519",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 823766,
+      "numTurns": 7,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/api/authentication.py",
+      "lineRange": "405-606",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "b2828da16d891c06d80a820ec3b424ec",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 659482,
+      "numTurns": 11,
+      "findingCount": 1
+    },
+    {
+      "filename": "src/sentry/flags/providers.py",
+      "lineRange": "471-605",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "ce1318e3757b490eb883220741152519",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 55194,
+      "numTurns": 5,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/integrations/discord/requests/base.py",
+      "lineRange": "216-282",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "a32fd7649af867f350805ed2735f1372",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 577244,
+      "numTurns": 5,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/integrations/bitbucket/webhook.py",
+      "lineRange": "1-207",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "13ac8d39e6fcd277dd4d24509a636b43",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 1230661,
+      "numTurns": 18,
+      "findingCount": 1
+    },
+    {
+      "filename": "src/sentry/api/authentication.py",
+      "lineRange": "607-808",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "b2828da16d891c06d80a820ec3b424ec",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 369251,
+      "numTurns": 10,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/integrations/github_enterprise/webhook.py",
+      "lineRange": "1-199",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "21f648cd4673a85b2e8eb2929df729ea",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 395163,
+      "numTurns": 8,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/integrations/jira_server/webhooks.py",
+      "lineRange": "1-106",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "3b0317e56fbe7806003b2aa95a40dc6b",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 397996,
+      "numTurns": 6,
+      "findingCount": 1
+    },
+    {
+      "filename": "src/sentry/integrations/models/data_forwarder.py",
+      "lineRange": "1-39",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "bde2f8e7c5fc8836739bf217aee7ec31",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 7839,
+      "numTurns": 1,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/api/authentication.py",
+      "lineRange": "809-864",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "b2828da16d891c06d80a820ec3b424ec",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 77557,
+      "numTurns": 9,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/integrations/github_enterprise/webhook.py",
+      "lineRange": "200-386",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "21f648cd4673a85b2e8eb2929df729ea",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 82136,
+      "numTurns": 4,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/integrations/utils/atlassian_connect.py",
+      "lineRange": "1-155",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "6deb06c5402a25399835776b3005e9d0",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 102976,
+      "numTurns": 5,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/preprod/api/endpoints/pull_request/organization_pullrequest_size_analysis_download.py",
+      "lineRange": "1-76",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "34647f3c1dcb3dbd771b82bd89566dc7",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 71558,
+      "numTurns": 4,
+      "findingCount": 1
+    },
+    {
+      "filename": "src/sentry/models/apiapplication.py",
+      "lineRange": "1-209",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "996d3e26a7efabc8b9237f0f68327eed",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 173893,
+      "numTurns": 5,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/preprod/api/endpoints/size_analysis/project_preprod_size_analysis_compare_download.py",
+      "lineRange": "1-122",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "59a08ce45ac97247751116ec77318eb1",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 142064,
+      "numTurns": 13,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/integrations/bitbucket/webhook.py",
+      "lineRange": "208-273",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "13ac8d39e6fcd277dd4d24509a636b43",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 553958,
+      "numTurns": 5,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/projects/services/project_key/impl.py",
+      "lineRange": "1-87",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "c04cacfc8495e528a8131dd9be64c525",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 177400,
+      "numTurns": 19,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/releases/endpoints/project_releases_token.py",
+      "lineRange": "1-66",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "2d5fcc8d551b929a03ee54f7ead0d778",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 111946,
+      "numTurns": 10,
+      "findingCount": 1
+    },
+    {
+      "filename": "src/sentry/relocation/api/endpoints/retry.py",
+      "lineRange": "1-148",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "fa1babae163d1488df43aa66d17f0e30",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 115567,
+      "numTurns": 6,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/models/apiapplication.py",
+      "lineRange": "210-299",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "996d3e26a7efabc8b9237f0f68327eed",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 356464,
+      "numTurns": 16,
+      "findingCount": 1
+    },
+    {
+      "filename": "src/sentry/seer/endpoints/organization_seer_rpc.py",
+      "lineRange": "1-186",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "a21453ac1ed0c3607b444f8f00d71aca",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 263788,
+      "numTurns": 24,
+      "findingCount": 1
+    },
+    {
+      "filename": "src/sentry/tasks/post_process.py",
+      "lineRange": "1-205",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "9bb4cf73131cd292a54e065be17fd0ae",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 19727,
+      "numTurns": 1,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/tasks/post_process.py",
+      "lineRange": "206-410",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "9bb4cf73131cd292a54e065be17fd0ae",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 7560,
+      "numTurns": 1,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/tasks/post_process.py",
+      "lineRange": "411-615",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "9bb4cf73131cd292a54e065be17fd0ae",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 22037,
+      "numTurns": 1,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/tasks/post_process.py",
+      "lineRange": "616-820",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "4aa745061e29939d142d448197070f3a",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 8615,
+      "numTurns": 1,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/tasks/post_process.py",
+      "lineRange": "821-1025",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "4aa745061e29939d142d448197070f3a",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 31369,
+      "numTurns": 4,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/tasks/post_process.py",
+      "lineRange": "1026-1230",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "9bb4cf73131cd292a54e065be17fd0ae",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 31863,
+      "numTurns": 1,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/sentry_apps/api/endpoints/installation_external_issue_actions.py",
+      "lineRange": "1-67",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "4e91fc5954bc97402d08b06e548ed05a",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 348154,
+      "numTurns": 46,
+      "findingCount": 1
+    },
+    {
+      "filename": "src/sentry/seer/endpoints/organization_seer_rpc.py",
+      "lineRange": "187-274",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "a21453ac1ed0c3607b444f8f00d71aca",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 191417,
+      "numTurns": 11,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/tasks/post_process.py",
+      "lineRange": "1231-1435",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "9bb4cf73131cd292a54e065be17fd0ae",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 72611,
+      "numTurns": 3,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/web/frontend/release_webhook.py",
+      "lineRange": "1-124",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "25d2f80e2d276315d534c7bbf536621a",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 47923,
+      "numTurns": 1,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/tasks/post_process.py",
+      "lineRange": "1436-1640",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "9bb4cf73131cd292a54e065be17fd0ae",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 52248,
+      "numTurns": 4,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/web/frontend/mailgun_inbound_webhook.py",
+      "lineRange": "1-92",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "c3c78aeaab0546a349679c43b22c1ea0",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 93117,
+      "numTurns": 4,
+      "findingCount": 1
+    },
+    {
+      "filename": "src/sentry/tasks/post_process.py",
+      "lineRange": "1641-1672",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "9bb4cf73131cd292a54e065be17fd0ae",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 7664,
+      "numTurns": 1,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/workflow_engine/endpoints/organization_alertrule_detector_index.py",
+      "lineRange": "1-99",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "cf5e3295f1eb8bdb05506077e7ecffaf",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 48177,
+      "numTurns": 4,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry_plugins/heroku/plugin.py",
+      "lineRange": "1-211",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "5417f218a67fcf2aa5653aaeee3b77da",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 48351,
+      "numTurns": 2,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/workflow_engine/endpoints/organization_detector_anomaly_data.py",
+      "lineRange": "1-179",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "c627dc3240019dc8be4400709e3114c0",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 55660,
+      "numTurns": 5,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry_plugins/heroku/plugin.py",
+      "lineRange": "212-213",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "5417f218a67fcf2aa5653aaeee3b77da",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 22077,
+      "numTurns": 2,
+      "findingCount": 0
+    },
+    {
+      "filename": "static/app/components/events/autofix/insights/autofixInsightSources.tsx",
+      "lineRange": "1-275",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "4168806f85261985ccb91e11ca4a0d07",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 80662,
+      "numTurns": 19,
+      "findingCount": 0
+    },
+    {
+      "filename": "static/app/components/events/autofix/insights/autofixInsightSources.tsx",
+      "lineRange": "276-447",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "4168806f85261985ccb91e11ca4a0d07",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 22840,
+      "numTurns": 1,
+      "findingCount": 0
+    },
+    {
+      "filename": "static/app/components/featureFlags/hooks/useFlagSeries.tsx",
+      "lineRange": "1-84",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "4f9ed80ed17e51f28f24d22377b63053",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 141620,
+      "numTurns": 10,
+      "findingCount": 1
+    },
+    {
+      "filename": "static/app/components/events/interfaces/utils.tsx",
+      "lineRange": "1-279",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "b0c5e6979c5475717f4c62a76b9ef711",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 226392,
+      "numTurns": 6,
+      "findingCount": 1
+    },
+    {
+      "filename": "static/app/components/events/interfaces/utils.tsx",
+      "lineRange": "280-392",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "b0c5e6979c5475717f4c62a76b9ef711",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 7053,
+      "numTurns": 1,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry_plugins/jira/client.py",
+      "lineRange": "1-98",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "c78dc7cc640696442bb0e1101be492a8",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 998722,
+      "numTurns": 7,
+      "findingCount": 1
+    },
+    {
+      "filename": "static/app/views/preprod/components/visualizations/appSizeTreemap.tsx",
+      "lineRange": "1-242",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "51fafb6bf4e8edd336d25527f434ea6c",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 9507,
+      "numTurns": 1,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/seer/endpoints/seer_rpc.py",
+      "lineRange": "1-215",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "82633d6f081137ba91267636a8df4e63",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 67050,
+      "numTurns": 4,
+      "findingCount": 0
+    },
+    {
+      "filename": "static/app/views/explore/releases/list/mobileBuildsChart.tsx",
+      "lineRange": "1-243",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "95b4de6d8558dbc0ab068f7726c32811",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 782746,
+      "numTurns": 8,
+      "findingCount": 0
+    },
+    {
+      "filename": "static/app/views/discover/utils.tsx",
+      "lineRange": "1-254",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "a2d9b911d3f782e1eca6f93bcd98c7e5",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 804113,
+      "numTurns": 5,
+      "findingCount": 0
+    },
+    {
+      "filename": "static/app/views/discover/utils.tsx",
+      "lineRange": "255-508",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "a2d9b911d3f782e1eca6f93bcd98c7e5",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 111658,
+      "numTurns": 6,
+      "findingCount": 0
+    },
+    {
+      "filename": "static/app/views/discover/utils.tsx",
+      "lineRange": "509-762",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "a2d9b911d3f782e1eca6f93bcd98c7e5",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 16277,
+      "numTurns": 1,
+      "findingCount": 0
+    },
+    {
+      "filename": "static/app/views/discover/utils.tsx",
+      "lineRange": "763-908",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "a2d9b911d3f782e1eca6f93bcd98c7e5",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 22933,
+      "numTurns": 2,
+      "findingCount": 0
+    },
+    {
+      "filename": "static/app/views/preprod/components/visualizations/appSizeTreemap.tsx",
+      "lineRange": "243-484",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "51fafb6bf4e8edd336d25527f434ea6c",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 239673,
+      "numTurns": 6,
+      "findingCount": 0
+    },
+    {
+      "filename": "static/app/views/preprod/components/visualizations/appSizeTreemap.tsx",
+      "lineRange": "485-559",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "51fafb6bf4e8edd336d25527f434ea6c",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 5499,
+      "numTurns": 1,
+      "findingCount": 0
+    },
+    {
+      "filename": "static/app/views/explore/releases/list/mobileBuildsChart.tsx",
+      "lineRange": "244-274",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "95b4de6d8558dbc0ab068f7726c32811",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 194553,
+      "numTurns": 17,
+      "findingCount": 0
+    },
+    {
+      "filename": "static/app/views/settings/organizationIntegrations/integrationDetailedView.tsx",
+      "lineRange": "1-234",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "92c77269fb84b2771d3ff8e87f01ef33",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 37177,
+      "numTurns": 3,
+      "findingCount": 0
+    },
+    {
+      "filename": "static/app/views/settings/organizationIntegrations/integrationDetailedView.tsx",
+      "lineRange": "235-468",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "5a7a36e9ea0d57c8447ca5e8eb84628b",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 35862,
+      "numTurns": 4,
+      "findingCount": 0
+    },
+    {
+      "filename": "static/app/views/settings/organizationIntegrations/integrationDetailedView.tsx",
+      "lineRange": "469-554",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "5a7a36e9ea0d57c8447ca5e8eb84628b",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 5469,
+      "numTurns": 1,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/seer/endpoints/seer_rpc.py",
+      "lineRange": "216-430",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "4165845a598a9d39b2e999542e0f278a",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 1162671,
+      "numTurns": 5,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/seer/endpoints/seer_rpc.py",
+      "lineRange": "431-645",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "4165845a598a9d39b2e999542e0f278a",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 2617296,
+      "numTurns": 7,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/seer/endpoints/seer_rpc.py",
+      "lineRange": "646-860",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "82633d6f081137ba91267636a8df4e63",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 64603,
+      "numTurns": 5,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/seer/endpoints/seer_rpc.py",
+      "lineRange": "861-965",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "4165845a598a9d39b2e999542e0f278a",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 17209,
+      "numTurns": 1,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/api/endpoints/project_rules.py",
+      "lineRange": "1-202",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "35eee1450babf7bfb3ebd31b39ce3b03",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 31628,
+      "numTurns": 2,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/api/endpoints/organization_pinned_searches.py",
+      "lineRange": "1-113",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "88021e7e5d7ad1a28b46f4bc1fbd1f93",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 39363,
+      "numTurns": 6,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/codecov/endpoints/repository_token_regenerate/repository_token_regenerate.py",
+      "lineRange": "1-68",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "b7cec6aff9ccb300743bc07449115589",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 838,
+      "numTurns": 1,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/discover/endpoints/discover_saved_query_detail.py",
+      "lineRange": "1-191",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "4bf4ed07311fbaffead317200e4f51ab",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 1345,
+      "numTurns": 1,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/explore/endpoints/explore_saved_query_detail.py",
+      "lineRange": "1-195",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "e2bcc1db59f77147057acd7c70efdc58",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 1407,
+      "numTurns": 1,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/flags/endpoints/secrets.py",
+      "lineRange": "1-140",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "c94b0973838ccc98e93c3b47176300fb",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 1370,
+      "numTurns": 1,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/integrations/api/endpoints/external_team_details.py",
+      "lineRange": "1-113",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "58c0252744a411b8e92da9ead9f932e8",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 2837,
+      "numTurns": 1,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/integrations/jira/webhooks/installed.py",
+      "lineRange": "1-110",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "72d65f2721d9080d627c5c62022dae83",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 1447,
+      "numTurns": 1,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/api/endpoints/accept_organization_invite.py",
+      "lineRange": "1-218",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "040c569aa940127db7834a3552681a99",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 49211,
+      "numTurns": 2,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/integrations/messaging/linkage.py",
+      "lineRange": "1-198",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "88a8be2f743033c687722ef7661d652a",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 1679,
+      "numTurns": 1,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/api/endpoints/project_rules.py",
+      "lineRange": "203-404",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "35eee1450babf7bfb3ebd31b39ce3b03",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 22711,
+      "numTurns": 3,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/api/endpoints/project_rules.py",
+      "lineRange": "405-606",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "35eee1450babf7bfb3ebd31b39ce3b03",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 31630,
+      "numTurns": 1,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/api/endpoints/accept_organization_invite.py",
+      "lineRange": "219-283",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "241a077db0c08a5a9a4b081d4495fcdc",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 63174,
+      "numTurns": 2,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/integrations/msteams/webhook.py",
+      "lineRange": "1-197",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "2dfcc25da721be55d05126b57103400c",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 1843,
+      "numTurns": 1,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/auth/services/access/impl.py",
+      "lineRange": "1-125",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "8b722c8aa12bb59f46b579f88862a8fa",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 116389,
+      "numTurns": 6,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/api/endpoints/project_rules.py",
+      "lineRange": "607-808",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "35eee1450babf7bfb3ebd31b39ce3b03",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 31848,
+      "numTurns": 5,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/integrations/msteams/webhook.py",
+      "lineRange": "198-394",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "2dfcc25da721be55d05126b57103400c",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 5633,
+      "numTurns": 2,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/api/endpoints/project_rules.py",
+      "lineRange": "809-1010",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "35eee1450babf7bfb3ebd31b39ce3b03",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 2321,
+      "numTurns": 1,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/integrations/msteams/webhook.py",
+      "lineRange": "395-591",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "2dfcc25da721be55d05126b57103400c",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 2899,
+      "numTurns": 1,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/integrations/msteams/webhook.py",
+      "lineRange": "592-747",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "2dfcc25da721be55d05126b57103400c",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 1517,
+      "numTurns": 1,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/api/endpoints/project_rules.py",
+      "lineRange": "1011-1083",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "35eee1450babf7bfb3ebd31b39ce3b03",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 5232,
+      "numTurns": 2,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/integrations/slack/webhooks/action.py",
+      "lineRange": "1-202",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "4674ba351400640ad792ff0b1e4169bb",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 1431,
+      "numTurns": 1,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/integrations/slack/webhooks/options_load.py",
+      "lineRange": "1-115",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "75d3eb4abe6d6ed835149ffd367fa97a",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 1430,
+      "numTurns": 1,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/integrations/slack/webhooks/action.py",
+      "lineRange": "203-404",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "4674ba351400640ad792ff0b1e4169bb",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 1442,
+      "numTurns": 1,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/integrations/slack/webhooks/action.py",
+      "lineRange": "405-606",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "4674ba351400640ad792ff0b1e4169bb",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 2426,
+      "numTurns": 1,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/integrations/perforce/integration.py",
+      "lineRange": "1-202",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "86b64f401fa1ea199f75b80c4981d192",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 14580,
+      "numTurns": 3,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/integrations/slack/webhooks/action.py",
+      "lineRange": "607-808",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "4674ba351400640ad792ff0b1e4169bb",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 3314,
+      "numTurns": 1,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/integrations/slack/webhooks/action.py",
+      "lineRange": "809-1010",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "4674ba351400640ad792ff0b1e4169bb",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 4069,
+      "numTurns": 2,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/integrations/slack/webhooks/action.py",
+      "lineRange": "1011-1037",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "4674ba351400640ad792ff0b1e4169bb",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 1720,
+      "numTurns": 1,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/notifications/platform/api/endpoints/internal_registered_templates.py",
+      "lineRange": "1-128",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "28f69bccd2600c299784f6da8c9d1592",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 16481,
+      "numTurns": 1,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/preprod/api/endpoints/preprod_artifact_approve.py",
+      "lineRange": "1-104",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "be57d36bf848ced416f046a1aa523089",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 18656,
+      "numTurns": 1,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/notifications/notification_action/group_type_notification_registry/handlers/metric_alert_registry_handler.py",
+      "lineRange": "1-108",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "6f6b7addddd97dba5411e7cddc0268ab",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 60836,
+      "numTurns": 3,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/preprod/api/endpoints/public/organization_preprod_size_analysis.py",
+      "lineRange": "1-199",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "1fb30b94c8167445810e26ad5e8b742f",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 12189,
+      "numTurns": 2,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/preprod/api/endpoints/public/organization_preprod_size_analysis.py",
+      "lineRange": "200-291",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "1fb30b94c8167445810e26ad5e8b742f",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 1479,
+      "numTurns": 1,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/replays/endpoints/data_export_notifications.py",
+      "lineRange": "1-26",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "13454a72018dec1a50a7e68471b75441",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 1329,
+      "numTurns": 1,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/integrations/perforce/integration.py",
+      "lineRange": "203-404",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "86b64f401fa1ea199f75b80c4981d192",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 72235,
+      "numTurns": 4,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/replays/endpoints/project_replay_details.py",
+      "lineRange": "1-103",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "91a84c97f4a0f7a1bc79afb2627c5c55",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 1348,
+      "numTurns": 1,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/integrations/perforce/integration.py",
+      "lineRange": "405-606",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "86b64f401fa1ea199f75b80c4981d192",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 1330,
+      "numTurns": 1,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/replays/usecases/replay_counts.py",
+      "lineRange": "1-202",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "5e9173d6c8e383bc753f03c66f6ed7a5",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 2631,
+      "numTurns": 1,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/integrations/perforce/integration.py",
+      "lineRange": "607-681",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "86b64f401fa1ea199f75b80c4981d192",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 2333,
+      "numTurns": 1,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/seer/autofix/autofix_agent.py",
+      "lineRange": "1-231",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "a2fa68461c7be0ab02198579c86da7ac",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 1353,
+      "numTurns": 1,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/preprod/api/endpoints/preprod_artifact_snapshot.py",
+      "lineRange": "1-191",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "bd4a737ad5d5f3dc8b4389c7989e578c",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 47702,
+      "numTurns": 4,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/integrations/messaging/linkage.py",
+      "lineRange": "199-396",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "88a8be2f743033c687722ef7661d652a",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 274153,
+      "numTurns": 7,
+      "findingCount": 1
+    },
+    {
+      "filename": "src/sentry/replays/usecases/replay_counts.py",
+      "lineRange": "203-229",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "5e9173d6c8e383bc753f03c66f6ed7a5",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 117838,
+      "numTurns": 2,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/seer/endpoints/organization_autofix_automation_settings.py",
+      "lineRange": "1-192",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "5344b143586787d3ed1e5fcc11f91b49",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 180565,
+      "numTurns": 4,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/preprod/api/endpoints/preprod_artifact_snapshot.py",
+      "lineRange": "192-382",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "bd4a737ad5d5f3dc8b4389c7989e578c",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 292200,
+      "numTurns": 5,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/seer/endpoints/organization_autofix_automation_settings.py",
+      "lineRange": "193-384",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "5344b143586787d3ed1e5fcc11f91b49",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 46246,
+      "numTurns": 4,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/preprod/api/endpoints/preprod_artifact_snapshot.py",
+      "lineRange": "383-573",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "bd4a737ad5d5f3dc8b4389c7989e578c",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 44584,
+      "numTurns": 5,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/seer/endpoints/organization_autofix_automation_settings.py",
+      "lineRange": "385-405",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "5344b143586787d3ed1e5fcc11f91b49",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 26075,
+      "numTurns": 3,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/integrations/messaging/linkage.py",
+      "lineRange": "397-594",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "88a8be2f743033c687722ef7661d652a",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 264934,
+      "numTurns": 5,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/seer/supergroups/endpoints/organization_supergroups_by_group.py",
+      "lineRange": "1-103",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "4ff2f37c6041f220c69f71d2c6b8d4c0",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 15399,
+      "numTurns": 3,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/sentry_apps/api/endpoints/installation_external_issue_actions.py",
+      "lineRange": "1-67",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "0701c3c095191764586783943ab720ea",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 1315,
+      "numTurns": 1,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/sentry_apps/services/cell/impl.py",
+      "lineRange": "1-207",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "0ee124226d6070c0e0e81f068973be09",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 2774,
+      "numTurns": 1,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/sentry_apps/services/cell/impl.py",
+      "lineRange": "208-414",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "0ee124226d6070c0e0e81f068973be09",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 70431,
+      "numTurns": 3,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/sentry_apps/services/cell/impl.py",
+      "lineRange": "415-621",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "0ee124226d6070c0e0e81f068973be09",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 2660,
+      "numTurns": 1,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/sentry_apps/services/cell/impl.py",
+      "lineRange": "622",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "0ee124226d6070c0e0e81f068973be09",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 2455,
+      "numTurns": 1,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/users/models/user_merge_verification_code.py",
+      "lineRange": "1-77",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "256a366f68a7083205a564906fb55c05",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 1630,
+      "numTurns": 1,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/workflow_engine/endpoints/organization_open_periods.py",
+      "lineRange": "1-173",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "0ad67b3909b489027625b4ea30a6c69e",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 1532,
+      "numTurns": 1,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/integrations/messaging/linkage.py",
+      "lineRange": "595-677",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "88a8be2f743033c687722ef7661d652a",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 87869,
+      "numTurns": 3,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/workflow_engine/endpoints/validators/utils.py",
+      "lineRange": "1-208",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "d585c82fa81b6d5beec60f2615c442a6",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 1639,
+      "numTurns": 1,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/workflow_engine/endpoints/validators/utils.py",
+      "lineRange": "209-371",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "d585c82fa81b6d5beec60f2615c442a6",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 1510,
+      "numTurns": 1,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/preprod/api/endpoints/preprod_artifact_snapshot.py",
+      "lineRange": "574-754",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "bd4a737ad5d5f3dc8b4389c7989e578c",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 159985,
+      "numTurns": 4,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/seer/autofix/autofix_agent.py",
+      "lineRange": "232-462",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "a2fa68461c7be0ab02198579c86da7ac",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 563806,
+      "numTurns": 12,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/seer/autofix/autofix_agent.py",
+      "lineRange": "463-671",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "a2fa68461c7be0ab02198579c86da7ac",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 1933,
+      "numTurns": 1,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/api/endpoints/organization_events_root_cause_analysis.py",
+      "lineRange": "1-218",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "b748b7ebe94a312e1d9346877611ef05",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 40954,
+      "numTurns": 5,
+      "findingCount": 0
+    },
+    {
+      "filename": "src/sentry/api/endpoints/system_options.py",
+      "lineRange": "1-138",
+      "status": "success",
+      "runtime": "pi",
+      "traceId": "a31872367dde6e152b7c25eb6e824a70",
+      "responseModel": "z-ai/glm-5.2-20260616",
+      "durationMs": 50903,
+      "numTurns": 3,
+      "findingCount": 0
+    }
+  ],
+  "notes": "Full benchmark result stitched from one Warden run per corpus SHA using --runtime pi --model openrouter/z-ai/glm-5.2 --effort high --traces. Each shard analyzes every unique corpus path for that SHA, not the whole Sentry repository. The first xhigh attempt was abandoned after an unbounded provider wait on auth_index.py; this recorded result uses GLM 5.2 high, OpenRouter's default supported reasoning effort. Four high-effort shards required combined-clean artifacts: traced extraction_no_findings_json records with zero findings were normalized to ok empty-finding chunks, and targeted repair records were used where available. This is worth tracking as a Warden/Pi compatibility issue for GLM 5.2: the model often returned prose for no-finding chunks instead of the required JSON despite the prompt. The 7f41cc50 seer_rpc.py provider context-length failure was resolved by a targeted lower-parallelism repair run, but several no-finding parser failures remained and were normalized from traced zero-finding outputs. Recorded cost uses the validated artifact summaries and excludes abandoned xhigh attempts plus dirty failed rerun artifacts. Raw JSONL artifacts are withheld pending sensitive-data review.",
+  "scoring": {
+    "reviewer": "agent-semantic-match-pass",
+    "scoredAt": "2026-07-02",
+    "knownFindingCount": 86,
+    "knownFound": 15,
+    "knownMissed": 71,
+    "knownPartial": 0,
+    "knownFoundRate": 0.1744,
+    "notes": "Agent-verified semantic matches. A finding counts when it identifies the same bug in roughly the same location as an existing corpus finding. Same-file findings about different bugs do not count; duplicate findings map to one unique corpus ID."
+  },
+  "scores": [
+    {
+      "findingId": "VNB-3SC",
+      "matchedCorpusIds": [
+        "sentry-vuln-003"
+      ],
+      "verdict": "known-found",
+      "notes": "Internal EA features endpoint auth bypass."
+    },
+    {
+      "findingId": "GQV-ECX",
+      "matchedCorpusIds": [
+        "sentry-vuln-001"
+      ],
+      "verdict": "known-found",
+      "notes": "Accept-invite missing return allows member deletion without token validation."
+    },
+    {
+      "findingId": "DKA-GU7",
+      "matchedCorpusIds": [
+        "sentry-vuln-056"
+      ],
+      "verdict": "known-found",
+      "notes": "Fresh OAuth app clientSecret exposure to non-owner grantees."
+    },
+    {
+      "findingId": "KQW-U9T",
+      "matchedCorpusIds": [],
+      "verdict": "not-known",
+      "notes": "Timing-unsafe webhook signature compare is not the Statsig timestamp freshness corpus bug."
+    },
+    {
+      "findingId": "ZYG-N5A",
+      "matchedCorpusIds": [
+        "sentry-vuln-051"
+      ],
+      "verdict": "known-found",
+      "notes": "Bitbucket Server unsigned public webhook route."
+    },
+    {
+      "findingId": "F2V-2NJ",
+      "matchedCorpusIds": [
+        "sentry-vuln-062"
+      ],
+      "verdict": "known-found",
+      "notes": "client_secret_jwt replay cache shorter than token lifetime and exp not required."
+    },
+    {
+      "findingId": "7LP-A6L",
+      "matchedCorpusIds": [],
+      "verdict": "not-known",
+      "notes": "Bitbucket X-Forwarded-For and conditional-signature bypass is not the invalid-signature HMAC logging corpus bug."
+    },
+    {
+      "findingId": "MZD-LG4",
+      "matchedCorpusIds": [
+        "sentry-vuln-070"
+      ],
+      "verdict": "known-found",
+      "notes": "Jira Server webhook JWT logging with non-expiring token."
+    },
+    {
+      "findingId": "4KN-HN8",
+      "matchedCorpusIds": [
+        "sentry-vuln-046"
+      ],
+      "verdict": "known-found",
+      "notes": "Pull-request size-analysis download lacks project access check."
+    },
+    {
+      "findingId": "7BQ-RPT",
+      "matchedCorpusIds": [
+        "sentry-vuln-073"
+      ],
+      "verdict": "known-found",
+      "notes": "Release webhook token uses uuid1."
+    },
+    {
+      "findingId": "LNN-479",
+      "matchedCorpusIds": [
+        "sentry-vuln-072"
+      ],
+      "verdict": "known-found",
+      "notes": "Legacy OAuth redirect URI prefix matching."
+    },
+    {
+      "findingId": "VB3-Z8D",
+      "matchedCorpusIds": [
+        "sentry-vuln-055"
+      ],
+      "verdict": "known-found",
+      "notes": "Org-level Seer RPC exposes project-backed data without project access checks."
+    },
+    {
+      "findingId": "W5J-FKK",
+      "matchedCorpusIds": [],
+      "verdict": "not-known",
+      "notes": "Sentry App issue-link SSRF is not the event-scope corpus issue."
+    },
+    {
+      "findingId": "FVE-CVG",
+      "matchedCorpusIds": [
+        "sentry-vuln-075"
+      ],
+      "verdict": "known-found",
+      "notes": "Mailgun timestamp/nonce signed but not freshness- or reuse-checked."
+    },
+    {
+      "findingId": "J98-F9P",
+      "matchedCorpusIds": [
+        "sentry-vuln-082"
+      ],
+      "verdict": "known-found",
+      "notes": "ECharts feature flag tooltip HTML injection."
+    },
+    {
+      "findingId": "V9P-73M",
+      "matchedCorpusIds": [
+        "sentry-vuln-081"
+      ],
+      "verdict": "known-found",
+      "notes": "Copy-as-curl escapes values but not HTTP method or header names."
+    },
+    {
+      "findingId": "F4C-G5W",
+      "matchedCorpusIds": [
+        "sentry-vuln-078"
+      ],
+      "verdict": "known-found",
+      "notes": "Legacy Jira plugin disables TLS verification while sending Basic Auth."
+    },
+    {
+      "findingId": "FSW-T9G",
+      "matchedCorpusIds": [
+        "sentry-vuln-026"
+      ],
+      "verdict": "known-found",
+      "notes": "Messaging identity unlink deletes by external_id without caller ownership binding."
+    }
+  ]
+}

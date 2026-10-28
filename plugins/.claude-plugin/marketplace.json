@@ -8,7 +8,7 @@
       "name": "warden",
       "source": "./warden",
       "version": "0.0.0",
-      "skills": ["warden"]
+      "skills": ["warden", "warden-service"]
     }
   ]
 }

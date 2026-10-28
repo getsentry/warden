@@ -1,0 +1,15 @@
+{
+  "given": "React autosave effect promises to save the latest editor text on an interval",
+  "files": [
+    "fixtures/stale-autosave-closure/editor.tsx"
+  ],
+  "should_find": [
+    {
+      "finding": "AutoSaveEditor omits text from the interval effect dependencies, so autosave keeps writing the initial text instead of the latest user edits"
+    }
+  ],
+  "should_not_find": [
+    "style, formatting, or naming issues",
+    "textarea sizing or visual presentation"
+  ]
+}

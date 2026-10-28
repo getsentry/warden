@@ -1,0 +1,38 @@
+{
+  "given": "Sentry dashboard new timeseries visualization renders the Other series returned from top-N grouping",
+  "files": [
+    "fixtures/sentry-dashboard-other-series-color/visualizationWidget.tsx",
+    "fixtures/sentry-dashboard-other-series-color/createPlottableFromTimeSeries.tsx"
+  ],
+  "supporting_files": [
+    "fixtures/sentry-dashboard-other-series-color/LICENSE.md"
+  ],
+  "should_find": [
+    {
+      "finding": "the new timeseries visualization does not map the Other series to the neutral grey color, so Other renders with the wrong series color instead of matching dashboard conventions"
+    }
+  ],
+  "should_not_find": [
+    "missing tests",
+    "style, formatting, or naming issues"
+  ],
+  "notes": {
+    "source": "https://github.com/getsentry/sentry/commit/de65182e8c3491930779dd88522ea04ee9633314",
+    "repository": "getsentry/sentry",
+    "source_ref": "f945e1ccefd3349392bbc6b7fc4aa9da4d3decc8",
+    "source_files": [
+      {
+        "fixturePath": "fixtures/sentry-dashboard-other-series-color/visualizationWidget.tsx",
+        "sourcePath": "static/app/views/dashboards/widgetCard/visualizationWidget.tsx",
+        "ref": "f945e1ccefd3349392bbc6b7fc4aa9da4d3decc8"
+      },
+      {
+        "fixturePath": "fixtures/sentry-dashboard-other-series-color/createPlottableFromTimeSeries.tsx",
+        "sourcePath": "static/app/views/dashboards/widgets/timeSeriesWidget/plottables/createPlottableFromTimeSeries.tsx",
+        "ref": "f945e1ccefd3349392bbc6b7fc4aa9da4d3decc8"
+      }
+    ],
+    "side": "parent-of-fix",
+    "body": "Regression seed from Sentry fix de65182e8c3491930779dd88522ea04ee9633314. the new timeseries visualization does not map the Other series to the neutral grey color, so Other renders with the wrong series color instead of matching dashboard conventions"
+  }
+}

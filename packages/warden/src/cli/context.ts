@@ -1,0 +1,170 @@
+import { realpathSync } from 'node:fs';
+import { basename, resolve } from 'node:path';
+import type { EventContext, FileChange } from '../types/index.js';
+import type { IgnoreConfig, ScanConfig } from '../config/schema.js';
+import { pluralize } from './output/index.js';
+import { expandAndCreateFileChanges } from './files.js';
+import {
+  getChangedFilesWithPatches,
+  getCurrentBranch,
+  getHeadSha,
+  getDefaultBranch,
+  getRepoRoot,
+  getRepoName,
+  getCommitMessage,
+  resolveRef,
+  type GitFileChange,
+} from './git.js';
+
+/**
+ * Convert git file change to EventContext FileChange format.
+ */
+function toFileChange(file: GitFileChange): FileChange {
+  return {
+    filename: file.filename,
+    status: file.status,
+    additions: file.additions,
+    deletions: file.deletions,
+    patch: file.patch,
+    chunks: file.chunks,
+  };
+}
+
+export interface LocalContextOptions {
+  base?: string;
+  head?: string;
+  cwd?: string;
+  /** Override auto-detected default branch (from config) */
+  defaultBranch?: string;
+  /** Analyze only staged changes (git diff --cached) */
+  staged?: boolean;
+}
+
+/**
+ * Build an EventContext from local git repository state.
+ * Creates a synthetic pull_request event from git diff.
+ *
+ * When analyzing a specific commit (head is set), uses the actual commit
+ * message as title/body to provide intent context to the LLM.
+ */
+export function buildLocalEventContext(options: LocalContextOptions = {}): EventContext {
+  const cwd = options.cwd ?? process.cwd();
+  const repoPath = getRepoRoot(cwd);
+  const { owner, name } = getRepoName(cwd);
+  const defaultBranch = options.defaultBranch ?? getDefaultBranch(cwd);
+
+  // When staged, always diff against HEAD (index vs HEAD)
+  const staged = options.staged ?? false;
+  const base = staged ? 'HEAD' : (options.base ?? defaultBranch);
+  const head = options.head; // undefined means working tree
+  const currentBranch = getCurrentBranch(cwd);
+  const headSha = head ? resolveRef(head, cwd) : getHeadSha(cwd);
+
+  const changedFiles = getChangedFilesWithPatches(base, head, cwd, { staged });
+  const files = changedFiles.map(toFileChange);
+
+  // Use actual commit message when analyzing a specific commit
+  let title: string;
+  let body: string;
+  if (head) {
+    const commitMsg = getCommitMessage(head, cwd);
+    title = commitMsg.subject || `Commit ${head}`;
+    body = commitMsg.body || `Analyzing changes in ${head}`;
+  } else if (staged) {
+    title = `Staged changes: ${currentBranch}`;
+    body = `Analyzing staged changes`;
+  } else {
+    title = `Local changes: ${currentBranch}`;
+    body = `Analyzing local changes from ${base} to working tree`;
+  }
+
+  const diffContextSource = staged
+    ? { type: 'git-index' as const }
+    : head
+      ? { type: 'git-ref' as const, ref: headSha }
+      : { type: 'working-tree' as const };
+
+  return {
+    eventType: 'pull_request',
+    action: 'opened',
+    repository: {
+      owner,
+      name,
+      fullName: `${owner}/${name}`,
+      defaultBranch,
+    },
+    pullRequest: {
+      number: 0, // Local run, no real PR number
+      title,
+      body,
+      author: 'local',
+      baseBranch: base,
+      headBranch: currentBranch,
+      headSha,
+      baseSha: resolveRef(base, cwd),
+      files,
+    },
+    diffContextSource,
+    repoPath,
+  };
+}
+
+export interface FileContextOptions {
+  patterns: string[];
+  cwd?: string;
+  ignore?: IgnoreConfig;
+  scan?: ScanConfig;
+}
+
+/**
+ * Build an EventContext from a list of files or glob patterns.
+ * Creates a synthetic pull_request event treating files as newly added.
+ * This allows analysis without requiring git or a warden.toml config.
+ */
+export async function buildFileEventContext(options: FileContextOptions): Promise<EventContext> {
+  const requestedCwd = resolve(options.cwd ?? process.cwd());
+  let cwd = requestedCwd;
+  try {
+    cwd = realpathSync(requestedCwd);
+  } catch {
+    // File expansion reports missing or inaccessible invocation directories.
+  }
+  let repoPath = cwd;
+  try {
+    repoPath = getRepoRoot(cwd);
+  } catch {
+    // Explicit file analysis also works outside a Git checkout.
+  }
+  const dirName = basename(repoPath);
+
+  const files = await expandAndCreateFileChanges(options.patterns, cwd, {
+    ignore: options.ignore,
+    scan: options.scan,
+    basePath: repoPath,
+  });
+
+  return {
+    eventType: 'pull_request',
+    action: 'opened',
+    repository: {
+      owner: 'local',
+      name: dirName,
+      fullName: `local/${dirName}`,
+      defaultBranch: 'main',
+    },
+    pullRequest: {
+      number: 0,
+      title: 'File analysis',
+      body: `Analyzing ${files.length} ${pluralize(files.length, 'file')}`,
+      author: 'local',
+      baseBranch: 'main',
+      headBranch: 'file-analysis',
+      headSha: 'file-analysis',
+      baseSha: 'file-analysis',
+      files,
+    },
+    diffContextSource: { type: 'working-tree' },
+    explicitFileTargets: true,
+    repoPath,
+  };
+}

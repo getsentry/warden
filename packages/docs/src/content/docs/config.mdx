@@ -1,0 +1,107 @@
+---
+title: Configuration
+description: Warden configuration reference.
+editUrl: false
+---
+
+Warden is configured with `warden.toml` in your repository root.
+This reference covers `warden.toml` only. GitHub Actions workflow settings live
+under [GitHub Workflow](/github/workflow/).
+
+```toml title="warden.toml"
+version = 1
+
+[[skills]]
+name = "security-review"
+
+[[skills.triggers]]
+type = "pull_request"
+actions = ["opened", "synchronize", "reopened", "labeled"]
+draft = false
+labels = ["Warden"]
+
+[[skills]]
+name = "code-review"
+
+[[skills.triggers]]
+type = "pull_request"
+actions = ["opened", "synchronize", "reopened", "labeled"]
+draft = false
+labels = ["Warden"]
+```
+
+## Sections
+
+<div class="api-link-grid">
+  <a class="api-link-card" href="/config/skills/">
+    <strong>Skill Entries</strong>
+    <span>Skill fields, filters, remotes, and model overrides.</span>
+  </a>
+  <a class="api-link-card" href="/config/models/">
+    <strong>Models and Runtimes</strong>
+    <span>Pi selectors, Claude runtime, model lanes, and precedence.</span>
+  </a>
+  <a class="api-link-card" href="/config/triggers/">
+    <strong>Triggers</strong>
+    <span>Pull request, local, and schedule trigger settings.</span>
+  </a>
+  <a class="api-link-card" href="/config/output/">
+    <strong>Output and Defaults</strong>
+    <span>Failure thresholds, report thresholds, and defaults.</span>
+  </a>
+  <a class="api-link-card" href="/config/runner/">
+    <strong>Runner</strong>
+    <span>Run-level concurrency for CLI and action executions.</span>
+  </a>
+  <a class="api-link-card" href="/config/chunking/">
+    <strong>Chunking</strong>
+    <span>Control whether Warden analyzes hunks, whole files, or skips files.</span>
+  </a>
+</div>
+
+## Environment Variables
+
+<dl class="sentry-key-value-list">
+  <div>
+    <dt>
+      <code>WARDEN_OFFLINE</code>
+      <span class="sentry-property-meta">boolean</span>
+    </dt>
+    <dd>Set to <code>true</code> or <code>1</code> to block remote skill network fetches and Pi model-catalog refresh for the current process.</dd>
+  </div>
+  <div>
+    <dt>
+      <code>WARDEN_MODEL</code>
+      <span class="sentry-property-meta">string</span>
+    </dt>
+    <dd>Fallback model selector when <code>warden.toml</code> and <code>--model</code> do not set one. See <a href="/config/models/">Models and Runtimes</a>.</dd>
+  </div>
+  <div>
+    <dt>
+      <code>WARDEN_OPENAI_API_KEY</code>
+      <span class="sentry-property-meta">secret</span>
+    </dt>
+    <dd>OpenAI API key when using an OpenAI Pi model.</dd>
+  </div>
+  <div>
+    <dt>
+      <code>WARDEN_ANTHROPIC_API_KEY</code>
+      <span class="sentry-property-meta">secret</span>
+    </dt>
+    <dd>Anthropic API key when using an Anthropic Pi model or the Claude runtime.</dd>
+  </div>
+  <div>
+    <dt>
+      <code>WARDEN_OPENROUTER_API_KEY</code>
+      <span class="sentry-property-meta">secret</span>
+    </dt>
+    <dd>OpenRouter API key when using an OpenRouter Pi model.</dd>
+  </div>
+  <div>
+    <dt>
+      <code>WARDEN_SKILL_CACHE_TTL</code>
+      <span class="sentry-property-meta">duration</span>
+    </dt>
+    <dd>Cache duration for unpinned remote skills. Default: 24h.</dd>
+  </div>
+</dl>

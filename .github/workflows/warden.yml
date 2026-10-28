@@ -4,6 +4,8 @@ name: Warden
 # See: https://github.com/orgs/community/discussions/44650
 permissions:
   contents: write
+  pull-requests: write
+  checks: write
 
 on:
   pull_request:
@@ -14,9 +16,18 @@ jobs:
     runs-on: ubuntu-latest
     env:
       WARDEN_MODEL: ${{ secrets.WARDEN_MODEL }}
+      WARDEN_OPENROUTER_API_KEY: ${{ secrets.WARDEN_OPENROUTER_API_KEY }}
       WARDEN_SENTRY_DSN: ${{ secrets.WARDEN_SENTRY_DSN }}
+      WARDEN_SERVICE_URL: ${{ vars.WARDEN_SERVICE_URL }}
+      WARDEN_SERVICE_TOKEN: ${{ secrets.WARDEN_SERVICE_TOKEN }}
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Checkout org Warden config
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          repository: ${{ github.repository_owner }}/.github
+          path: .warden-org
 
       - uses: pnpm/action-setup@02f6c237bd2518259fed6c71566509edfb3f2b74 # v4
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
@@ -28,13 +39,23 @@ jobs:
       - run: pnpm build
       - run: pnpm build:action
 
+      - name: Analyze
+        id: warden-analyze
+        uses: ./
+        with:
+          mode: analyze
+          base-config-path: .warden-org/warden.toml
+
       - uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547 # v1
         id: app-token
         with:
           app-id: ${{ secrets.WARDEN_APP_ID }}
           private-key: ${{ secrets.WARDEN_PRIVATE_KEY }}
 
-      - uses: ./
+      - name: Report
+        uses: ./
         with:
-          anthropic-api-key: ${{ secrets.WARDEN_ANTHROPIC_API_KEY }}
+          mode: report
+          base-config-path: .warden-org/warden.toml
+          findings-file: ${{ steps.warden-analyze.outputs.findings-file }}
           github-token: ${{ steps.app-token.outputs.token }}

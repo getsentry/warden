@@ -1,0 +1,8 @@
+version = 1
+
+[[skills]]
+name = "labeled-skill"
+
+[[skills.triggers]]
+type = "pull_request"
+actions = ["labeled"]

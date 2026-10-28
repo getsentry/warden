@@ -1,0 +1,36 @@
+{
+  "given": "verifier rejects a false positive that treats the fixture's Slack validation stub as the vulnerability",
+  "files": [
+    "fixtures/sentry-slack-options-load-unscoped-group/options_load.py"
+  ],
+  "candidate": {
+    "id": "verification-slack-signature-stub",
+    "severity": "high",
+    "confidence": "medium",
+    "title": "Slack request authentication is bypassed",
+    "description": "SlackOptionsLoadRequest.validate always returns True, so unauthenticated callers can invoke the options-load endpoint.",
+    "verification": "validate() returns True in this fixture, so the endpoint appears to skip Slack signature validation.",
+    "location": {
+      "path": "sentry-slack-options-load-unscoped-group/options_load.py",
+      "startLine": 13
+    }
+  },
+  "expect": {
+    "verdict": "reject"
+  },
+  "supporting_files": [
+    "fixtures/sentry-slack-options-load-unscoped-group/LICENSE.md"
+  ],
+  "notes": {
+    "source": "https://github.com/getsentry/sentry/pull/114185",
+    "repository": "getsentry/sentry",
+    "source_ref": "b0c31079134ae8f755161842361ae28ace2baef1",
+    "source_files": [
+      {
+        "fixturePath": "fixtures/sentry-slack-options-load-unscoped-group/options_load.py",
+        "sourcePath": "src/sentry/integrations/slack/webhooks/options_load.py",
+        "ref": "b0c31079134ae8f755161842361ae28ace2baef1"
+      }
+    ]
+  }
+}

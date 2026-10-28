@@ -1,0 +1,133 @@
+---
+title: Quickstart
+description: Install Warden, configure model credentials, and initialize a repository.
+editUrl: false
+---
+
+import CopyPrompt from "@sentry/starlight-theme/components/CopyPrompt.astro";
+
+export const setupPrompt = `Set up Warden in this repository for local and pull request reviews.
+
+## Source of truth
+
+Follow the current Warden documentation instead of guessing configuration:
+
+- Quickstart: https://warden.sentry.dev/quickstart.md
+- Repository setup: https://warden.sentry.dev/github/repository.md
+- Models and runtimes: https://warden.sentry.dev/config/models.md
+- Adding skills: https://warden.sentry.dev/skills/adding.md
+
+Read any linked Warden documentation you need while completing the setup.
+
+## Setup
+
+1. Inspect the repository and any existing Warden configuration. Preserve working configuration rather than replacing it.
+2. Run \`npx @sentry/warden init\` from the repository root. Review the generated \`warden.toml\`, \`.github/workflows/warden.yml\`, and \`.gitignore\` changes.
+3. Add the built-in reviews:
+   - \`npx @sentry/warden add security-review\`
+   - \`npx @sentry/warden add code-review\`
+4. Configure the skills for pull request reviews using the documented defaults. Adjust paths only when the repository structure requires it.
+5. Configure \`WARDEN_MODEL\` and its matching \`WARDEN_<PROVIDER>_API_KEY\` for local use. Identify the same values as GitHub Actions secrets for the generated workflow. Reuse an existing provider choice when one exists; otherwise tell me which model and credential are needed. Never write a secret into a tracked file.
+6. Run \`npx @sentry/warden\` to review the current branch and verify the setup. Fix configuration errors, but do not fix review findings unless I ask.
+
+## Done when
+
+The repository has a reviewed \`warden.toml\`, a Warden GitHub Actions workflow, and a successful local Warden run. Summarize the files changed, validation performed, and any remaining secret or GitHub configuration I must provide.`;
+
+## Set Up With Your Agent
+
+Copy these instructions into your local coding agent to install and configure Warden in the current project.
+
+<CopyPrompt content={setupPrompt} title="Set up Warden in this project" />
+
+## Install
+
+Install the CLI globally:
+
+```bash
+pnpm add -g @sentry/warden
+```
+
+## Authenticate
+
+Warden runs model-backed work through Pi by default. Set the model selector and
+the matching provider credential:
+
+```bash
+# OpenAI example
+export WARDEN_MODEL=openai/gpt-5.5
+export WARDEN_OPENAI_API_KEY=sk-...
+
+# Anthropic example
+export WARDEN_MODEL=anthropic/claude-sonnet-4-6
+export WARDEN_ANTHROPIC_API_KEY=sk-ant-...
+```
+
+CI environments require the same provider credentials as repository or
+organization secrets. See [Models and Runtimes](/config/models/) for config
+defaults, per-skill overrides, and Claude runtime selection.
+
+## Initialize
+
+Initialize Warden in a repository:
+
+```bash
+warden init
+```
+
+`warden init` creates:
+
+| File | Purpose |
+| --- | --- |
+| `warden.toml` | Skills, triggers, thresholds, and defaults. |
+| `.github/workflows/warden.yml` | Pull request workflow for GitHub Actions. |
+
+## Run Locally
+
+```bash
+warden
+```
+
+With no arguments, Warden reviews the current branch against the default branch.
+Use this before opening or updating a pull request.
+
+## Initial `warden.toml`
+
+The default config starts with the built-in security and correctness reviews:
+
+```toml title="warden.toml"
+version = 1
+
+[[skills]]
+name = "security-review"
+
+[[skills.triggers]]
+type = "pull_request"
+actions = ["opened", "synchronize", "reopened", "labeled"]
+draft = false
+labels = ["Warden"]
+
+[[skills]]
+name = "code-review"
+
+[[skills.triggers]]
+type = "pull_request"
+actions = ["opened", "synchronize", "reopened", "labeled"]
+draft = false
+labels = ["Warden"]
+```
+
+Add more skills when your codebase has specific review needs.
+
+## Next
+
+<div class="api-link-grid">
+  <a class="api-link-card" href="/local-review/">
+    <strong>Local Review</strong>
+    <span>Use staged, range, target, skill-specific, and autofix runs.</span>
+  </a>
+  <a class="api-link-card" href="/github/repository/">
+    <strong>Repository Setup</strong>
+    <span>Set up GitHub secrets and pull request reviews.</span>
+  </a>
+</div>

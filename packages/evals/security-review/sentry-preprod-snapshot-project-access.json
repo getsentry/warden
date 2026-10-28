@@ -1,0 +1,30 @@
+{
+  "given": "preprod snapshot endpoint fetches artifacts by organization only and returns or deletes project artifacts without checking project membership",
+  "files": [
+    "fixtures/sentry-preprod-snapshot-project-access/preprod_artifact_snapshot.py"
+  ],
+  "should_find": [
+    {
+      "finding": "preprod snapshot GET and DELETE load artifacts by organization_id only and do not call has_project_access before exposing manifests or deleting artifacts"
+    }
+  ],
+  "should_not_find": [
+    "exception logging",
+    "missing rate limiting"
+  ],
+  "supporting_files": [
+    "fixtures/sentry-preprod-snapshot-project-access/LICENSE.md"
+  ],
+  "notes": {
+    "source": "https://github.com/getsentry/sentry/pull/114169",
+    "repository": "getsentry/sentry",
+    "source_ref": "004819f53b2634ebe0faa1e9c59575c5203ff37b",
+    "source_files": [
+      {
+        "fixturePath": "fixtures/sentry-preprod-snapshot-project-access/preprod_artifact_snapshot.py",
+        "sourcePath": "src/sentry/preprod/api/endpoints/preprod_artifact_snapshot.py",
+        "ref": "004819f53b2634ebe0faa1e9c59575c5203ff37b"
+      }
+    ]
+  }
+}

@@ -1,0 +1,3 @@
+ALTER TABLE "memory_evidence" DROP CONSTRAINT "memory_evidence_memory_id_evidence_kind_created_at_pk";--> statement-breakpoint
+ALTER TABLE "memory_evidence" ADD COLUMN "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL;--> statement-breakpoint
+CREATE UNIQUE INDEX "memory_evidence_memory_observation_unique" ON "memory_evidence" USING btree ("memory_id","observation_id") WHERE "memory_evidence"."observation_id" IS NOT NULL;

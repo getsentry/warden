@@ -1,0 +1,279 @@
+---
+title: Overview
+description: Sentry benchmark comparisons for Warden.
+editUrl: false
+---
+
+import BenchmarkRuns from "../../components/BenchmarkRuns.astro";
+
+The Sentry benchmark is a small, qualitative readout for Warden's security
+review behavior. It compares runs against known vulnerabilities from the public
+`getsentry/sentry` repository.
+
+This is not an exhaustive eval and it is not a proof that Warden will catch
+every future issue. It is a way to compare implementations, prompts, models,
+and runtimes against the same historical security corpus.
+
+## What It Is
+
+The corpus currently contains 86 validated vulnerabilities across 79 files and
+6 historical Sentry commits. A benchmark run checks out each commit and scans
+only the files tied to known vulnerabilities at that commit.
+
+That keeps the run focused. We are measuring whether Warden can recognize the
+same root causes, not whether it can discover unrelated issues across the whole
+Sentry repository.
+
+## Comparison Matrix
+
+The score table lists the best scores first, ranked by known-corpus recall.
+The cost table ranks runs by recorded provider cost per known corpus finding.
+Complete runs with no failed chunks and per-chunk trace data enter automatically.
+Rows based on partial run data include an accounting note below the table.
+
+Timing remains in result metadata for diagnostics, but the overview does not
+rank it. Provider load, network conditions, retries, queueing, and the benchmark
+host can materially change wall time. Recall and cost are the stable comparison
+signals.
+
+<BenchmarkRuns />
+
+## Reading Results
+
+- **Known** is the headline score: corpus entries where scoring confirmed the
+  same bug in roughly the same location.
+- **Findings** is review volume before benchmark scoring. More findings can
+  improve recall, but they also create more review work.
+- **Cost** is the recorded provider cost for the run.
+- **Cost/known** divides total cost by unique known corpus findings. Lower is
+  more cost-efficient on this corpus. It does not include reviewer time.
+- Scoring is semantic. Same-file findings about different bugs do not count,
+  duplicates do not double-count, and one finding can cover multiple corpus
+  entries when it catches the same root bug.
+- A finding that does not match the corpus is not automatically a false
+  positive. It can describe another valid issue, a duplicate represented at a
+  different corpus commit, or an unsupported claim that review rejects.
+
+## Analysis
+
+### Grok 4.5 High
+
+Grok 4.5 high uses Pi through OpenRouter as `openrouter/x-ai/grok-4.5`, with
+GPT 5.6 Luna high for auxiliary calls. The Warden 0.47.0 run found 41 of 86
+known entries and emitted 55 findings. It cost $34.88, or $0.85 per known entry.
+It ranks first among the 20 stable rows for known-corpus recall and ninth for
+cost per known entry.
+
+K3 max remains cheaper at $19.37 but found nine fewer known entries. K3 high
+cost $28.14 and found 14 fewer. Grok 4.5 is the stronger recall result in this
+sample, while K3 max remains more cost-efficient.
+
+### Grok 4.6 High
+
+The controlled rerun puts Grok 4.5 and Grok 4.6 on the same Warden 0.47.0
+pipeline. Both use Pi, high effort, GPT 5.6 Luna high for auxiliary calls, the
+same six corpus commits, parallelism 4, and a 100-turn limit.
+
+Grok 4.5 found 41 of 86 known entries, emitted 55 final findings, and cost
+$34.88. Grok 4.6 found 25, emitted 38, and cost $78.47. They share 22 known
+entries. Grok 4.5 found 19 that Grok 4.6 missed, while Grok 4.6 found three that
+Grok 4.5 missed. Grok 4.6 found 16 fewer known issues at 2.25 times the clean
+provider cost. Cost per known entry was $0.85 for Grok 4.5 and $3.14 for Grok
+4.6.
+
+Grok 4.5 ranks first among the 20 stable rows for recall and ninth for cost per
+known entry. Grok 4.6 ranks ninth and seventeenth. The clean shard aggregates
+were 3 hours 31 minutes and 8 hours 23 minutes. The overview does not rank
+timing because provider and host conditions are not controlled tightly enough.
+
+The final 16-finding gap is a Warden system result, not a pure model-quality
+gap. Before Warden schema validation, verification, and merging, Grok 4.5's 80
+primary candidates covered 44 unique corpus entries. Grok 4.6's 65 candidates
+covered 38. The raw primary-output gap was six.
+
+Pipeline handling widened that gap. Grok 4.5 emitted two candidates with a
+`verification` array where Warden expects a string. Grok 4.6 emitted 12. Those
+candidates did not enter final Warden output, and seven corpus entries absent
+from Grok 4.6's final score were present in the rejected candidates. Auxiliary
+merging also combined unrelated issues, including client-secret JWT replay
+with Mailgun replay and Seer RPC authorization with unrelated project
+endpoints. Final scoring excludes unsupported merged locations.
+
+The first Grok 4.6 attempts for two shards each contained one chunk that ended
+with reasoning but no final text. Provider traces reported success with a
+`stop` finish reason; Warden recorded `extraction_no_findings_json`. The clean
+comparison excludes those complete shard attempts. Published clean spend is
+$78.47. Actual Grok 4.6 spend including the failed attempts was $117.19.
+
+The earlier rows scored 37 for Grok 4.5 and 19 for Grok 4.6, so the direction
+replicated under the controlled rerun. The primary outputs still favor Grok
+4.5, but Warden's schema and auxiliary pipeline explain part of the final gap.
+These remain single runs, not a deterministic model ranking. The result does
+not support moving the benchmark or production model lane to Grok 4.6.
+
+### Gemini 3.8 Flash High
+
+Gemini 3.8 Flash high uses Pi through OpenRouter as
+`openrouter/google/gemini-3.8-flash`. It found 19 of 86 known entries and
+emitted 25 findings. This puts it behind Claude Opus 4.8 high on Pi and ahead
+of Claude Opus 4.8 medium and DeepSeek V4 Flash on known-corpus recall. Eighteen
+emitted findings matched 19 unique corpus entries because one Atlassian JWT
+finding covered two entries. The other seven findings described different
+issues and did not count.
+
+The matched findings cover a broad range of security boundaries. Gemini found
+cross-organization, cross-project, and cross-team authorization gaps, OAuth
+client-secret exposure, untrusted JWT algorithm selection, weak webhook and
+transport controls, and two client-side injection issues. It also caught
+narrower logic errors, including the accept-invite deletion fallthrough,
+pinned-search ownership bypass, and arbitrary GCS transfer-job trigger.
+
+Gemini cost $78.17, or $4.11 per known corpus finding. That is nearly the same
+as Grok 4.6 high at $78.47, while Gemini found six fewer known entries.
+DeepSeek V4 Flash found one fewer for $10.11. Gemini recorded 311 million input
+tokens, the highest total in the matrix.
+
+This partial run could score at most 21/86 if completed. Recorded cost is a
+lower bound.
+
+### Kimi K3 Effort Levels and K2.6
+
+The historical K3 max run remains the strongest Kimi result on this corpus. It
+found 32 of 86 known entries. K2.6 found 31, K3 high found 27, and K3 low found
+16. Across the 20 stable rows now published, those results rank fourth, fifth,
+seventh, and eighteenth by known-corpus recall.
+
+K3 max also has the best Kimi cost efficiency at $19.37, or $0.61 per known entry.
+K3 low cost $10.28, or $0.64 per known entry, but found half as many known
+issues. K3 high cost $28.14, or $1.04 per known entry. K2.6 cost $67.18, or
+$2.17 per known entry. By cost per known entry, K3 max ranks third overall,
+K3 low fourth, K3 high eleventh, and K2.6 sixteenth.
+
+K2.6 spent much more time carrying context through long investigations. Its
+selected traces contain 2,440 agent turns and the row records 105.7 million
+input tokens. K3 max used 701 turns and 9.7 million input tokens. The extra
+work did not improve recall. For a single Kimi review, max is the best default
+in these samples. Low is useful as a cheaper screen. High and K2.6 do not move
+the recall-cost frontier.
+
+The matched sets are not nested. K2.6 and K3 max share only 13 known entries
+and cover 50 in union. K3 low and max share 11 and cover 37 in union. Similar
+headline scores do not mean that two runs find the same bugs, and a higher
+effort run is not a strict superset of a lower effort run. These remain
+single-run samples, not deterministic model guarantees.
+
+The corpus matches are the strongest evidence that findings are real: scoring
+requires the same root bug at the same historical commit. The non-matches were
+also reviewed individually. Some describe credible separate issues, including
+timing-unsafe flag-secret comparisons, a Slack autofix membership gap, and a
+conditional Bitbucket forwarded-IP bypass. Others are conditional or
+unsupported, such as treating a token encrypted for Seer as exposed plaintext.
+They remain `not-known`, receive no recall credit, and still need owner triage
+or exploit reproduction before being treated as confirmed vulnerabilities.
+
+K3 low completed all 156 chunks without repair. K2.6 and K3 high use exact
+replacements only for failed chunks; clean original chunks were not resampled.
+Their published costs include the full main runs and every targeted repair.
+Raw JSONL traces remain withheld pending sensitive-data review.
+
+### GPT 5.6 Luna High
+
+GPT 5.6 Luna high uses Pi directly as `openai/gpt-5.6-luna`. It found 36 of
+86 known entries and emitted 57 findings. This puts it behind GPT 5.5 high and
+Grok 4.5 high on known-corpus recall. Thirty-three emitted findings matched 36
+unique corpus entries. The other 24 findings described different bugs and did
+not count.
+
+The run cost $56.98, or $1.58 per known corpus finding. All 156 final chunks
+completed with traces. One MS Teams chunk lost its terminal OpenAI stream
+event in the main shard. A parallelism-1 repair replaced that exact chunk, and
+the recorded cost includes both the main shard and the full repair run.
+
+### Sonnet 5 High on Pi
+
+Sonnet 5 high found 22 of 86 known entries and emitted 27 findings. That makes
+it competitive, but not better than Sonnet 4.6 high on this corpus. It costs
+more than Sonnet 4.6 on Pi, emits fewer final findings, and trails Sonnet 4.6
+by three known matches.
+
+### Sonnet 4.6: Claude SDK vs Pi
+
+This is the clearest runtime comparison. Pi found 25 of 86 known entries. The
+Claude SDK found 24 of 86. Both emitted 32 findings.
+
+The quality result is close. The operating profile is not. Claude SDK recorded
+$103.59 total cost, compared to $19.84 for Pi. The trace summaries point to
+larger repeated context in Claude SDK runs, not a matching gain in recall.
+
+### Opus 4.8 High: Claude SDK vs Pi
+
+Pi found 21 of 86 known entries and emitted 24 findings. Claude SDK found 17
+and emitted 17. Pi was also cheaper: $21.31 total versus $79.56.
+
+The trace shape differs from Sonnet 4.6. Pi does more turns and more tool
+executions here, but each turn carries much less input context. Claude SDK's
+extra cost is mostly context volume, not more tool fanout.
+
+### Opus 4.8 High vs Opus 4.6 High
+
+The direct Pi comparison favors Opus 4.6 high on recall. Opus 4.6 found 23 of
+86 known entries. Opus 4.8 found 21. Both emitted 24 findings.
+
+Opus 4.8 is more selective under the current prompt and corpus. It exits more
+investigations earlier, which lowers cost and tool fanout, but it misses enough
+known vulnerabilities to trail Opus 4.6 here.
+
+### DeepSeek V4 XHigh
+
+DeepSeek V4 Pro found 23 of 86 known entries and emitted 30 findings. V4 Flash
+found 18 and emitted 27.
+
+Flash is cheaper because the model price is lower, not because it does less
+work. It used more turns, more tool executions, and more scan input tokens than
+V4 Pro. The result is not just a cheaper Opus-shaped run; it explores much more
+context and lands on a different set of known findings.
+
+### GLM 5.2 High
+
+GLM 5.2 uses Pi through OpenRouter as `openrouter/z-ai/glm-5.2` with explicit
+`--effort high`. OpenRouter reports `high` as the model's default reasoning
+effort, with `xhigh` also available. The recorded row scans the same 156 chunks
+and leaves Warden's finding verifier enabled. It found 15 of 86 known corpus
+entries and emitted 18 total findings.
+
+The main result is lower recall, not noisy output. Fifteen of the 18 emitted
+findings matched known corpus entries. The three non-matches were same-file or
+nearby security findings that did not match the corpus issue: a LaunchDarkly
+timing-unsafe compare rather than the Statsig timestamp freshness bug, a
+Bitbucket forwarded-IP/signature bypass rather than invalid-signature HMAC
+logging, and a Sentry App issue-link SSRF rather than the event-scope corpus
+issue.
+
+Operationally, GLM 5.2 exposed a Warden compatibility problem. Many clean
+no-finding chunks returned prose instead of the required `{"findings":[]}` JSON.
+Those records had traces, usage, and zero findings, but Warden marked them as
+`extraction_no_findings_json`. Four shards therefore use combined-clean
+artifacts: traced zero-finding extraction failures were normalized to empty
+ok chunks, and targeted repair records were used where reruns produced cleaner
+records. One large `seer_rpc.py` chunk also exceeded OpenRouter's effective
+1M-token context limit in the full shard; rerunning the failed target set with
+`--parallel 1` removed the context failure.
+
+Recorded cost for the validated artifacts is $5.26: $4.94 scan cost plus $0.32
+post-processing and verification overhead. That excludes the abandoned `xhigh`
+attempt and dirty failed rerun artifacts. GLM 5.2 used 8.3M input tokens and
+422k output tokens across the validated row, with a 39.4-second P50 chunk time
+and a 6.6-minute P90. The row is useful, but the parser issue should be fixed
+before treating GLM 5.2 as a routine unattended benchmark target.
+
+## Corpus
+
+The [Sentry vulnerability corpus](/benchmarking/sentry-vulnerability-corpus/)
+lists the known issues used for scoring. Each entry includes the repository
+SHA, the affected file, a short vulnerability description, and the relevant
+code snippet.
+
+## Run It
+
+Use the [running guide](/benchmarking/running/) to reproduce the benchmark,
+add a new model run, and record sanitized result metadata.

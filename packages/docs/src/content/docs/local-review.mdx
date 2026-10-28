@@ -1,0 +1,71 @@
+---
+title: Local Review
+description: Run Warden locally before opening or updating a pull request.
+editUrl: false
+---
+
+Running Warden locally is the fastest way to catch issues while the code is
+fresh.
+
+## Review Current Branch
+
+Run Warden with no arguments to review the current branch against the default
+branch:
+
+```bash
+warden
+```
+
+Warden prefers the local `origin/<default>` ref when it exists. That mirrors the
+pull request workflow without requiring a network fetch.
+
+## Review Staged Changes
+
+For pre-commit workflows, analyze only what is staged:
+
+```bash
+warden --staged
+```
+
+This uses `git diff --cached`.
+
+## Review a Git Range
+
+Use an explicit git range when the default branch is not the right comparison
+point:
+
+```bash
+warden main..HEAD
+warden HEAD~3..HEAD
+```
+
+## Analyze Targets
+
+Pass files, directories, or an `@file` containing one target per line:
+
+```bash
+warden src/auth.ts
+warden src/api/
+warden @targets.txt
+```
+
+## Run One Skill
+
+Skip trigger matching and run a specific skill:
+
+```bash
+warden --skill security-review
+warden --skill code-review
+warden --skill ./skills/api-review
+```
+
+## Apply Fixes
+
+Use `--fix` to apply suggested fixes interactively:
+
+```bash
+warden --fix
+```
+
+Warden prompts before applying each change.
+

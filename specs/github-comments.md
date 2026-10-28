@@ -9,7 +9,15 @@ How Warden formats and manages PR comments: format conventions, deduplication, a
 ```
 **Title stating what is broken or wrong**
 
-2-4 sentence description. Root cause first, user-visible consequence last.
+One short sentence stating what breaks and why it matters.
+
+<details><summary>Evidence</summary>
+
+- `createThing()` passes the caller-controlled value into `runThing()`.
+- The adjacent write path checks `resolveThing()` before calling the same helper.
+- This read path skips that guard, so access depends on the broader token scope.
+
+</details>
 
 <details><summary>Also found at N additional locations</summary>
 
@@ -23,6 +31,7 @@ Identified by Warden `skill-name` · `FINDING-ID`
 ```
 
 - Title: bold, no emoji, no ID, no confidence, no severity
+- Evidence details render in a collapsible block when present
 - Severity is communicated via GitHub check annotation level (failure/warning/notice)
 - Footer: skill name and finding ID in backticks
 - Additional locations in collapsible details block

@@ -50,11 +50,15 @@ pnpm cli run --json
 ## Project Structure
 
 ```
-src/
-├── action/       # GitHub Action entry point
-├── cli/          # Local CLI
-├── config/       # Config loading (warden.toml)
-├── skills/       # Built-in skills
-├── triggers/     # Trigger matching logic
-└── types/        # Type definitions
+packages/
+├── warden/       # @sentry/warden package
+│   └── src/
+│       ├── action/    # GitHub Action entry point
+│       ├── cli/       # Local CLI
+│       ├── config/    # Config loading (warden.toml)
+│       ├── skills/    # Built-in skills
+│       ├── triggers/  # Trigger matching logic
+│       └── types/     # Type definitions
+├── docs/         # Docs site
+└── evals/        # Eval runner, scenarios, and fixtures
 ```

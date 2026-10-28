@@ -1,0 +1,8 @@
+version = 1
+
+[[skills]]
+name = "org-skill"
+
+[[skills.triggers]]
+type = "pull_request"
+actions = ["opened", "synchronize"]

@@ -1,0 +1,280 @@
+---
+title: Workflow
+description: GitHub Actions workflow configuration and action inputs.
+editUrl: false
+---
+
+This is the GitHub Actions layer, not `warden.toml`. `warden.toml` controls
+which skills run and how findings are reported. The workflow controls when
+GitHub starts Warden, which credentials are available, and which action inputs
+are passed.
+
+`warden init` generates a split analyze/report starter workflow. Add a GitHub App
+token step immediately before reporting when you want branded comments.
+
+```yaml title=".github/workflows/warden.yml"
+name: Warden
+
+permissions:
+  contents: write
+  pull-requests: write
+  checks: write
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled]
+
+env:
+  WARDEN_MODEL: ${{ secrets.WARDEN_MODEL }}
+  WARDEN_OPENAI_API_KEY: ${{ secrets.WARDEN_OPENAI_API_KEY }}
+  WARDEN_ANTHROPIC_API_KEY: ${{ secrets.WARDEN_ANTHROPIC_API_KEY }}
+
+jobs:
+  warden:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Analyze
+        id: warden-analyze
+        uses: getsentry/warden@v0
+        with:
+          mode: analyze
+
+      - name: Report
+        uses: getsentry/warden@v0
+        with:
+          mode: report
+          findings-file: ${{ steps.warden-analyze.outputs.findings-file }}
+```
+
+## Global Workflow With Layered Config
+
+Put the workflow file in your org `.github` repository to run Warden everywhere
+with one mandatory workflow definition. Add the second checkout when you want a
+shared base `warden.toml`.
+
+```yaml title=".github/workflows/warden.yml"
+name: Warden
+
+permissions:
+  contents: write
+  pull-requests: write
+  checks: write
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled]
+
+env:
+  WARDEN_MODEL: ${{ secrets.WARDEN_MODEL }}
+  WARDEN_OPENAI_API_KEY: ${{ secrets.WARDEN_OPENAI_API_KEY }}
+  WARDEN_ANTHROPIC_API_KEY: ${{ secrets.WARDEN_ANTHROPIC_API_KEY }}
+
+jobs:
+  warden:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout target repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Checkout org GitHub repo
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/.github
+          path: .warden-org
+
+      - name: Analyze
+        id: warden-analyze
+        uses: getsentry/warden@v0
+        with:
+          mode: analyze
+          base-config-path: .warden-org/warden.toml
+          base-skill-root: .warden-org
+
+      - name: Report
+        uses: getsentry/warden@v0
+        with:
+          mode: report
+          findings-file: ${{ steps.warden-analyze.outputs.findings-file }}
+          base-config-path: .warden-org/warden.toml
+          base-skill-root: .warden-org
+```
+
+The first checkout is the repository being reviewed. The second checkout
+provides the org-wide base config and local shared skills.
+
+If the target repo also has a root `warden.toml`, Warden loads it in the same
+run. Repo-local config can add skills and repo-local defaults, but it does not
+weaken org-enforced base skills.
+
+## Split Analyze and Report
+
+The recommended workflow runs analysis and reporting as separate action steps.
+This keeps long analysis runs from holding GitHub write credentials. GitHub App
+installation tokens expire after 1 hour, and a long analysis run can outlive a
+token that was created before Warden starts.
+
+Use `mode: analyze` first. It runs skills and writes a structured findings file
+without creating checks, posting comments, or resolving stale comments. Then
+create the GitHub App token and run `mode: report` against that findings file.
+Split modes are only supported for pull request workflows. Report mode reloads
+`warden.toml`, applies the report step's current reporting settings, creates
+completed checks, and posts comments.
+
+```yaml title=".github/workflows/warden.yml"
+jobs:
+  warden:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Analyze
+        id: warden-analyze
+        uses: getsentry/warden@v0
+        with:
+          mode: analyze
+
+      - name: Create Warden app token
+        id: warden-token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ secrets.WARDEN_APP_ID }}
+          private-key: ${{ secrets.WARDEN_PRIVATE_KEY }}
+
+      - name: Report
+        uses: getsentry/warden@v0
+        with:
+          mode: report
+          findings-file: ${{ steps.warden-analyze.outputs.findings-file }}
+          github-token: ${{ steps.warden-token.outputs.token }}
+```
+
+If you use `config-path`, `base-config-path`, `base-skill-root`, or action-level
+reporting inputs such as `fail-on`, `report-on`, `request-changes`,
+`fail-check`, or `max-findings`, pass the intended values to the report step.
+Report mode reads config again from the checkout and applies the report step's
+inputs; the findings file does not store a copy of `warden.toml`.
+
+## Required Status Checks
+
+If Warden is a required status check, require the core `warden` check or a
+per-skill check like `warden: security-review`.
+
+Keep workflow-level `paths` and `paths-ignore` filters off required Warden
+workflows. Let Warden start, then let `warden.toml` decide which triggers match.
+For each configured pull request trigger, Warden creates a check run. Triggers
+that do not actually run for the current event complete as neutral.
+
+Do not set `post-checks: false` on a repo where `warden` or a per-skill check
+is a required status check — Warden stops creating that check entirely, so it
+never reports and the required check blocks every PR indefinitely.
+
+## Action Inputs
+
+<dl class="sentry-key-value-list">
+  <div>
+    <dt>
+      <code>mode</code>
+      <span class="sentry-property-meta">run | analyze | report</span>
+    </dt>
+    <dd>Action mode. Default: <code>run</code> for compatibility. New pull request workflows should use <code>analyze</code> and <code>report</code> to split analysis from GitHub write reporting.</dd>
+  </div>
+  <div>
+    <dt>
+      <code>findings-file</code>
+      <span class="sentry-property-meta">path</span>
+    </dt>
+    <dd>Structured findings file to read in <code>mode: report</code>. Usually the <code>findings-file</code> output from the analyze step.</dd>
+  </div>
+  <div>
+    <dt>
+      <code>github-token</code>
+      <span class="sentry-property-meta">string</span>
+    </dt>
+    <dd>GitHub token for posting comments. Default: <code>GITHUB_TOKEN</code>.</dd>
+  </div>
+  <div>
+    <dt>
+      <code>anthropic-api-key</code>
+      <span class="sentry-property-meta">string</span>
+    </dt>
+    <dd>Anthropic API key input. Prefer <code>WARDEN_ANTHROPIC_API_KEY</code> env for new workflows.</dd>
+  </div>
+  <div>
+    <dt>
+      <code>base-config-path</code>
+      <span class="sentry-property-meta">optional</span>
+    </dt>
+    <dd>Path to a base <code>warden.toml</code> loaded before repo config.</dd>
+  </div>
+  <div>
+    <dt>
+      <code>base-skill-root</code>
+      <span class="sentry-property-meta">optional</span>
+    </dt>
+    <dd>Repo root containing local shared skills used by the base config.</dd>
+  </div>
+  <div>
+    <dt>
+      <code>config-path</code>
+      <span class="sentry-property-meta">string</span>
+    </dt>
+    <dd>Path to the repo-local config. Default: <code>warden.toml</code>.</dd>
+  </div>
+  <div>
+    <dt>
+      <code>fail-on</code>
+      <span class="sentry-property-meta">severity</span>
+    </dt>
+    <dd>Minimum severity to fail the check.</dd>
+  </div>
+  <div>
+    <dt>
+      <code>report-on</code>
+      <span class="sentry-property-meta">severity</span>
+    </dt>
+    <dd>Minimum severity to post comments.</dd>
+  </div>
+  <div>
+    <dt>
+      <code>max-findings</code>
+      <span class="sentry-property-meta">number</span>
+    </dt>
+    <dd>Maximum findings to report. Default: <code>50</code>.</dd>
+  </div>
+  <div>
+    <dt>
+      <code>request-changes</code>
+      <span class="sentry-property-meta">boolean</span>
+    </dt>
+    <dd>Whether to request changes on PR reviews. Default: <code>false</code>.</dd>
+  </div>
+  <div>
+    <dt>
+      <code>fail-check</code>
+      <span class="sentry-property-meta">boolean</span>
+    </dt>
+    <dd>Whether to fail the check run. Default: <code>false</code>.</dd>
+  </div>
+  <div>
+    <dt>
+      <code>post-checks</code>
+      <span class="sentry-property-meta">boolean</span>
+    </dt>
+    <dd>Whether to create/update the core <code>warden</code> check and per-skill checks. Set to <code>false</code> to post only PR review comments. Default: <code>true</code>. See <a href="#required-status-checks">Required Status Checks</a> before disabling this on a repo with a required Warden check.</dd>
+  </div>
+  <div>
+    <dt>
+      <code>parallel</code>
+      <span class="sentry-property-meta">number</span>
+    </dt>
+    <dd>Maximum concurrent matched trigger executions and hunk analyses unless <code>runner.concurrency</code> is set. Default: <code>5</code>.</dd>
+  </div>
+</dl>

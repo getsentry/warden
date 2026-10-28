@@ -1,0 +1,43 @@
+{
+  "runId": "sentry-security-review-pi-sonnet-4-6-s-2026-05-05-002",
+  "corpusId": "sentry-vulnerability-corpus",
+  "repository": "getsentry/sentry",
+  "targetSha": "7f41cc502faa1088108e896565409be72d92bc38",
+  "checkoutSha": "7f41cc502faa1088108e896565409be72d92bc38",
+  "wardenRunId": "3ecac058-36f2-4118-84c4-449699056312",
+  "wardenVersion": "0.34.0",
+  "skill": "@sentry/warden:security-review@0.34.0",
+  "model": "anthropic/claude-sonnet-4-6",
+  "runtime": "pi",
+  "reportOn": "low",
+  "minConfidence": "low",
+  "targetMode": "corpus-files-for-sha",
+  "targetList": "targets-7f41cc502faa1088108e896565409be72d92bc38.txt",
+  "targetFindingCount": 43,
+  "targetFileCount": 38,
+  "filesAnalyzed": 38,
+  "chunksTotal": 80,
+  "chunksAnalyzed": 80,
+  "chunksFailed": 0,
+  "findingsTotal": 12,
+  "findingsBySeverity": {
+    "medium": 10,
+    "low": 2
+  },
+  "findingsByConfidence": {
+    "high": 9,
+    "medium": 2,
+    "low": 1
+  },
+  "durationMs": 1131430,
+  "inputTokens": 3339505,
+  "outputTokens": 199291,
+  "cacheReadInputTokens": 2753138,
+  "cacheCreationInputTokens": 585895,
+  "analysisCostUSD": 6.01382865,
+  "auxiliaryCostUSD": 0.07055,
+  "costUSD": 6.08437865,
+  "rawJsonl": "sentry-security-review-pi-sonnet-4-6-s-2026-05-05-002.jsonl",
+  "rawArtifactStatus": "withheld-pending-sensitive-review",
+  "notes": "Raw JSONL output and repo-local run log were byte-identical. Use JSONL totals as canonical; the live console reported a different transient cost."
+}

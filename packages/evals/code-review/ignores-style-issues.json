@@ -1,0 +1,18 @@
+{
+  "given": "functionally correct code with style issues, verbose conditionals, and magic numbers",
+  "files": [
+    "fixtures/ignores-style-issues/utils.ts"
+  ],
+  "should_find": [
+    {
+      "finding": "no bugs: the code is functionally correct despite style and readability issues, so zero findings are expected",
+      "required": false
+    }
+  ],
+  "should_not_find": [
+    "inconsistent naming convention",
+    "missing JSDoc comments",
+    "verbose conditional that could be simplified",
+    "magic numbers in discount calculation"
+  ]
+}

@@ -1,0 +1,30 @@
+{
+  "given": "Autofix automation settings GET lists every project in the organization instead of using OrganizationEndpoint.get_projects",
+  "files": [
+    "fixtures/sentry-autofix-settings-get-project-access/organization_autofix_automation_settings.py"
+  ],
+  "should_find": [
+    {
+      "finding": "Autofix automation settings GET queries all organization projects directly and returns settings for projects the caller cannot access"
+    }
+  ],
+  "should_not_find": [
+    "repository provider validation",
+    "audit log contents"
+  ],
+  "supporting_files": [
+    "fixtures/sentry-autofix-settings-get-project-access/LICENSE.md"
+  ],
+  "notes": {
+    "source": "https://github.com/getsentry/sentry/pull/114977",
+    "repository": "getsentry/sentry",
+    "source_ref": "841e962b7e9af1f442a7c9da6eb6ec7e2a01843a",
+    "source_files": [
+      {
+        "fixturePath": "fixtures/sentry-autofix-settings-get-project-access/organization_autofix_automation_settings.py",
+        "sourcePath": "src/sentry/seer/endpoints/organization_autofix_automation_settings.py",
+        "ref": "841e962b7e9af1f442a7c9da6eb6ec7e2a01843a"
+      }
+    ]
+  }
+}

@@ -1,0 +1,16 @@
+version = 1
+
+[defaults]
+postChecks = false
+
+[defaults.auxiliary]
+model = "anthropic/org-aux-model"
+effort = "high"
+maxRetries = 7
+
+[[skills]]
+name = "org-skill"
+
+[[skills.triggers]]
+type = "pull_request"
+actions = ["opened", "synchronize"]

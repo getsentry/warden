@@ -1,0 +1,38 @@
+{
+  "given": "Sentry detector endpoints build validator context for detector type feature flag checks targeted at the requesting actor",
+  "files": [
+    "fixtures/sentry-detector-validator-user-context/organization_detector_details.py",
+    "fixtures/sentry-detector-validator-user-context/organization_detector_index.py"
+  ],
+  "supporting_files": [
+    "fixtures/sentry-detector-validator-user-context/LICENSE.md"
+  ],
+  "should_find": [
+    {
+      "finding": "get_detector_validator omits request.user from the validator context, so detector validators that evaluate actor-targeted feature flags cannot see the requesting user and reject or mis-handle enabled detector flows"
+    }
+  ],
+  "should_not_find": [
+    "missing tests",
+    "style, formatting, or naming issues"
+  ],
+  "notes": {
+    "source": "https://github.com/getsentry/sentry/commit/f19882e5a3f81e2d98a05af58c5faa1b406499c8",
+    "repository": "getsentry/sentry",
+    "source_ref": "93b7cee973b5da40d542b5f7d13c639752ee508b",
+    "source_files": [
+      {
+        "fixturePath": "fixtures/sentry-detector-validator-user-context/organization_detector_details.py",
+        "sourcePath": "src/sentry/workflow_engine/endpoints/organization_detector_details.py",
+        "ref": "93b7cee973b5da40d542b5f7d13c639752ee508b"
+      },
+      {
+        "fixturePath": "fixtures/sentry-detector-validator-user-context/organization_detector_index.py",
+        "sourcePath": "src/sentry/workflow_engine/endpoints/organization_detector_index.py",
+        "ref": "93b7cee973b5da40d542b5f7d13c639752ee508b"
+      }
+    ],
+    "side": "parent-of-fix",
+    "body": "Regression seed from Sentry fix f19882e5a3f81e2d98a05af58c5faa1b406499c8. get_detector_validator omits request.user from the validator context, so detector validators that evaluate actor-targeted feature flags cannot see the requesting user and reject or mis-handle enabled detector flows"
+  }
+}

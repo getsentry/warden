@@ -1,0 +1,38 @@
+{
+  "source": "https://github.com/getsentry/sentry-python/pull/7780",
+  "findings": [
+    {
+      "id": "YNL-KUW",
+      "severity": "high",
+      "confidence": "high",
+      "title": "A local SERVER_NAME marks public WSGI requests as localhost",
+      "description": "The WSGI middleware passes `SERVER_NAME` as `url_host` to `is_localhost()`. Since `SERVER_NAME` can describe the internal server and any local input makes the helper return true, a deployment with `SERVER_NAME=localhost` or `127.0.0.1` will mark requests as localhost even when `HTTP_HOST` and the client IP are public. If the inbound localhost filter uses this attribute, it can discard production traffic. Use the effective public request host instead, and add a regression test with a local `SERVER_NAME` and public `HTTP_HOST` and client IP.",
+      "location": {
+        "path": "sentry_sdk/integrations/wsgi.py",
+        "startLine": 24
+      }
+    },
+    {
+      "id": "XNA-MC6",
+      "severity": "high",
+      "confidence": "high",
+      "title": "Local SERVER_NAME marks public WSGI requests as localhost",
+      "description": "In `wsgi.py`, `is_localhost(url_host=environ[\"SERVER_NAME\"])` treats the internal bind name as the request host, so `SERVER_NAME=localhost|127.0.0.1` with a public `HTTP_HOST` still sets `sentry.is_localhost=True` and can drop production traffic via inbound filters. Pass the public host from `get_host(...)` (or omit `url_host` when `HTTP_HOST` is set), and add a regression case with local `SERVER_NAME` + public Host/IP expecting False.",
+      "location": {
+        "path": "tests/integrations/wsgi/test_wsgi.py",
+        "startLine": 1361
+      }
+    },
+    {
+      "id": "89W-DUX",
+      "severity": "medium",
+      "confidence": "high",
+      "title": "Client-controlled X-Forwarded-For forces localhost client_ip",
+      "description": "is_localhost() uses get_client_ip(), which prefers the first X-Forwarded-For hop with no use_x_forwarded_for gate, so a client can send X-Forwarded-For: 127.0.0.1 and get sentry.is_localhost=true. Prefer REMOTE_ADDR unless forwarded headers are explicitly trusted.",
+      "location": {
+        "path": "sentry_sdk/integrations/wsgi.py",
+        "startLine": 24
+      }
+    }
+  ]
+}

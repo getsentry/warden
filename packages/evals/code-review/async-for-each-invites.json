@@ -1,0 +1,15 @@
+{
+  "given": "project invite sending uses forEach with an async callback and returns completed invite results for audit logging",
+  "files": [
+    "fixtures/async-for-each-invites/invites.ts"
+  ],
+  "should_find": [
+    {
+      "finding": "sendProjectInvites returns before the async forEach callbacks finish, so sent is 0, results are empty, and invite failures are detached from the returned promise"
+    }
+  ],
+  "should_not_find": [
+    "style, formatting, or naming issues",
+    "the lack of batching or rate limiting"
+  ]
+}

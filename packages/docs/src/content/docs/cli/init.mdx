@@ -1,0 +1,32 @@
+---
+title: warden init
+description: Initialize Warden in a repository.
+editUrl: false
+---
+
+```bash
+warden init [options]
+```
+
+Initializes Warden in your project. Creates a configuration file and GitHub
+workflow.
+
+## Options
+
+| Option | Purpose |
+| --- | --- |
+| `-C, --cwd <path>` | Run as if invoked from this directory. |
+| `-f, --force` | Overwrite existing files. |
+| `--quiet` | Errors and final summary only. |
+| `-v, --verbose` | Increase verbosity. Repeat as `-vv` or combine with `--debug`. |
+| `--debug` | Enable debug output. |
+| `--log` | Use log output mode. |
+| `--color / --no-color` | Override color detection. |
+| `-h, --help` | Show help for this command. |
+
+## Examples
+
+```bash
+warden init
+warden init --force
+```

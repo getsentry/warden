@@ -1,0 +1,20 @@
+version = 1
+
+[runner]
+concurrency = 2
+
+[defaults]
+auxiliaryMaxRetries = 3
+
+[defaults.auxiliary]
+effort = "medium"
+
+[defaults.synthesis]
+model = "anthropic/repo-synth-model"
+
+[[skills]]
+name = "test-skill"
+paths = ["src/**/*.ts"]
+
+[[skills.triggers]]
+type = "schedule"

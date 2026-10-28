@@ -1,0 +1,27 @@
+---
+title: Runner
+description: Configure Warden run-level concurrency.
+editUrl: false
+---
+
+Runner settings control run-level concurrency.
+
+```toml title="warden.toml"
+[runner]
+concurrency = 1
+```
+
+<dl class="sentry-key-value-list">
+  <div>
+    <dt>
+      <code>concurrency</code>
+      <span class="sentry-property-meta">number</span>
+    </dt>
+    <dd>Maximum concurrent hunk analyses across running CLI skills. In GitHub Actions, it also limits matched trigger dispatch.</dd>
+  </div>
+</dl>
+
+If unset, the CLI uses `4` and the Action uses the workflow `parallel` input.
+
+For CLI runs, `--parallel` overrides `runner.concurrency`. In GitHub Actions,
+`runner.concurrency` overrides the workflow `parallel` input.

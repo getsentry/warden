@@ -1,0 +1,58 @@
+---
+title: Skills
+description: Skills define what Warden should look for.
+editUrl: false
+---
+
+Skills are Markdown files that tell Warden what to look for. They are review
+specialists: one skill can focus on AppSec, another on API contracts, another
+on performance, and another on your local architectural rules.
+
+## Built-ins
+
+Warden ships with two baseline skills:
+
+| Skill | Purpose |
+| --- | --- |
+| `security-review` | Baseline application security coverage. |
+| `code-review` | Correctness bugs and behavioral regressions. |
+
+Add them by name:
+
+```bash
+warden add security-review
+warden add code-review
+```
+
+## Custom Skills
+
+Custom skills live in a directory with a `SKILL.md` file:
+
+```text title="Skill directory"
+.agents/skills/
+└── api-review/
+    └── SKILL.md
+```
+
+The directory name and frontmatter `name` should match.
+
+## Next
+
+<div class="api-link-grid">
+  <a class="api-link-card" href="/skills/built-in/">
+    <strong>Built-in Skills</strong>
+    <span>Start with Warden's baseline reviews.</span>
+  </a>
+  <a class="api-link-card" href="/skills/adding/">
+    <strong>Adding Skills</strong>
+    <span>Add built-in, remote, and local skills to a project.</span>
+  </a>
+  <a class="api-link-card" href="/skills/writing/">
+    <strong>Writing Skills</strong>
+    <span>Create focused SKILL.md files for your codebase.</span>
+  </a>
+  <a class="api-link-card" href="/skills/discovery/">
+    <strong>Discovery</strong>
+    <span>Understand resolution order and skill directories.</span>
+  </a>
+</div>

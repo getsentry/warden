@@ -7,6 +7,9 @@ Observability via Sentry: tracing, error context, and business metrics. All tele
 - [OpenTelemetry GenAI semantic conventions](https://opentelemetry.io/docs/specs/semconv/gen-ai/) (attribute names, span structure)
 - [OTel GenAI agent spans](https://opentelemetry.io/docs/specs/semconv/gen-ai/gen-ai-agent-spans/) (`invoke_agent` attributes)
 - [OTel GenAI client spans](https://opentelemetry.io/docs/specs/semconv/gen-ai/gen-ai-spans/) (token usage, model, response attributes)
+- [OTel VCS attributes](https://opentelemetry.io/docs/specs/semconv/registry/attributes/vcs/) (repository attributes)
+- [OTel code attributes](https://opentelemetry.io/docs/specs/semconv/registry/attributes/code/) (source locations)
+- [OTel CI/CD attributes](https://opentelemetry.io/docs/specs/semconv/registry/attributes/cicd/) (Action run attributes)
 - [Sentry AI Agents module](https://develop.sentry.dev/sdk/telemetry/traces/modules/ai-agents/) (Sentry's source of truth for `gen_ai.*` span processing)
 - [Sentry JS AI agent instrumentation](https://docs.sentry.io/platforms/javascript/guides/node/tracing/instrumentation/ai-agents-module/) (practical instrumentation guide)
 
@@ -14,7 +17,7 @@ Observability via Sentry: tracing, error context, and business metrics. All tele
 
 ## Initialization
 
-`initSentry(context)` in `src/sentry.ts`. Called once at process start in both CLI and Action entry points.
+`initSentry(context)` in `packages/warden/src/sentry.ts`. Called once at process start in both CLI and Action entry points.
 
 | Setting | Value |
 |---------|-------|
@@ -25,12 +28,22 @@ Observability via Sentry: tracing, error context, and business metrics. All tele
 
 ### Global Attributes
 
-Set via `Sentry.getGlobalScope().setAttributes()`. These propagate automatically to all metrics and spans.
+Set via `Sentry.getGlobalScope().setAttributes()`. These propagate to logs and
+metrics. The GitHub Action root span receives the same attributes explicitly
+because current Sentry scope attributes do not decorate spans.
 
 | Attribute | Set when | Value |
 |-----------|----------|-------|
 | `warden.source` | `initSentry()` | `github-action` or `cli` |
-| `warden.repository` | After context built | `owner/repo` (e.g. `getsentry/sentry`) |
+| `vcs.owner.name` | Repository context or Action startup | repository owner/org (e.g. `getsentry`) |
+| `vcs.repository.name` | Repository context or Action startup | repository name (e.g. `sentry`) |
+| `vcs.provider.name` | Repository context or Action startup for GitHub repos | `github` |
+| `vcs.repository.url.full` | Repository context or Action startup for GitHub repos | canonical repository URL |
+| `github.event.name` | GitHub Actions only | Action event name (GitHub-specific; no OTel equivalent) |
+| `cicd.pipeline.name` | GitHub Actions only | GitHub workflow name |
+| `cicd.pipeline.run.id` | GitHub Actions only | GitHub workflow run ID |
+| `cicd.pipeline.run.url.full` | GitHub Actions only | GitHub workflow run URL |
+| `cicd.pipeline.task.name` | GitHub Actions only | GitHub job name |
 
 ### Trace ID
 
@@ -62,31 +75,33 @@ The Anthropic integration records inputs and outputs (`recordInputs: true, recor
 Spans follow [OpenTelemetry semantic conventions](https://opentelemetry.io/docs/specs/semconv/) where applicable, with Sentry-specific extensions for AI agent visibility.
 
 ```
-workflow.run "review pull_request"
-  workflow.init "initialize workflow"
-  workflow.setup "setup github state"
-  workflow.execute "execute triggers"
-    skill.run "run {skill}"                    ← existing
-      skill.analyze_file "analyze file {path}"
-        skill.analyze_hunk "analyze hunk {path}:{range}"
-          gen_ai.invoke_agent "invoke_agent {skill}"   ← Sentry AI dashboard
-            gen_ai.chat "chat {skill} turn 1"          ← per-turn from SDK stream
-              gen_ai.execute_tool "Read"                ← tool use from SDK stream
-              gen_ai.execute_tool "Grep"
-            gen_ai.chat "chat {skill} turn 2"
-            gen_ai.chat "chat {skill} turn 3"
-              gen_ai.execute_tool "Read"
-  workflow.review "post reviews"
-  workflow.resolve "resolve stale comments"
-    fix_eval.run "evaluate fix attempts"
-      fix_eval.evaluate "evaluate fix {path}:{line}"
-        (auto: anthropic chat spans via integration)
+cicd.workflow "run Warden action"              ← GitHub Action only
+  workflow.run "review pull_request"
+    workflow.init "initialize workflow"
+    workflow.setup "setup github state"
+    workflow.execute "execute triggers"
+      skill.run "run {skill}"                    ← existing
+        skill.analyze_file "analyze file {path}"
+          skill.analyze_hunk "analyze hunk {path}:{range}"
+            gen_ai.invoke_agent "invoke_agent {skill}"   ← Sentry AI dashboard
+              gen_ai.chat "chat {skill} turn 1"          ← per-turn from SDK stream
+                gen_ai.execute_tool "Read"                ← tool use from SDK stream
+                gen_ai.execute_tool "Grep"
+              gen_ai.chat "chat {skill} turn 2"
+              gen_ai.chat "chat {skill} turn 3"
+                gen_ai.execute_tool "Read"
+    workflow.review "post reviews"
+    workflow.resolve "resolve stale comments"
+      fix_eval.run "evaluate fix attempts"
+        fix_eval.evaluate "evaluate fix {path}:{line}"
+          (auto: anthropic chat spans via integration)
 ```
 
 ### Span ops
 
 | `op` | Scope | Notes |
 |------|-------|-------|
+| `cicd.workflow` | Entire GitHub Action invocation | Root span includes failures before workflow initialization |
 | `gen_ai.invoke_agent` | Claude Code SDK subprocess | Required prefix for Sentry AI Agents dashboard |
 | `gen_ai.chat` | Per-turn API call within SDK | Created from `SDKAssistantMessage` stream events; child of `invoke_agent` |
 | `gen_ai.execute_tool` | Tool execution within a turn | Created from `SDKAssistantMessage` tool_use blocks + `SDKToolProgressMessage`; child of `gen_ai.chat` |
@@ -107,37 +122,36 @@ The `gen_ai.invoke_agent` span on `executeQuery()` carries attributes for Sentry
 | Attribute | Source | Spec |
 |-----------|--------|------|
 | `gen_ai.operation.name` | `'invoke_agent'` | [OTel required](https://opentelemetry.io/docs/specs/semconv/gen-ai/gen-ai-agent-spans/) |
-| `gen_ai.system` | `'anthropic'` | Legacy; kept for older Sentry SDK compat |
-| `gen_ai.provider.name` | `'anthropic'` | [OTel required](https://opentelemetry.io/docs/specs/semconv/registry/attributes/gen-ai/) (replaces `gen_ai.system`) |
-| `gen_ai.agent.name` | Model ID from options | [OTel SHOULD](https://opentelemetry.io/docs/specs/semconv/gen-ai/gen-ai-agent-spans/) |
+| `gen_ai.provider.name` | Runtime/model provider (`anthropic`, `openai`, `pi`, etc.) | [OTel required](https://opentelemetry.io/docs/specs/semconv/registry/attributes/gen-ai/) |
+| `gen_ai.agent.name` | Skill name | [OTel SHOULD](https://opentelemetry.io/docs/specs/semconv/gen-ai/gen-ai-agent-spans/) |
 | `gen_ai.request.model` | Model ID from options | [OTel conditionally required](https://opentelemetry.io/docs/specs/semconv/gen-ai/gen-ai-agent-spans/) |
-| `gen_ai.request.max_turns` | `maxTurns` value | Warden extension (not in spec) |
-| `gen_ai.request.messages` | Stringified `[{role, content}]` array | [Sentry AI Agents](https://docs.sentry.io/platforms/javascript/guides/node/ai-agent-monitoring/). Set on all `gen_ai.*` spans. |
+| `warden.request.max_turns` | `maxTurns` value | Warden extension (not in spec) |
+| `gen_ai.system_instructions` | Stringified text instruction parts | OTel GenAI |
+| `gen_ai.input.messages` | Stringified normalized message array | OTel GenAI |
 
 ### Response attributes (set after SDK result)
 
 | Attribute | Source | Spec |
 |-----------|--------|------|
-| `gen_ai.usage.input_tokens` | `input_tokens + cache_read + cache_write` | [OTel recommended](https://opentelemetry.io/docs/specs/semconv/gen-ai/gen-ai-spans/). **Total** input tokens, not just uncached. |
+| `gen_ai.usage.input_tokens` | Uncached input + cache read + cache write | [OTel recommended](https://opentelemetry.io/docs/specs/semconv/gen-ai/gen-ai-spans/). **Total** input tokens, not just uncached. |
 | `gen_ai.usage.output_tokens` | `resultMessage.usage.output_tokens` | [OTel recommended](https://opentelemetry.io/docs/specs/semconv/gen-ai/gen-ai-spans/) |
-| `gen_ai.usage.input_tokens.cached` | `resultMessage.usage.cache_read_input_tokens` | [Sentry extension](https://develop.sentry.dev/sdk/telemetry/traces/modules/ai-agents/). Subset of `input_tokens`. |
-| `gen_ai.usage.input_tokens.cache_write` | `resultMessage.usage.cache_creation_input_tokens` | [Sentry extension](https://develop.sentry.dev/sdk/telemetry/traces/modules/ai-agents/). Subset of `input_tokens`. |
-| `gen_ai.usage.total_tokens` | `input_tokens + output_tokens` (after totaling) | [OTel](https://opentelemetry.io/docs/specs/semconv/gen-ai/gen-ai-spans/) |
-| `gen_ai.cost.total_tokens` | `resultMessage.total_cost_usd` | [Sentry extension](https://develop.sentry.dev/sdk/telemetry/traces/modules/ai-agents/). USD cost from SDK. |
+| `gen_ai.usage.cache_read.input_tokens` | Cache-read input tokens | [OTel recommended](https://opentelemetry.io/docs/specs/semconv/gen-ai/gen-ai-spans/) |
+| `gen_ai.usage.cache_creation.input_tokens` | Cache-write input tokens | [OTel recommended](https://opentelemetry.io/docs/specs/semconv/gen-ai/gen-ai-spans/) |
 | `gen_ai.response.id` | `resultMessage.uuid` | [OTel recommended](https://opentelemetry.io/docs/specs/semconv/gen-ai/gen-ai-spans/) |
-| `gen_ai.response.model` | First key in `resultMessage.modelUsage` | [OTel recommended](https://opentelemetry.io/docs/specs/semconv/gen-ai/gen-ai-spans/) |
-| `gen_ai.response.text` | Stringified `["response text"]` array | [Sentry AI Agents](https://docs.sentry.io/platforms/javascript/guides/node/ai-agent-monitoring/). Set when response text is available. |
+| `gen_ai.response.model` | Actual response model | [OTel recommended](https://opentelemetry.io/docs/specs/semconv/gen-ai/gen-ai-spans/) |
+| `gen_ai.response.finish_reasons` | Provider stop reason array | OTel GenAI |
+| `gen_ai.output.messages` | Stringified normalized assistant message array | OTel GenAI |
 
-**Token accounting:** The Anthropic API's `input_tokens` field counts only non-cached input tokens. `cache_read_input_tokens` and `cache_creation_input_tokens` are separate, non-overlapping counts. The OTel `gen_ai.usage.input_tokens` attribute represents the *total* input tokens, so we sum all three. Sentry then [subtracts the cached/reasoning counts from the totals](https://docs.sentry.io/platforms/javascript/guides/node/tracing/instrumentation/ai-agents-module/) to compute the raw portion. Setting `input_tokens` to only the non-cached value causes Sentry to compute negative costs.
+**Token accounting:** Provider usage can split input into uncached input, cache-read input, and cache-write input. Anthropic exposes these as `input_tokens`, `cache_read_input_tokens`, and `cache_creation_input_tokens`; Pi exposes the same normalized shape as `input`, `cacheRead`, and `cacheWrite`. The `gen_ai.usage.input_tokens` attribute represents the *total* input tokens, so Warden sums all three and records the cache subsets with OTel's `gen_ai.usage.cache_*` attributes. Setting the top-level field to only the uncached value underreports usage and makes cache accounting ambiguous.
 
 ### SDK-specific attributes
 
 | Attribute | Source |
 |-----------|--------|
-| `sdk.session_id` | `resultMessage.session_id` |
-| `sdk.duration_ms` | `resultMessage.duration_ms` |
-| `sdk.duration_api_ms` | `resultMessage.duration_api_ms` |
-| `sdk.num_turns` | `resultMessage.num_turns` |
+| `gen_ai.conversation.id` | `resultMessage.session_id` |
+| `warden.sdk.duration_ms` | `resultMessage.duration_ms` |
+| `warden.sdk.duration_api_ms` | `resultMessage.duration_api_ms` |
+| `warden.sdk.num_turns` | `resultMessage.num_turns` |
 
 ### Per-turn `gen_ai.chat` attributes
 
@@ -147,14 +161,12 @@ Created from `SDKAssistantMessage` events streamed by `query()`. Each span repre
 |-----------|--------|-------|
 | `gen_ai.operation.name` | `'chat'` | OTel operation name |
 | `gen_ai.provider.name` | `'anthropic'` | OTel provider |
-| `gen_ai.agent.name` | Skill name | Links turn to skill |
+| `gen_ai.agent.name` | Skill name when available | Links turn to skill |
 | `gen_ai.response.model` | `message.message.model` | Actual model used for this turn |
 | `gen_ai.usage.input_tokens` | `input + cache_read + cache_write` | Total input tokens (same accounting as parent) |
 | `gen_ai.usage.output_tokens` | `message.message.usage.output_tokens` | Output tokens for this turn |
-| `gen_ai.usage.input_tokens.cached` | `message.message.usage.cache_read_input_tokens` | Cache read subset |
-| `gen_ai.usage.input_tokens.cache_write` | `message.message.usage.cache_creation_input_tokens` | Cache write subset |
-| `gen_ai.usage.total_tokens` | `input + output` | Total tokens for this turn |
-| `gen_ai.tool_use.count` | Count of `tool_use` content blocks | Number of tools invoked in this turn |
+| `gen_ai.usage.cache_read.input_tokens` | `message.message.usage.cache_read_input_tokens` | Cache read subset |
+| `gen_ai.usage.cache_creation.input_tokens` | `message.message.usage.cache_creation_input_tokens` | Cache write subset |
 
 ### Per-tool `gen_ai.execute_tool` attributes
 
@@ -162,35 +174,90 @@ Created from `tool_use` content blocks in `SDKAssistantMessage`, enriched with t
 
 | Attribute | Source | Notes |
 |-----------|--------|-------|
+| `gen_ai.operation.name` | `'execute_tool'` | OTel operation name |
+| `gen_ai.agent.name` | Skill name when available | Links tool use to skill |
 | `gen_ai.tool.name` | `tool_use.name` | Tool name (e.g. `Read`, `Grep`) |
-| `tool.elapsed_seconds` | `SDKToolProgressMessage.elapsed_time_seconds` | Execution duration; only set when progress message received |
+
+When the SDK reports tool elapsed time, Warden sets the tool span start/end time
+so duration is represented by `span.duration`.
+
+### Structured `gen_ai.chat` attributes
+
+Direct structured model calls (`runAuxiliary` / `runSynthesis`) create manual
+`gen_ai.chat` spans so the bundled action has coverage even when loader-based
+auto-instrumentation is unavailable.
+
+| Attribute | Source | Notes |
+|-----------|--------|-------|
+| `gen_ai.operation.name` | `'chat'` | OTel operation name |
+| `gen_ai.provider.name` | Runtime/model provider (`anthropic`, `openai`, `pi`, etc.) | OTel provider |
+| `gen_ai.agent.name` | Request `agentName` when available | Links the call to the originating skill or builder agent |
+| `warden.ai.task` | Request `task` | Warden task name (`extraction`, `deduplication`, `fix_quality`, `fix_evaluation`, `consolidation`, or `skill_build`) |
+| `gen_ai.request.model` | Requested model | Model sent to the runtime provider |
+
+Structured tool-loop calls also create `gen_ai.execute_tool` child spans with
+`gen_ai.operation.name`, `gen_ai.agent.name`, `warden.ai.task`, and
+`gen_ai.tool.name`.
 
 ### Why manual instrumentation for the SDK
 
-The Claude Code SDK runs as a subprocess via `query()`. It is not an `@anthropic-ai/sdk` client call, so `anthropicAIIntegration` cannot auto-instrument it. The SDK streams rich message types (`SDKAssistantMessage`, `SDKToolProgressMessage`) that provide per-turn token usage and tool execution data. We process these to create `gen_ai.chat` and `gen_ai.execute_tool` child spans. The aggregate result message provides session-level totals for the parent `gen_ai.invoke_agent` span. Direct Anthropic API calls (haiku extraction, fix evaluation judge) *are* auto-instrumented by the integration.
+The Claude Code SDK runs as a subprocess via `query()`. It is not an `@anthropic-ai/sdk` client call, so `anthropicAIIntegration` cannot auto-instrument it. The SDK streams rich message types (`SDKAssistantMessage`, `SDKToolProgressMessage`) that provide per-turn token usage and tool execution data. We process these to create `gen_ai.chat` and `gen_ai.execute_tool` child spans. The aggregate result message provides session-level totals for the parent `gen_ai.invoke_agent` span. Direct structured Anthropic calls are also wrapped manually because the bundled GitHub Action cannot rely on loader-based auto-instrumentation.
 
 ---
 
 ## Internal Span Attributes
 
-### `skill.analyze_file`
+### `cicd.workflow`
+
+The GitHub Action root span receives the `vcs.*`, `github.event.name`, and
+`cicd.*` attributes listed under **Global Attributes** at creation.
 
 | Attribute | Type | When set |
 |-----------|------|----------|
-| `code.filepath` | string | Creation |
-| `hunk.count` | number | Creation |
-| `finding.count` | number | After loop |
-| `hunk.failed_count` | number | After loop |
-| `extraction.failed_count` | number | After loop |
+| `warden.action.outcome` | string | Completion (`success` or `failure`) |
+| `warden.action.stage` | string | Failure (`input`, `environment`, or `dispatch`) |
+| `warden.error.code` | string | Failure, using the stable `ErrorCode` taxonomy |
+
+### `workflow.run`
+
+| Attribute | Type | When set |
+|-----------|------|----------|
+| `warden.trigger.count` | number | After trigger matching |
+| `warden.finding.count` | number | After result |
+
+### `skill.run`
+
+| Attribute | Type | When set |
+|-----------|------|----------|
+| `gen_ai.agent.name` | string | Creation and after skill resolution |
+| `warden.trigger.name` | string | Creation for trigger-backed runs |
+| `warden.file.count` | number | Creation |
+| `warden.finding.count` | number | After result |
+
+### `skill.analyze_file`
+
+The parent `skill.run` span carries `gen_ai.agent.name` for every run and
+`warden.trigger.name` only when the skill was selected by an actual trigger.
+Direct CLI skill runs omit trigger metadata. Child file and hunk spans also
+carry `gen_ai.agent.name` so skill-scoped span queries do not depend on parent
+span context propagation.
+
+| Attribute | Type | When set |
+|-----------|------|----------|
+| `code.file.path` | string | Creation |
+| `warden.hunk.count` | number | Creation |
+| `warden.finding.count` | number | After loop |
+| `warden.hunk.failed_count` | number | After loop |
+| `warden.extraction.failed_count` | number | After loop |
 
 ### `skill.analyze_hunk`
 
 | Attribute | Type | When set |
 |-----------|------|----------|
-| `code.filepath` | string | Creation |
-| `hunk.line_range` | string | Creation |
-| `hunk.failed` | boolean | After result |
-| `finding.count` | number | After result |
+| `code.file.path` | string | Creation |
+| `warden.hunk.line_range` | string | Creation |
+| `warden.hunk.failed` | boolean | After result |
+| `warden.finding.count` | number | After result |
 
 Retries add a breadcrumb (`category: 'retry'`) with attempt number, error message, and delay.
 
@@ -198,22 +265,23 @@ Retries add a breadcrumb (`category: 'retry'`) with attempt number, error messag
 
 | Attribute | Type | When set |
 |-----------|------|----------|
-| `fix_eval.comment_count` | number | Creation |
-| `fix_eval.evaluated` | number | After loop |
-| `fix_eval.resolved` | number | After loop |
-| `fix_eval.failed` | number | After loop |
-| `fix_eval.skipped` | number | After loop |
+| `warden.fix_eval.comment_count` | number | Creation |
+| `warden.fix_eval.evaluated` | number | After loop |
+| `warden.fix_eval.resolved` | number | After loop |
+| `warden.fix_eval.failed` | number | After loop |
+| `warden.fix_eval.skipped` | number | After loop |
 
 ### `fix_eval.evaluate`
 
 | Attribute | Type | When set |
 |-----------|------|----------|
-| `code.filepath` | string | Creation |
-| `code.line` | number | Creation |
-| `fix_eval.finding_id` | string | Creation |
-| `fix_eval.skill` | string | Creation (when available) |
-| `fix_eval.verdict` | string | After result |
-| `fix_eval.used_fallback` | boolean | After result |
+| `code.file.path` | string | Creation |
+| `code.line.number` | number | Creation |
+| `warden.fix_eval.finding_id` | string | Creation from Warden comment metadata |
+| `gen_ai.agent.name` | string | Creation from Warden comment metadata |
+| `warden.fix_eval.raw_verdict` | string | Judge result before Warden overrides |
+| `warden.fix_eval.verdict` | string | Final outcome after re-detection and fallback handling |
+| `warden.fix_eval.used_fallback` | boolean | After result |
 
 ---
 
@@ -223,7 +291,12 @@ Retries add a breadcrumb (`category: 'retry'`) with attempt number, error messag
 
 Non-fatal errors (the workflow continues despite the failure) are still real errors. A GitHub API call that 500s is an error whether or not we can recover from it.
 
-`setFailed()` throws `ActionFailedError`, which propagates out of `Sentry.startSpan()` callbacks so spans end cleanly before the process exits. The top-level catch handler in `src/action/main.ts` distinguishes `ActionFailedError` (expected failure: threshold exceeded, missing env, CLI not found) from unexpected errors. Only unexpected errors call `captureException`. Both paths call `flushSentry()` then `process.exit(1)`.
+`setFailed()` throws `ActionFailedError`, which propagates out of
+`Sentry.startSpan()` callbacks so spans end cleanly before the process exits.
+The dispatcher records expected failures on the root span and action-run metric
+without creating an Issue. Unexpected errors are captured inside the active
+root span. The top-level catch handler in `packages/warden/src/action/run.ts`
+prints the failure, flushes Sentry, and exits.
 
 ### Operation tags
 
@@ -237,12 +310,16 @@ All `captureException` calls include an `operation` tag for filtering in Sentry 
 | `fetch_existing_comments` | `postReviewsAndTrackFailures` | Fetching PR comments for dedup |
 | `post_thread_reply` | `evaluateFixesAndResolveStale` | Posting fix evaluation reply |
 | `evaluate_fix_attempts` | `evaluateFixesAndResolveStale` | Fix evaluation batch |
+| `evaluate_fix_attempt` | `evaluateFixAttempts` | Per-comment fix evaluation |
 | `resolve_stale_comments` | `evaluateFixesAndResolveStale` | Stale comment resolution |
 | `dismiss_review` | `finalizeWorkflow` | Dismissing CHANGES_REQUESTED review |
 | `update_core_check` | `finalizeWorkflow` | Updating check run with summary |
 | `fetch_fix_context` | `evaluateFixAttempts` | Fetching code at finding location |
 
-Untagged `captureException` calls exist at top-level catch handlers in `src/cli/index.ts`, `src/action/main.ts`, and `src/action/triggers/executor.ts` (tagged with `trigger.name` and `skill.name` instead).
+Untagged `captureException` calls exist in `packages/warden/src/cli/index.ts`.
+The Action dispatcher tags unexpected startup errors with `warden.error.code`
+and `warden.action.stage`; the trigger executor tags failures with
+`warden.trigger.name` and `gen_ai.agent.name` instead.
 
 ---
 
@@ -250,28 +327,42 @@ Untagged `captureException` calls exist at top-level catch handlers in `src/cli/
 
 Emitted via `Sentry.metrics.*`. Each function is a no-op when Sentry is not initialized and wrapped in try/catch so metrics never break the workflow.
 
-All metrics inherit `warden.source` and `warden.repository` from the global scope (see **Global Attributes** above). Only per-metric attributes are listed below.
+All metrics inherit `warden.source`, repository attributes, and GitHub Actions attributes from the global scope (see **Global Attributes** above). Only per-metric attributes are listed below.
 
 ### Run count (`emitRunMetric`)
 
 | Metric | Type | Per-metric attributes |
 |--------|------|-----------------------|
-| `workflow.runs` | count | -- (inherits globals) |
+| `warden.workflow.runs` | count | -- (inherits globals) |
 
 Called once per analysis workflow execution (CLI run or GitHub Action workflow).
 
-### Skill-level (`emitSkillMetrics`)
+### Action run count (`emitActionRunMetric`)
 
 | Metric | Type | Per-metric attributes |
 |--------|------|-----------------------|
-| `skill.duration` | distribution (ms) | `skill`, `model` |
-| `tokens.input` | distribution | `skill`, `model` |
-| `tokens.output` | distribution | `skill`, `model` |
-| `cost.usd` | distribution | `skill`, `model` |
-| `findings.total` | count | `skill`, `model` |
-| `findings` | count | `skill`, `model`, `severity` |
+| `warden.action.runs` | count | `warden.action.outcome`, `warden.action.stage`, `warden.error.code` (failures only) |
 
-`model` is included when `report.model` is set (i.e. when the caller specifies a model).
+Called once per GitHub Action invocation, including failures during input
+parsing or environment validation before an analysis workflow exists.
+
+### Skill-level (`emitSkillMetrics`)
+
+Called once per completed skill report from both CLI/PR task execution and
+scheduled workflow execution.
+
+| Metric | Type | Per-metric attributes |
+|--------|------|-----------------------|
+| `warden.skill.duration` | distribution (ms) | `gen_ai.agent.name`, `gen_ai.request.model`, `warden.runtime.name` |
+| `gen_ai.client.token.usage` | distribution (`{token}`) | `gen_ai.agent.name`, `gen_ai.request.model`, `gen_ai.operation.name`, `gen_ai.provider.name`, `gen_ai.token.type`, `warden.runtime.name` |
+| `warden.gen_ai.token.usage` | distribution (`{token}`) | `gen_ai.agent.name`, `gen_ai.request.model`, `gen_ai.operation.name`, `gen_ai.provider.name`, `warden.runtime.name`, `warden.gen_ai.token.category` |
+| `warden.gen_ai.cost.usd` | distribution | `gen_ai.agent.name`, `gen_ai.request.model`, `warden.runtime.name` |
+| `warden.gen_ai.cost.component.usd` | distribution | `gen_ai.agent.name`, `gen_ai.request.model`, `warden.runtime.name`, `warden.gen_ai.cost.component` |
+| `warden.findings` | count | `gen_ai.agent.name`, `gen_ai.request.model`, `warden.runtime.name`, `warden.finding.severity` |
+
+`gen_ai.client.token.usage` follows current OTel semantics and emits only total `input` and `output` token histograms. Cache-sensitive dashboards must use Warden component metrics: `warden.gen_ai.token.usage` emits mutually exclusive token categories (`standard_input`, `cache_read_input`, `cache_creation_5m_input`, `cache_creation_1h_input`, `output`), and `warden.gen_ai.cost.component.usd` emits estimated relative-cost components when the model ID or its undated base exists in Pi's Anthropic catalog.
+
+`gen_ai.request.model` is included when `report.model` is set (i.e. when the caller specifies a model). `warden.runtime.name` is included when the report runtime is known (`claude` or `pi`).
 
 ### Extraction (`emitExtractionMetrics`)
 
@@ -279,8 +370,8 @@ Called from `parseHunkOutput` in `analyzeHunk`. Tracks regex vs LLM fallback rat
 
 | Metric | Type | Attributes |
 |--------|------|------------|
-| `extraction.attempts` | count | `skill`, `method` (`regex` / `llm` / `none`) |
-| `extraction.findings` | count | `skill`, `method` |
+| `warden.extraction.attempts` | count | `gen_ai.agent.name`, `warden.extraction.method` (`regex` / `llm` / `none`) |
+| `warden.extraction.findings` | count | `gen_ai.agent.name`, `warden.extraction.method` |
 
 ### Retries (`emitRetryMetric`)
 
@@ -288,7 +379,7 @@ Called from `analyzeHunk` retry block.
 
 | Metric | Type | Attributes |
 |--------|------|------------|
-| `skill.retries` | count | `skill`, `attempt` |
+| `warden.skill.retries` | count | `gen_ai.agent.name`, `warden.retry.attempt` |
 
 ### Fix gate (`emitFixGateMetrics`)
 
@@ -296,10 +387,10 @@ Called from both `runSkill()` and `runSkillTask()` after `sanitizeFindingsSugges
 
 | Metric | Type | Attributes |
 |--------|------|------------|
-| `fix_gate.checked` | count | `skill` |
-| `fix_gate.stripped_deterministic` | count | `skill` |
-| `fix_gate.stripped_semantic` | count | `skill` |
-| `fix_gate.semantic_unavailable` | count | `skill` |
+| `warden.fix_gate.checked` | count | `gen_ai.agent.name` |
+| `warden.fix_gate.stripped_deterministic` | count | `gen_ai.agent.name` |
+| `warden.fix_gate.stripped_semantic` | count | `gen_ai.agent.name` |
+| `warden.fix_gate.semantic_unavailable` | count | `gen_ai.agent.name` |
 
 ### Deduplication (`emitDedupMetrics`)
 
@@ -307,9 +398,9 @@ Called from both `runSkill()` and `runSkillTask()` after `deduplicateFindings`.
 
 | Metric | Type | Attributes |
 |--------|------|------------|
-| `dedup.total` | distribution | `skill` |
-| `dedup.unique` | distribution | `skill` |
-| `dedup.removed` | distribution | `skill` (only when total > 0) |
+| `warden.dedup.total` | distribution | `gen_ai.agent.name` |
+| `warden.dedup.unique` | distribution | `gen_ai.agent.name` |
+| `warden.dedup.removed` | distribution | `gen_ai.agent.name` (only when total > 0) |
 
 ### Fix evaluation (`emitFixEvalMetrics`)
 
@@ -317,13 +408,16 @@ Called from `evaluateFixAttempts` after all evaluations complete.
 
 | Metric | Type | Attributes |
 |--------|------|------------|
-| `fix_eval.evaluated` | count | -- |
-| `fix_eval.resolved` | count | -- |
-| `fix_eval.failed` | count | -- |
-| `fix_eval.skipped` | count | -- |
-| `warden.fix_eval.verdict` | count | `verdict`, `skill` |
+| `warden.fix_eval.evaluated` | count | -- |
+| `warden.fix_eval.resolved` | count | -- |
+| `warden.fix_eval.failed` | count | -- |
+| `warden.fix_eval.skipped` | count | -- |
+| `warden.fix_eval.unique_findings.evaluated` | count | -- |
+| `warden.fix_eval.unique_findings.code_changed` | count | -- |
+| `warden.fix_eval.unique_findings.resolved` | count | -- |
+| `warden.fix_eval.verdict` | count | `warden.fix_eval.verdict`, `warden.fix_eval.used_fallback`, `gen_ai.agent.name` |
 
-The aggregate metrics above are emitted once per run. The per-verdict metric is emitted after each individual evaluation with the verdict (`resolved`, `attempted_failed`, `not_attempted`, `re_detected`) and the originating skill name.
+The aggregate metrics above are emitted once per run. The per-verdict metric is emitted after each individual evaluation with the final verdict (`resolved`, `attempted_failed`, `not_attempted`, `re_detected`, `eval_error`), whether fallback was used, and the originating skill name.
 
 ### Stale resolution (`emitStaleResolutionMetric`)
 
@@ -331,7 +425,7 @@ Called from `evaluateFixesAndResolveStale` when stale comments are resolved. Emi
 
 | Metric | Type | Attributes |
 |--------|------|------------|
-| `stale.resolved` | count | `skill` (optional) |
+| `warden.stale.resolved` | count | `gen_ai.agent.name` (optional) |
 
 ---
 
@@ -339,12 +433,12 @@ Called from `evaluateFixesAndResolveStale` when stale comments are resolved. Emi
 
 1. **No-op when disabled.** Every function checks `initialized` first. No env var = no overhead.
 2. **Never break the workflow.** All metric emission and span attribute setting is wrapped in try/catch. Telemetry failures are swallowed silently.
-3. **Follow OTel conventions.** Gen AI spans use `gen_ai.*` ops and standard attribute names so they surface in Sentry's AI Agents dashboard without custom configuration. When OTel and Sentry conventions diverge, follow [Sentry's AI Agents module spec](https://develop.sentry.dev/sdk/telemetry/traces/modules/ai-agents/) as the source of truth for what Sentry actually processes.
-4. **Set both `gen_ai.system` and `gen_ai.provider.name`.** `gen_ai.provider.name` is the current OTel standard. `gen_ai.system` is kept for backward compatibility with older Sentry SDK versions that may key on it.
-5. **Auto-instrument where possible.** Direct Anthropic API calls and HTTP requests are handled by Sentry integrations. Manual spans are only for the Claude Code SDK subprocess and internal orchestration.
+3. **Follow OTel conventions.** Use OTel semantic attributes (`vcs.*`, `code.*`, `cicd.*`, `gen_ai.*`) where they exist. Use `warden.*` only for Warden-specific concepts that OTel does not define. When OTel and a vendor-specific convention diverge, prefer the current OTel GenAI semantic convention and keep vendor-specific additions under `warden.*`.
+4. **Do not emit compatibility aliases.** The same concept must have one canonical attribute name. Breaking telemetry queries is preferable to preserving conflicting semantics.
+5. **Auto-instrument where possible.** Direct provider API calls and HTTP requests are handled by Sentry integrations where available. Manual spans are only for coding-agent runtime wrappers and internal orchestration.
 6. **Attributes over events.** Prefer span attributes to separate events. Attributes are searchable in Sentry and don't create noise.
 7. **Breadcrumbs for retries.** Retry attempts are breadcrumbs (not spans) because they're supplementary context for the parent span, not independent operations.
-8. **Tokens are totals, subfields are subsets.** `gen_ai.usage.input_tokens` is the total count including cached. `.cached` and `.cache_write` are subsets that Sentry subtracts to derive the raw portion. Never set the top-level field to only the uncached count.
+8. **Tokens are totals, subfields are subsets.** `gen_ai.usage.input_tokens` is the total count including cached input. `gen_ai.usage.cache_read.input_tokens` and `gen_ai.usage.cache_creation.input_tokens` are subsets. Never set the top-level field to only the uncached count.
 
 ---
 
@@ -352,10 +446,11 @@ Called from `evaluateFixesAndResolveStale` when stale comments are resolved. Emi
 
 | File | Role |
 |------|------|
-| `src/sentry.ts` | Init, integrations, global attributes, metric emission functions |
-| `src/sdk/analyze.ts` | `executeQuery` (gen AI span), `analyzeFile` / `analyzeHunk` (workflow spans), extraction + retry + dedup metrics |
-| `src/action/fix-evaluation/index.ts` | `evaluateFixAttempts` / per-comment spans, fix eval metrics |
-| `src/action/workflow/base.ts` | `ActionFailedError` sentinel, `setFailed()` |
-| `src/action/main.ts` | Top-level catch handler, Sentry flush, `process.exit` |
-| `src/action/workflow/pr-workflow.ts` | Error context tags, stale resolution metrics |
-| `src/cli/output/tasks.ts` | Dedup metrics (CLI code path) |
+| `packages/warden/src/sentry.ts` | Init, integrations, global attributes, metric emission functions |
+| `packages/warden/src/sdk/analyze.ts` | `executeQuery` (gen AI span), `analyzeFile` / `analyzeHunk` (workflow spans), extraction + retry + dedup metrics |
+| `packages/warden/src/action/fix-evaluation/index.ts` | `evaluateFixAttempts` / per-comment spans, fix eval metrics |
+| `packages/warden/src/action/workflow/base.ts` | `ActionFailedError` sentinel, `setFailed()` |
+| `packages/warden/src/action/runner.ts` | Action root span, startup outcome metric, unexpected error capture |
+| `packages/warden/src/action/run.ts` | Top-level catch handler, Sentry flush, `process.exit` |
+| `packages/warden/src/action/workflow/pr-workflow.ts` | Error context tags, stale resolution metrics |
+| `packages/warden/src/cli/output/tasks.ts` | Dedup metrics (CLI code path) |

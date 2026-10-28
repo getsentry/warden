@@ -1,0 +1,195 @@
+---
+import {Code as ExpressiveCode} from "astro-expressive-code/components";
+
+type Finding = {
+  code: {
+    language?: string;
+    lines?: string;
+    path?: string;
+    snippet: string;
+  };
+  id: string;
+  repository: string;
+  sha: string;
+  summary: string;
+};
+
+type Corpus = {
+  description: string;
+  findings: Finding[];
+  id: string;
+  shaNotes?: string;
+  title: string;
+  updatedAt: string;
+};
+
+const corpusModules = import.meta.glob<Corpus>(
+  "../data/benchmarking/*.json",
+  {eager: true, import: "default"},
+);
+
+const corpora = Object.values(corpusModules).sort((a, b) =>
+  a.title.localeCompare(b.title),
+);
+
+const formatSnippet = (snippet: string) => {
+  const lines = snippet.replace(/^\n+|\s+$/g, "").split("\n");
+  const indents = lines
+    .filter((line) => line.trim().length > 0)
+    .map((line) => line.match(/^\s*/)?.[0].length ?? 0);
+  const minIndent = indents.length > 0 ? Math.min(...indents) : 0;
+  return lines.map((line) => line.slice(minIndent)).join("\n");
+};
+
+const codeTitle = (finding: Finding) => {
+  if (!finding.code.path) {
+    return "";
+  }
+
+  const pathSegments = finding.code.path.split("/");
+  const compactPath = pathSegments.at(-1) ?? finding.code.path;
+  const location = `${compactPath}${finding.code.lines ? `:${finding.code.lines}` : ""}`;
+  return `wrap title="${location}"`;
+};
+
+const githubLineAnchor = (lines?: string) => {
+  if (!lines) {
+    return "";
+  }
+
+  const [start, end] = lines.split("-");
+  return end ? `#L${start}-L${end}` : `#L${start}`;
+};
+
+const githubUrl = (finding: Finding) => {
+  return `https://github.com/${finding.repository}/blob/${finding.sha}/${finding.code.path}${githubLineAnchor(finding.code.lines)}`;
+};
+
+const shortSha = (sha: string) => sha.slice(0, 12);
+---
+
+{corpora.map((corpus) => {
+  return (
+    <section class="benchmark-corpus" aria-label={corpus.title}>
+      <header class="corpus-header">
+        <p>{corpus.findings.length} findings</p>
+      </header>
+
+      <div class="finding-list" aria-label="Findings">
+        {corpus.findings.map((finding) => (
+          <article class="finding-row" aria-labelledby={`${finding.id}-title`}>
+            <h3 id={`${finding.id}-title`}>
+              <a href={githubUrl(finding)}>{finding.id}</a>
+            </h3>
+            <div class="finding-body">
+              <p>{finding.summary}</p>
+              <p class="finding-source">
+                <a href={githubUrl(finding)}>
+                  <code>{finding.repository}@{shortSha(finding.sha)}</code>
+                  <span>View source</span>
+                </a>
+              </p>
+              <ExpressiveCode
+                code={formatSnippet(finding.code.snippet)}
+                lang={finding.code.language ?? "text"}
+                meta={codeTitle(finding)}
+              />
+            </div>
+            </article>
+        ))}
+      </div>
+    </section>
+  );
+})}
+
+<style>
+  .benchmark-corpus {
+    display: grid;
+    gap: 0.8rem;
+  }
+
+  .corpus-header {
+    color: var(--sl-color-gray-2);
+    font-size: 0.85rem;
+    margin: 0;
+  }
+
+  .finding-list {
+    border-bottom: 1px solid var(--sl-color-gray-6);
+    display: grid;
+    margin: 0;
+    padding: 0;
+  }
+
+  .finding-row {
+    border-top: 1px solid var(--sl-color-gray-6);
+    display: grid;
+    gap: 0.45rem;
+    padding: 1rem 0;
+  }
+
+  .finding-row h3 {
+    font-size: 1rem;
+    margin: 0;
+  }
+
+  .finding-row h3 a {
+    color: inherit;
+    text-decoration: none;
+  }
+
+  .finding-row h3 a:hover {
+    text-decoration: underline;
+  }
+
+  .finding-body {
+    display: grid;
+    gap: 0.55rem;
+    min-width: 0;
+  }
+
+  .finding-body p {
+    color: var(--sl-color-gray-1);
+    margin: 0;
+  }
+
+  .finding-source {
+    font-size: 0.8rem;
+  }
+
+  .finding-source a {
+    align-items: baseline;
+    color: var(--sl-color-gray-2);
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 0.45rem;
+    overflow-wrap: anywhere;
+    text-decoration: none;
+  }
+
+  .finding-source a:hover {
+    color: var(--sl-color-gray-1);
+    text-decoration: underline;
+  }
+
+  .finding-source span {
+    font-size: 0.78rem;
+  }
+
+  .finding-body :global(.expressive-code) {
+    margin: 0;
+  }
+
+  .finding-body :global(.expressive-code figure.frame) {
+    margin: 0;
+  }
+
+  .finding-body :global(.expressive-code pre) {
+    margin: 0;
+  }
+
+  .finding-body :global(.expressive-code .title) {
+    overflow-wrap: anywhere;
+    white-space: normal;
+  }
+</style>

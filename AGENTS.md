@@ -16,33 +16,29 @@ Example: `Co-Authored-By: Claude Sonnet 4 <noreply@anthropic.com>`
 
 ## Architecture
 
-This is a pnpm workspace monorepo. Shared build tools (eslint, lint-staged, simple-git-hooks, typescript, vitest) live in the root `package.json`.
+This is a pnpm workspace monorepo. Shared build tools (oxlint, lint-staged, simple-git-hooks, typescript, vitest) live in the root `package.json`.
 
 ```
+TELEMETRY.md           # Sentry telemetry investigation map; points to Junior's shared spec
+
 packages/
-├── docs/              # Astro docs site (dex-docs), deployed via Vercel
-
-src/                   # @sentry/warden core (root package)
-├── index.ts           # Library entry point
-├── types/             # Zod schemas and types
-├── config/            # Config loading (warden.toml)
-├── triggers/          # Event trigger matching
-├── event/             # GitHub event parsing
-├── diff/              # Diff parsing and context
-├── output/            # Report rendering
-├── skills/            # Skill discovery and loading
-├── sdk/               # Claude Code SDK runner
-├── cli/               # CLI entry and commands
-│   └── output/        # CLI output formatting
-├── action/            # GitHub Action entry
-├── evals/             # Eval runner, judge, and types
-├── utils/             # Shared utilities
-└── examples/          # Example configurations
-
-evals/                 # Eval specs, fixtures, and test skills (see evals/README.md)
-├── *.yaml             # YAML eval definitions
-├── skills/            # Test skills used as eval vehicles
-└── fixtures/          # Source code with known issues
+├── warden/            # @sentry/warden core package
+│   └── src/
+│       ├── index.ts   # Library entry point
+│       ├── types/     # Zod schemas and types
+│       ├── config/    # Config loading (warden.toml)
+│       ├── triggers/  # Event trigger matching
+│       ├── event/     # GitHub event parsing
+│       ├── diff/      # Diff parsing and context
+│       ├── output/    # Report rendering
+│       ├── skills/    # Skill discovery and loading
+│       ├── sdk/       # Agent SDK runner
+│       ├── cli/       # CLI entry and commands
+│       ├── action/    # GitHub Action entry
+│       ├── utils/     # Shared utilities
+│       └── examples/  # Example configurations
+├── docs/              # Astro docs site (warden-docs), deployed via Vercel
+├── evals/             # Private eval package: runner, scenarios, fixtures, test skills
 ```
 
 ## Key Conventions
@@ -85,6 +81,17 @@ All of `dist/` is gitignored. The ncc action bundle (`dist/action/`) is built an
 pnpm lint && pnpm build && pnpm test
 ```
 
+## Policies
+
+Repo-wide defaults live under `policies/`.
+
+- [Benchmark tables](policies/benchmark-tables.md):
+  Don't add metadata to benchmark tables or their variants unless explicitly requested.
+- `policies/code-comments.md`:
+  Exported functions need brief JSDoc.
+  Comments explain non-obvious intent, invariants, or tradeoffs.
+  Remove stale or obvious comments when behavior changes.
+
 ## Task Management
 
 Use `/dex` to break down complex work, track progress across sessions, and coordinate multi-step implementations.
@@ -97,11 +104,11 @@ Use `/dex` to break down complex work, track progress across sessions, and coord
 - `/iterate-pr` — Fix CI failures and review feedback until checks pass
 
 ### Code Quality
-- `/warden` — Run Warden analysis before committing. See `.agents/skills/warden/SKILL.md`
-- `/warden-sweep` — Full-repo code sweep: scan, verify, patch, draft PRs. See `.agents/skills/warden-sweep/SKILL.md`
+- `/warden` — Run Warden analysis before committing. See `packages/warden/skills/warden/SKILL.md`
+- `/warden-service` — Query the Warden Service read API. See `packages/warden/skills/warden-service/SKILL.md`
+- `/warden-sweep` — Full-repo code sweep: scan, verify, patch, draft PRs. See `packages/warden/skills/warden-sweep/SKILL.md`
 - `/code-simplifier` — Simplify and refine code
 - `/architecture-review` — Staff-level codebase health review. See `.agents/skills/architecture-review/SKILL.md`
-- `/find-warden-bugs` — Warden-specific bug detection from historical patterns. See `.agents/skills/find-warden-bugs/SKILL.md`
 
 ### Authoring
 - `/testing-guidelines` — Required when writing tests. See `.agents/skills/testing-guidelines/SKILL.md`
@@ -119,7 +126,7 @@ Skills define **what to look for**, not how to respond to findings:
 
 ## Evals
 
-End-to-end behavioral tests for the full pipeline. See [`evals/README.md`](evals/README.md) for the YAML spec, how to add evals, and how it all works. Run with `pnpm test:evals`.
+End-to-end evals for the full pipeline plus verifier-only evals live in `packages/evals/`. See [`packages/evals/INTERNAL.md`](packages/evals/INTERNAL.md) for maintainer workflow and [`packages/evals/README.md`](packages/evals/README.md) for schemas. Run with `pnpm evals`; scaffold PR fixtures with `pnpm evals:scaffold <github-pr-url>`.
 
 ## Voice
 

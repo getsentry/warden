@@ -1,0 +1,386 @@
+import type { Octokit } from '@octokit/rest';
+import type { ExistingComment } from '../../output/dedup.js';
+import { parseWardenFindingId, parseWardenSkills } from '../../output/dedup.js';
+import type { Finding, UsageStats } from '../../types/index.js';
+import { aggregateUsage, emptyUsage } from '../../sdk/usage.js';
+import { findingMatchesComment } from '../../output/stale.js';
+import { Sentry, emitFixEvalMetrics, emitFixEvalVerdictMetric } from '../../sentry.js';
+import type { EvaluateFixAttemptsContext, EvaluateFixAttemptsResult, FixEvaluation, FixJudgeResult } from './types.js';
+import { evaluateFix } from './judge.js';
+import type { FixJudgeContext, FixJudgeRuntimeOptions } from './judge.js';
+import { fetchFollowUpChanges, fetchFileContent, formatFailedFixReply } from './github.js';
+
+export { postThreadReply } from './github.js';
+export type { EvaluateFixAttemptsResult, FixEvaluation } from './types.js';
+
+/** Maximum comments to evaluate per run */
+const MAX_EVALUATIONS = 20;
+const EVALUATION_FAILED_REASONING = 'Evaluation failed';
+const RE_DETECTED_REASONING =
+  'The fix attempt was made, but the same issue was detected again in the updated code.';
+
+/** Extract finding ID (e.g. "WRZ-XPL") from a comment title like "[WRZ-XPL] Some title" */
+function extractFindingId(title: string): string | undefined {
+  const match = title.match(/^\[([^\]]+)\]\s*/);
+  return match?.[1];
+}
+
+function getCommentFindingId(comment: ExistingComment): string | undefined {
+  return comment.findingId ?? extractFindingId(comment.title) ?? (comment.body ? parseWardenFindingId(comment.body) : undefined);
+}
+
+function getCommentSkill(comment: ExistingComment): string | undefined {
+  return comment.skills?.[0] ?? (comment.body ? parseWardenSkills(comment.body)[0] : undefined);
+}
+
+/** Number of lines of context around the finding location */
+const CONTEXT_LINES = 20;
+
+/**
+ * Extract numbered lines from content.
+ */
+function extractLines(content: string, start: number, end: number): string {
+  const lines = content.split('\n');
+  return lines
+    .slice(start - 1, end)
+    .map((line, i) => `${start + i}: ${line}`)
+    .join('\n');
+}
+
+/**
+ * Fetch code snippet at a finding location at a specific commit.
+ */
+async function fetchCodeAtLocation(
+  octokit: Octokit,
+  owner: string,
+  repo: string,
+  comment: ExistingComment,
+  sha: string,
+  contextLines = CONTEXT_LINES
+): Promise<string> {
+  const targetLine = comment.line;
+  const startLine = Math.max(1, targetLine - contextLines);
+  const endLine = targetLine + contextLines;
+
+  try {
+    const content = await fetchFileContent(octokit, owner, repo, comment.path, sha);
+    return extractLines(content, startLine, endLine);
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    if (errorMessage.includes('Not Found')) {
+      return '(file does not exist at this commit)';
+    }
+    throw error;
+  }
+}
+
+/**
+ * Check if an issue was re-detected in the current findings.
+ */
+function wasReDetected(comment: ExistingComment, currentFindings: Finding[]): boolean {
+  return currentFindings.some((finding) => findingMatchesComment(finding, comment));
+}
+
+function createFallbackEvaluation(): FixJudgeResult {
+  return {
+    verdict: { status: 'not_attempted', reasoning: EVALUATION_FAILED_REASONING },
+    usage: emptyUsage(),
+    usedFallback: true,
+  };
+}
+
+/**
+ * Apply Warden's final verdict precedence and record the side effects for it.
+ */
+function recordEvaluationOutcome(args: {
+  result: EvaluateFixAttemptsResult;
+  comment: ExistingComment;
+  findingId?: string;
+  skill?: string;
+  context: EvaluateFixAttemptsContext;
+  evalResult: FixJudgeResult;
+  durationMs: number;
+  reDetected: boolean;
+  uniqueCodeChangedThreadIds: Set<string>;
+  uniqueResolvedThreadIds: Set<string>;
+}): FixEvaluation['verdict'] {
+  const {
+    result,
+    comment,
+    findingId,
+    skill,
+    context,
+    evalResult,
+    durationMs,
+    reDetected,
+    uniqueCodeChangedThreadIds,
+    uniqueResolvedThreadIds,
+  } = args;
+
+  if (evalResult.usedFallback) {
+    result.failedEvaluations++;
+  }
+
+  let finalVerdict: FixEvaluation['verdict'];
+  let reasoning = evalResult.verdict.reasoning;
+
+  if (reDetected) {
+    finalVerdict = 're_detected';
+    reasoning = RE_DETECTED_REASONING;
+    if (comment.threadId) {
+      uniqueCodeChangedThreadIds.add(comment.threadId);
+    }
+    result.toReply.push({
+      comment,
+      replyBody: formatFailedFixReply(context.headSha, RE_DETECTED_REASONING),
+      commitSha: context.headSha,
+    });
+  } else if (evalResult.usedFallback) {
+    finalVerdict = 'eval_error';
+  } else if (evalResult.verdict.status === 'not_attempted') {
+    finalVerdict = 'not_attempted';
+  } else if (evalResult.verdict.status === 'resolved') {
+    finalVerdict = 'resolved';
+    if (comment.threadId) {
+      uniqueCodeChangedThreadIds.add(comment.threadId);
+      uniqueResolvedThreadIds.add(comment.threadId);
+    }
+    result.toResolve.push(comment);
+  } else {
+    finalVerdict = 'attempted_failed';
+    if (comment.threadId) {
+      uniqueCodeChangedThreadIds.add(comment.threadId);
+    }
+    result.toReply.push({
+      comment,
+      replyBody: formatFailedFixReply(context.headSha, evalResult.verdict.reasoning),
+      commitSha: context.headSha,
+    });
+  }
+
+  result.evaluations.push({
+    findingId,
+    skill,
+    path: comment.path,
+    line: comment.line,
+    title: comment.title,
+    verdict: finalVerdict,
+    reasoning,
+    durationMs,
+    usage: evalResult.usage,
+    usedFallback: evalResult.usedFallback,
+  });
+  emitFixEvalVerdictMetric(finalVerdict, skill, { usedFallback: evalResult.usedFallback });
+
+  return finalVerdict;
+}
+
+/**
+ * Evaluate fix attempts for all unresolved Warden comments.
+ *
+ * Flow:
+ * 1. Fetch patches between base and head SHAs
+ * 2. For each unresolved comment, let judge explore changes with tools
+ * 3. Cross-check against current findings for re-detection (safety override)
+ * 4. Categorize into toResolve and toReply
+ * 5. Accumulate usage stats from all evaluations
+ */
+export async function evaluateFixAttempts(
+  octokit: Octokit,
+  comments: ExistingComment[],
+  context: EvaluateFixAttemptsContext,
+  currentFindings: Finding[],
+  apiKey: string,
+  runtimeOptionsOrMaxRetries?: number | FixJudgeRuntimeOptions
+): Promise<EvaluateFixAttemptsResult> {
+  const runtimeOptions: FixJudgeRuntimeOptions =
+    runtimeOptionsOrMaxRetries !== null && typeof runtimeOptionsOrMaxRetries === 'object'
+      ? runtimeOptionsOrMaxRetries
+      : runtimeOptionsOrMaxRetries == null
+        ? {}
+      : { maxRetries: runtimeOptionsOrMaxRetries };
+  return Sentry.startSpan(
+    {
+      op: 'fix_eval.run',
+      name: 'evaluate fix attempts',
+      attributes: {
+        'warden.fix_eval.comment_count': comments.length,
+      },
+    },
+    async (outerSpan) => {
+      const result: EvaluateFixAttemptsResult = {
+        toResolve: [],
+        toReply: [],
+        skipped: 0,
+        evaluated: 0,
+        failedEvaluations: 0,
+        uniqueFindingsEvaluated: 0,
+        uniqueFindingsCodeChanged: 0,
+        uniqueFindingsResolved: 0,
+        usage: emptyUsage(),
+        evaluations: [],
+      };
+
+      // Filter to unresolved Warden comments only
+      const unresolvedComments = comments.filter((c) => c.isWarden && !c.isResolved && c.threadId);
+
+      if (unresolvedComments.length === 0) {
+        return result;
+      }
+
+      // Fetch patches and commit messages between base and head
+      const { patches, commitMessages } = await fetchFollowUpChanges(
+        octokit,
+        context.owner,
+        context.repo,
+        context.baseSha,
+        context.headSha
+      );
+
+      if (patches.size === 0) {
+        result.skipped = unresolvedComments.length;
+        return result;
+      }
+
+      // Limit evaluations
+      const commentsToEvaluate = unresolvedComments.slice(0, MAX_EVALUATIONS);
+      if (unresolvedComments.length > MAX_EVALUATIONS) {
+        result.skipped = unresolvedComments.length - MAX_EVALUATIONS;
+      }
+
+      const toolContext: FixJudgeContext = {
+        octokit,
+        owner: context.owner,
+        repo: context.repo,
+        baseSha: context.baseSha,
+        headSha: context.headSha,
+        patches,
+      };
+
+      const changedFiles = [...patches.keys()];
+      const usages: UsageStats[] = [];
+      const uniqueEvaluatedThreadIds = new Set<string>();
+      const uniqueCodeChangedThreadIds = new Set<string>();
+      const uniqueResolvedThreadIds = new Set<string>();
+
+      for (const comment of commentsToEvaluate) {
+        const findingId = getCommentFindingId(comment);
+        const skill = getCommentSkill(comment);
+
+        // Fetch code at the issue location before the fix
+        let codeBeforeFix: string;
+        try {
+          codeBeforeFix = await fetchCodeAtLocation(
+            octokit,
+            context.owner,
+            context.repo,
+            comment,
+            context.baseSha
+          );
+        } catch (error) {
+          Sentry.captureException(error, { tags: { operation: 'fetch_fix_context' } });
+          result.skipped++;
+          continue;
+        }
+
+        result.evaluated++;
+        if (comment.threadId) {
+          uniqueEvaluatedThreadIds.add(comment.threadId);
+        }
+
+        // Fetch code after fix (optional, reduces tool calls)
+        let codeAfterFix: string | undefined;
+        try {
+          codeAfterFix = await fetchCodeAtLocation(
+            octokit,
+            context.owner,
+            context.repo,
+            comment,
+            context.headSha
+          );
+        } catch {
+          // Non-fatal: judge can still use tools to investigate
+        }
+
+        const reDetected = wasReDetected(comment, currentFindings);
+
+        await Sentry.startSpan(
+          {
+            op: 'fix_eval.evaluate',
+            name: `evaluate fix ${comment.path}:${comment.line}`,
+            attributes: {
+              'code.file.path': comment.path,
+              'code.line.number': comment.line,
+              'warden.fix_eval.finding_id': findingId ?? 'unknown',
+              ...(skill && { 'gen_ai.agent.name': skill }),
+            },
+          },
+          async (evalSpan) => {
+            const startTime = performance.now();
+            let evalResult: FixJudgeResult;
+            try {
+              evalResult = await evaluateFix(
+                { comment, skillName: skill, changedFiles, codeBeforeFix, codeAfterFix, commitMessages },
+                toolContext,
+                apiKey,
+                runtimeOptions
+              );
+            } catch (error) {
+              Sentry.captureException(error, { tags: { operation: 'evaluate_fix_attempt' } });
+              evalResult = createFallbackEvaluation();
+            }
+            const durationMs = performance.now() - startTime;
+
+            evalSpan.setAttribute('warden.fix_eval.raw_verdict', evalResult.verdict.status);
+            evalSpan.setAttribute('warden.fix_eval.used_fallback', evalResult.usedFallback);
+
+            usages.push(evalResult.usage);
+            const finalVerdict = recordEvaluationOutcome({
+              result,
+              comment,
+              findingId,
+              skill,
+              context,
+              evalResult,
+              durationMs,
+              reDetected,
+              uniqueCodeChangedThreadIds,
+              uniqueResolvedThreadIds,
+            });
+            evalSpan.setAttribute('warden.fix_eval.verdict', finalVerdict);
+          },
+        );
+      }
+
+      result.usage = usages.length > 0 ? aggregateUsage(usages) : emptyUsage();
+      result.uniqueFindingsEvaluated = uniqueEvaluatedThreadIds.size;
+      result.uniqueFindingsCodeChanged = uniqueCodeChangedThreadIds.size;
+      result.uniqueFindingsResolved = uniqueResolvedThreadIds.size;
+      const codeChangeRate =
+        result.uniqueFindingsEvaluated > 0
+          ? result.uniqueFindingsCodeChanged / result.uniqueFindingsEvaluated
+          : 0;
+
+      // Set summary attributes and emit metrics
+      outerSpan.setAttribute('warden.fix_eval.evaluated', result.evaluated);
+      outerSpan.setAttribute('warden.fix_eval.resolved', result.toResolve.length);
+      outerSpan.setAttribute('warden.fix_eval.failed', result.failedEvaluations);
+      outerSpan.setAttribute('warden.fix_eval.skipped', result.skipped);
+      outerSpan.setAttribute('warden.fix_eval.unique_findings.evaluated', result.uniqueFindingsEvaluated);
+      outerSpan.setAttribute('warden.fix_eval.unique_findings.code_changed', result.uniqueFindingsCodeChanged);
+      outerSpan.setAttribute('warden.fix_eval.unique_findings.resolved', result.uniqueFindingsResolved);
+      outerSpan.setAttribute('warden.fix_eval.unique_findings.code_change_rate', codeChangeRate);
+      emitFixEvalMetrics(
+        result.evaluated,
+        result.toResolve.length,
+        result.failedEvaluations,
+        result.skipped,
+        result.uniqueFindingsEvaluated,
+        result.uniqueFindingsCodeChanged,
+        result.uniqueFindingsResolved
+      );
+
+      return result;
+    },
+  );
+}

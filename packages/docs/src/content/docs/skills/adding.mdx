@@ -1,0 +1,44 @@
+---
+title: Adding Skills
+description: Add built-in, remote, and local skills.
+editUrl: false
+---
+
+Use `warden add` to add skills to `warden.toml`.
+
+## Add Built-ins
+
+```bash
+warden add security-review
+warden add code-review
+```
+
+## Add a Remote Skill
+
+```bash
+warden add vercel-react-best-practices --remote vercel-labs/agent-skills
+```
+
+This fetches the skill and adds it with a trigger.
+
+Pin remote skills when reproducibility matters:
+
+```bash
+warden add --remote your-org/warden-skills@abc123 --skill api-review
+```
+
+## Browse Remote Skills
+
+```bash
+warden add --remote vercel-labs/agent-skills --list
+```
+
+## Add a Local Skill
+
+If the skill exists under `.agents/skills/`, `.warden/skills/`, or
+`.claude/skills/`, add it by name:
+
+```bash
+warden add api-review
+```
+

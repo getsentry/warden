@@ -1,0 +1,69 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1786550240848,
+      "tag": "0000_nifty_frog_thor",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1786622075619,
+      "tag": "0001_magical_puppet_master",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1786722427724,
+      "tag": "0002_hosted_memory_costs",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1786722427725,
+      "tag": "0003_hosted_memory_vectors",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1786725721309,
+      "tag": "0004_dazzling_vermin",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1786811253249,
+      "tag": "0005_large_mattie_franklin",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1786823438457,
+      "tag": "0006_tiny_garia",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1791609979741,
+      "tag": "0007_finding_short_urls",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1791663951670,
+      "tag": "0008_stable_finding_short_urls",
+      "breakpoints": true
+    }
+  ]
+}

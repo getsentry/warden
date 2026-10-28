@@ -1,0 +1,5 @@
+behavior: follow-bounded-pagination
+prompt: |
+  I asked Warden Service for 150 high-severity findings from repository ID 00000000-0000-4000-8000-000000000001. The first response has 100 items and `nextCursor: "opaque-value"`. Explain the next request and exactly when to stop.
+checks:
+  - judge: The response treats the cursor as opaque, URL-encodes it, preserves repositoryId and severity=high on the next /api/v1/findings request, requests only the remaining bounded scope or another valid page, and stops after collecting 150 total items or earlier if nextCursor is absent.

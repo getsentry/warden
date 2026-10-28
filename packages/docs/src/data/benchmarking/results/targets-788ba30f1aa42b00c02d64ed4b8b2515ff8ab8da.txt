@@ -1,0 +1,1 @@
+src/sentry/api/endpoints/accept_organization_invite.py

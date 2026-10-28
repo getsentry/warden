@@ -15,6 +15,34 @@ jobs:
         with:
           ref: ${{ github.event.release.tag_name }}
           fetch-depth: 0
+          fetch-tags: true
+
+      - name: Ensure source release tag
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          SOURCE_TAG="v${VERSION}-src"
+          ARTIFACT_SUBJECT="Build dist/action for $GITHUB_REF_NAME"
+          SOURCE_SHA="$(git rev-parse HEAD)"
+
+          while [ "$(git show -s --format=%s "$SOURCE_SHA")" = "$ARTIFACT_SUBJECT" ]; do
+            SOURCE_SHA="$(git rev-parse "$SOURCE_SHA^")"
+            echo "Detected existing artifact commit. Walking back to $SOURCE_SHA for $SOURCE_TAG"
+          done
+
+          if git rev-parse "$SOURCE_TAG^{commit}" >/dev/null 2>&1; then
+            EXISTING_SHA="$(git rev-parse "$SOURCE_TAG^{commit}")"
+            if [ "$EXISTING_SHA" = "$SOURCE_SHA" ]; then
+              echo "Source tag $SOURCE_TAG already points to $SOURCE_SHA"
+              exit 0
+            fi
+
+            echo "::error::Source tag $SOURCE_TAG points to $EXISTING_SHA, expected $SOURCE_SHA"
+            exit 1
+          fi
+
+          echo "Creating source tag $SOURCE_TAG on $SOURCE_SHA"
+          git tag "$SOURCE_TAG" "$SOURCE_SHA"
+          git push origin "refs/tags/$SOURCE_TAG"
 
       - uses: pnpm/action-setup@02f6c237bd2518259fed6c71566509edfb3f2b74 # v4
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
@@ -24,6 +52,9 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Build service API
+        run: pnpm --filter @sentry/warden-service-api build
 
       - name: Build action bundle
         run: pnpm build:action
@@ -38,8 +69,8 @@ jobs:
 
           # Stage only the bundle files needed by the action
           git add -f dist/action/index.js dist/action/licenses.txt dist/action/package.json
-          # Add chunk files if ncc produced any (code-split dynamic imports)
-          git add -f dist/action/*.index.js 2>/dev/null || true
+          # Add chunk and asset files if ncc produced any
+          git add -f dist/action/*.index.js dist/action/*.wasm 2>/dev/null || true
 
           # Skip commit if bundle is already present (idempotent re-runs)
           git diff --cached --quiet || git commit -m "Build dist/action for $GITHUB_REF_NAME"

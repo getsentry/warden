@@ -1,0 +1,7 @@
+behavior: summarize-api-evidence
+prompt: |
+  I queried `/api/v1/costs?groupBy=repository&from=2026-08-01T00:00:00Z&to=2026-08-08T00:00:00Z` and got this response. Summarize it for an engineering lead.
+
+  {"groups":[{"dimensions":{"repository":"acme/api"},"runs":12,"inputTokens":50000,"outputTokens":8000,"costUsd":4.25},{"dimensions":{"repository":"acme/web"},"runs":7,"inputTokens":24000,"outputTokens":3500,"costUsd":1.75}],"totals":{"runs":19,"inputTokens":74000,"outputTokens":11500,"costUsd":6}}
+checks:
+  - judge: The response concisely reports the two repository costs and the $6 total across 19 runs, identifies the August 1 through August 8 UTC scope and repository grouping, and does not merely reproduce the raw JSON.

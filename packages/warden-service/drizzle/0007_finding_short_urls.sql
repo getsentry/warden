@@ -1,0 +1,1 @@
+CREATE INDEX "findings_tenant_display_idx" ON "findings" USING btree ("tenant_id",coalesce("reported_id", "client_finding_id"));

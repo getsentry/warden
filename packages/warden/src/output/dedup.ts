@@ -1,0 +1,927 @@
+import { createHash } from 'node:crypto';
+import type { Octokit } from '@octokit/rest';
+import { z } from 'zod';
+import type { Confidence, Finding, Severity, UsageStats } from '../types/index.js';
+import { findingLine } from '../types/index.js';
+import { escapeHtml } from '../utils/index.js';
+import { getRuntime } from '../sdk/runtimes/index.js';
+import { applyMergeGroups, canUseRuntimeAuth, FINDING_COMPARISON_MAX_TOKENS } from '../sdk/extract.js';
+import type { AuxiliaryCallOptions } from '../sdk/extract.js';
+import {
+  buildJsonOutputSection,
+  formatIndexedFindingsForPrompt,
+  joinPromptSections,
+} from '../sdk/prompt-sections.js';
+
+/**
+ * Parsed marker data from a Warden comment.
+ */
+export interface WardenMarker {
+  path: string;
+  line: number;
+  contentHash: string;
+}
+
+/**
+ * Existing comment from GitHub (either Warden or external).
+ */
+export interface ExistingComment {
+  id: number;
+  path: string;
+  line: number;
+  title: string;
+  description: string;
+  /** Stable Warden finding ID from the attribution footer or legacy title prefix */
+  findingId?: string;
+  contentHash: string;
+  /** GraphQL node ID for the review thread (used to resolve stale comments) */
+  threadId?: string;
+  /** Whether the thread has been resolved (resolved comments are used for dedup but not stale detection) */
+  isResolved?: boolean;
+  /** Whether this is a Warden-generated comment */
+  isWarden?: boolean;
+  /** Skills that have already detected this issue (for Warden comments) */
+  skills?: string[];
+  /** Original finding severity, when emitted by a recent Warden comment */
+  severity?: Severity;
+  /** Original finding confidence, when emitted by a recent Warden comment */
+  confidence?: Confidence;
+  /** The raw comment body (needed for updating Warden comments) */
+  body?: string;
+  /** GraphQL node ID for the comment (needed for adding reactions) */
+  commentNodeId?: string;
+  /** Login of the actor that authored the comment, when available */
+  actor?: string;
+  /** The commit SHA at which this comment was originally created */
+  originalCommitSha?: string;
+}
+
+/**
+ * Type of action to take for a duplicate finding.
+ */
+export type DuplicateActionType = 'update_warden' | 'react_external';
+
+/**
+ * Action to take for a duplicate finding.
+ */
+export interface DuplicateAction {
+  type: DuplicateActionType;
+  /** ID produced by the current run before any Warden ID recentering */
+  originalFindingId: string;
+  finding: Finding;
+  existingComment: ExistingComment;
+  /** Whether this was a hash match or semantic match */
+  matchType: 'hash' | 'semantic';
+}
+
+/**
+ * Result of deduplication with actions for duplicates.
+ */
+export interface DeduplicateResult {
+  /** Findings that are not duplicates - should be posted */
+  newFindings: Finding[];
+  /** Actions to take for duplicate findings */
+  duplicateActions: DuplicateAction[];
+  /** Usage from semantic dedup LLM call, if invoked */
+  dedupUsage?: UsageStats;
+}
+
+/**
+ * Generate a short content hash from title and description.
+ * Used for exact-match deduplication.
+ */
+export function generateContentHash(title: string, description: string): string {
+  const content = `${title}\n${description}`;
+  return createHash('sha256').update(content).digest('hex').slice(0, 8);
+}
+
+/**
+ * Location+content key that disambiguates findings sharing the same content
+ * hash (e.g. identical generic wording from two different skills at two
+ * different locations). Mirrors the key this file already builds inline for
+ * existing-comment matching — reuse this instead of hashing content alone.
+ */
+export function generateLocationHashKey(path: string | undefined, line: number, hash: string): string {
+  return `${path ?? ''}:${line}:${hash}`;
+}
+
+/**
+ * Generate the marker HTML comment to embed in comment body.
+ * Format: <!-- warden:v1:{path}:{line}:{contentHash} -->
+ */
+export function generateMarker(path: string, line: number, contentHash: string): string {
+  return `<!-- warden:v1:${path}:${line}:${contentHash} -->`;
+}
+
+/** Generate the hidden metadata marker embedded in Warden comments. */
+export function generateFindingMetadata(
+  finding: Pick<Finding, 'severity' | 'confidence'> & { id?: string }
+): string {
+  const metadata = {
+    id: finding.id,
+    severity: finding.severity,
+    confidence: finding.confidence,
+  };
+  return `<!-- warden:finding:v1:${Buffer.from(JSON.stringify(metadata), 'utf8').toString('base64url')} -->`;
+}
+
+/**
+ * Parse a Warden marker from a comment body.
+ * Returns null if no valid marker is found.
+ */
+export function parseMarker(body: string): WardenMarker | null {
+  const match = body.match(/<!-- warden:v1:([^:]+):(\d+):([a-f0-9]+) -->/);
+  if (!match || match.length < 4) {
+    return null;
+  }
+
+  const path = match[1];
+  const lineStr = match[2];
+  const contentHash = match[3];
+
+  // Validate that all capture groups exist (defensive, should always be true when regex matches)
+  if (!path || !lineStr || !contentHash) {
+    return null;
+  }
+
+  return {
+    path,
+    line: parseInt(lineStr, 10),
+    contentHash,
+  };
+}
+
+/** Parse and validate a Warden finding metadata marker. */
+export function parseWardenFindingMetadata(
+  body: string
+): (Pick<Finding, 'severity' | 'confidence'> & { id?: string }) | null {
+  const match = body.match(/<!-- warden:finding:v1:([A-Za-z0-9_-]+) -->/);
+  const encoded = match?.[1];
+  if (!encoded) return null;
+
+  try {
+    const parsed = JSON.parse(Buffer.from(encoded, 'base64url').toString('utf8')) as Partial<Finding>;
+    const id = parsed.id;
+    if (id !== undefined && typeof id !== 'string') return null;
+
+    const severity = parsed.severity;
+    if (severity !== 'high' && severity !== 'medium' && severity !== 'low') return null;
+
+    const confidence = parsed.confidence;
+    if (
+      confidence !== undefined &&
+      confidence !== 'high' &&
+      confidence !== 'medium' &&
+      confidence !== 'low'
+    ) {
+      return null;
+    }
+
+    return { id, severity, confidence };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Parse title and description from a Warden comment body.
+ * Expected format: **:emoji: Title**\n\nDescription or **Title**\n\nDescription
+ * Strips legacy [ID] prefix from titles for backward compat.
+ */
+export function parseWardenComment(body: string): { title: string; description: string } | null {
+  // Match the title pattern: **:emoji: Title** or **Title**
+  // Use non-greedy match to handle titles containing asterisks
+  const titleMatch = body.match(/\*\*(?::[a-z_]+:\s*)?(.+?)\*\*/);
+  if (!titleMatch || !titleMatch[1]) {
+    return null;
+  }
+
+  // Strip legacy [ID] prefix (e.g., "[2K5-29B] Title" → "Title")
+  const title = titleMatch[1].replace(/^\[[A-Z0-9-]+\]\s*/, '').trim();
+
+  // Get the description - everything after the title until the first ---
+  const titleEnd = body.indexOf('**', body.indexOf('**') + 2) + 2;
+  const separatorIndex = body.indexOf('---');
+  const descEnd = separatorIndex > -1 ? separatorIndex : body.length;
+
+  const description = body.slice(titleEnd, descEnd).trim();
+
+  return { title, description };
+}
+
+function sanitizeReviewCommentText(body: string): string {
+  return body
+    .replaceAll(/<details[\s\S]*?<\/details>/gi, ' ')
+    .replaceAll(/<!--[\s\S]*?-->/g, ' ')
+    .replaceAll(/<[^>]+>/g, ' ')
+    .replaceAll(/!\[[^\]]*\]\([^)]*\)/g, ' ')
+    .replaceAll(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+    .replaceAll(/[*_`>#~-]+/g, ' ')
+    .replaceAll(/\s+/g, ' ')
+    .trim();
+}
+
+function truncateText(value: string, maxLength: number): string {
+  if (value.length <= maxLength) {
+    return value;
+  }
+
+  return value.slice(0, maxLength - 3).trimEnd() + '...';
+}
+
+function fallbackCommentDescription(body: string): string {
+  return truncateText(sanitizeReviewCommentText(body), 500);
+}
+
+function fallbackCommentTitle(body: string, commentId: number): string {
+  const description = sanitizeReviewCommentText(body);
+  if (!description) {
+    return `Review comment ${commentId}`;
+  }
+
+  return truncateText(description, 80);
+}
+
+interface WardenFooter {
+  fullMatch: string;
+  skills: string[];
+  findingId?: string;
+}
+
+const FINDING_ID_PATTERN = '[^<\\r\\n]+';
+const SKILL_LIST_PATTERN = '[^<\\r\\n]+?';
+const CURRENT_FOOTER_PATTERN = new RegExp(
+  `<sub>Identified by Warden · (${SKILL_LIST_PATTERN})(?: · (${FINDING_ID_PATTERN}))?</sub>`
+);
+const PRIOR_FOOTER_PATTERN = new RegExp(
+  `<sub>Identified by Warden (${SKILL_LIST_PATTERN})(?: · (${FINDING_ID_PATTERN}))?</sub>`
+);
+
+function decodeFooterValue(value: string): string {
+  return value.replaceAll('&lt;', '<').replaceAll('&gt;', '>').replaceAll('&amp;', '&');
+}
+
+function parseSkillList(value: string): string[] {
+  return value.split(',').map((skill) => decodeFooterValue(skill.trim()));
+}
+
+function parseWardenFooter(body: string): WardenFooter | null {
+  const currentMatch = body.match(CURRENT_FOOTER_PATTERN);
+  // TODO(2026-08-01): Remove PRIOR_FOOTER_PATTERN after comments using it have aged out.
+  const match = currentMatch ?? body.match(PRIOR_FOOTER_PATTERN);
+  const fullMatch = match?.[0];
+  const skillList = match?.[1];
+  if (!fullMatch || !skillList) return null;
+
+  // Do not reinterpret historical bracket, backtick, or `via` footers as the prior plain format.
+  if (!currentMatch && (/^via\s+`/.test(skillList) || /^\[[^\]]+\](?:,\s*\[[^\]]+\])*$/.test(skillList))) {
+    return null;
+  }
+
+  return {
+    fullMatch,
+    skills: parseSkillList(skillList),
+    findingId: match[2] ? decodeFooterValue(match[2]) : undefined,
+  };
+}
+
+/** Parse the finding ID from hidden metadata or a supported transitional footer. */
+export function parseWardenFindingId(body: string): string | undefined {
+  return parseWardenFindingMetadata(body)?.id ?? parseWardenFooter(body)?.findingId;
+}
+
+/** Check if a comment body is a supported Warden comment. */
+export function isWardenComment(body: string): boolean {
+  return body.includes('<!-- warden:v1:') || parseWardenFooter(body) !== null;
+}
+
+/** Parse skill names from a supported Warden attribution footer. */
+export function parseWardenSkills(body: string): string[] {
+  return parseWardenFooter(body)?.skills ?? [];
+}
+
+/** Add a skill to a supported Warden attribution footer. */
+export function updateWardenCommentBody(body: string, newSkill: string): string | null {
+  const footer = parseWardenFooter(body);
+  if (!footer || footer.skills.includes(newSkill)) return null;
+
+  const skills = [...footer.skills, newSkill].map(escapeHtml).join(', ');
+  const findingId = parseWardenFindingMetadata(body)?.id ?? footer.findingId;
+  const idSuffix = findingId ? ` · ${escapeHtml(findingId)}` : '';
+  return body.replace(
+    footer.fullMatch,
+    () => `<sub>Identified by Warden · ${skills}${idSuffix}</sub>`
+  );
+}
+
+/** GraphQL response structure for review threads */
+interface ReviewThreadNode {
+  id: string;
+  isResolved: boolean;
+  comments: {
+    nodes: {
+      id: string; // GraphQL node ID (for reactions)
+      databaseId: number;
+      body: string;
+      path: string;
+      line: number | null;
+      originalLine: number | null;
+      author?: {
+        login: string;
+      } | null;
+      originalCommit: { oid: string } | null;
+    }[];
+  };
+}
+
+interface ReviewThreadsResponse {
+  repository?: {
+    pullRequest?: {
+      reviewThreads: {
+        pageInfo: {
+          hasNextPage: boolean;
+          endCursor: string | null;
+        };
+        nodes: ReviewThreadNode[];
+      };
+    } | null;
+  } | null;
+}
+
+const REVIEW_THREADS_QUERY = `
+  query($owner: String!, $repo: String!, $prNumber: Int!, $cursor: String) {
+    repository(owner: $owner, name: $repo) {
+      pullRequest(number: $prNumber) {
+        reviewThreads(first: 100, after: $cursor) {
+          pageInfo {
+            hasNextPage
+            endCursor
+          }
+          nodes {
+            id
+            isResolved
+            comments(first: 1) {
+              nodes {
+                id
+                databaseId
+                body
+                path
+                line
+                originalLine
+                author {
+                  login
+                }
+                originalCommit {
+                  oid
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+`;
+
+/**
+ * Fetch all existing review comments for a PR (both Warden and external).
+ * Uses GraphQL to get thread IDs for stale comment resolution and node IDs for reactions.
+ */
+export async function fetchExistingComments(
+  octokit: Octokit,
+  owner: string,
+  repo: string,
+  prNumber: number
+): Promise<ExistingComment[]> {
+  const comments: ExistingComment[] = [];
+
+  // Use GraphQL to get thread IDs along with comment data
+  let cursor: string | null = null;
+  let hasNextPage = true;
+
+  while (hasNextPage) {
+    const response: ReviewThreadsResponse = await octokit.graphql(REVIEW_THREADS_QUERY, {
+      owner,
+      repo,
+      prNumber,
+      cursor,
+    });
+
+    const pullRequest = response.repository?.pullRequest;
+    if (!pullRequest) {
+      // PR doesn't exist or was deleted
+      return comments;
+    }
+
+    const threads = pullRequest.reviewThreads;
+
+    for (const thread of threads.nodes) {
+      // Get the first comment in the thread
+      const firstComment = thread.comments.nodes[0];
+      if (!firstComment) {
+        continue;
+      }
+
+      const isWarden = isWardenComment(firstComment.body);
+      const marker = isWarden ? parseMarker(firstComment.body) : null;
+      const parsed = isWarden ? parseWardenComment(firstComment.body) : null;
+      const findingMetadata = isWarden ? parseWardenFindingMetadata(firstComment.body) : null;
+
+      // For Warden comments, we need parsed title/description
+      // For external comments, we extract what we can or use body as description
+      const title = parsed?.title ?? fallbackCommentTitle(firstComment.body, firstComment.databaseId);
+      const description = parsed?.description ?? fallbackCommentDescription(firstComment.body);
+
+      comments.push({
+        id: firstComment.databaseId,
+        path: marker?.path ?? firstComment.path,
+        line: marker?.line ?? firstComment.line ?? firstComment.originalLine ?? 0,
+        title,
+        description,
+        findingId: isWarden ? parseWardenFindingId(firstComment.body) : undefined,
+        contentHash: marker?.contentHash ?? generateContentHash(title, description),
+        threadId: thread.id,
+        isResolved: thread.isResolved,
+        isWarden,
+        skills: isWarden ? parseWardenSkills(firstComment.body) : undefined,
+        severity: findingMetadata?.severity,
+        confidence: findingMetadata?.confidence,
+        body: firstComment.body,
+        commentNodeId: firstComment.id,
+        actor: firstComment.author?.login,
+        originalCommitSha: firstComment.originalCommit?.oid,
+      });
+    }
+
+    hasNextPage = threads.pageInfo.hasNextPage;
+    cursor = threads.pageInfo.endCursor;
+  }
+
+  return comments;
+}
+
+/**
+ * @deprecated Use fetchExistingComments instead
+ */
+export async function fetchExistingWardenComments(
+  octokit: Octokit,
+  owner: string,
+  repo: string,
+  prNumber: number
+): Promise<ExistingComment[]> {
+  const allComments = await fetchExistingComments(octokit, owner, repo, prNumber);
+  return allComments.filter((c) => c.isWarden);
+}
+
+/** Schema for validating LLM deduplication response with matched indices */
+const DuplicateMatchesSchema = z.array(
+  z.object({
+    findingIndex: z.number().int(),
+    existingIndex: z.number().int(),
+  })
+);
+
+/**
+ * Result from semantic dedup LLM call.
+ */
+interface SemanticDuplicateResult {
+  matches: Map<string, ExistingComment>;
+  usage?: UsageStats;
+}
+
+/**
+ * Use LLM to identify which findings are semantic duplicates of existing comments.
+ * Returns a Map of finding ID to matched ExistingComment, plus usage stats.
+ */
+async function findSemanticDuplicates(
+  findings: Finding[],
+  existingComments: ExistingComment[],
+  apiKey: string | undefined,
+  options: Pick<DeduplicateOptions, 'runtime' | 'model' | 'effort' | 'maxRetries' | 'currentSkill'> = {}
+): Promise<SemanticDuplicateResult> {
+  if (findings.length === 0 || existingComments.length === 0) {
+    return { matches: new Map() };
+  }
+
+  const existingList = existingComments
+    .map((c, i) => `${i + 1}. [${c.path}:${c.line}] "${c.title}" - ${c.description}`)
+    .join('\n');
+
+  const findingsList = formatIndexedFindingsForPrompt(findings);
+
+  const prompt = joinPromptSections([
+    `<task>
+Compare these code review findings and identify duplicates.
+</task>`,
+    `<existing_comments>
+${existingList}
+</existing_comments>`,
+    `<new_findings>
+${findingsList}
+</new_findings>`,
+    `<deduplication_rules>
+Return a JSON array of objects identifying which findings are DUPLICATES of which existing comments.
+Mark as duplicate when the finding describes the SAME underlying bug as an existing comment, even if wording, evidence, or the reported file and line differ.
+A report anchored in a caller or test can duplicate one anchored in the implementation. Compare the actual defect and affected behavior, not just the location or issue category.
+Independent bugs requiring separate fixes are NOT duplicates, even at the same location. Keep uncertain matches and findings with additional independent bugs separate.
+</deduplication_rules>`,
+    buildJsonOutputSection(`[{"findingIndex": 1, "existingIndex": 2}]
+where findingIndex is the 1-based index of the new finding and existingIndex is the 1-based index of the matching existing comment.
+Return [] if none are duplicates.`),
+  ]);
+
+  const result = await getRuntime(options.runtime ?? 'claude').runAuxiliary({
+    task: 'deduplication',
+    agentName: options.currentSkill,
+    apiKey,
+    prompt,
+    schema: DuplicateMatchesSchema,
+    model: options.model,
+    effort: options.effort,
+    maxTokens: FINDING_COMPARISON_MAX_TOKENS,
+    maxRetries: options.maxRetries,
+  });
+
+  if (!result.success) {
+    console.warn(`LLM deduplication failed, falling back to hash-only: ${result.error}`);
+    return { matches: new Map(), usage: result.usage };
+  }
+
+  const matches = new Map<string, ExistingComment>();
+  for (const match of result.data) {
+    const finding = findings[match.findingIndex - 1];
+    const existing = existingComments[match.existingIndex - 1];
+    if (finding && existing) {
+      matches.set(finding.id, existing);
+    }
+  }
+
+  return { matches, usage: result.usage };
+}
+
+/**
+ * Options for deduplication.
+ */
+export interface DeduplicateOptions extends AuxiliaryCallOptions {
+  /** Skip LLM deduplication and only use exact hash matching */
+  hashOnly?: boolean;
+  /** Current skill name (for updating Warden comment attribution) */
+  currentSkill?: string;
+}
+
+export interface ConsolidateOptions extends AuxiliaryCallOptions {
+  /** Skip LLM consolidation and only use exact hash matching */
+  hashOnly?: boolean;
+}
+
+const ADD_REACTION_MUTATION = `
+  mutation($subjectId: ID!, $content: ReactionContent!) {
+    addReaction(input: { subjectId: $subjectId, content: $content }) {
+      reaction {
+        content
+      }
+    }
+  }
+`;
+
+/**
+ * Update an existing Warden PR review comment via REST API.
+ */
+export async function updateWardenComment(
+  octokit: Octokit,
+  owner: string,
+  repo: string,
+  commentId: number,
+  newBody: string
+): Promise<void> {
+  await octokit.pulls.updateReviewComment({
+    owner,
+    repo,
+    comment_id: commentId,
+    body: newBody,
+  });
+}
+
+/**
+ * Add a reaction to an existing PR review comment.
+ * Uses GraphQL to handle review comments.
+ */
+export async function addReactionToComment(
+  octokit: Octokit,
+  commentNodeId: string,
+  reaction: 'THUMBS_UP' | 'EYES' = 'EYES'
+): Promise<void> {
+  await octokit.graphql(ADD_REACTION_MUTATION, {
+    subjectId: commentNodeId,
+    content: reaction,
+  });
+}
+
+/**
+ * Process duplicate actions - update Warden comments and add reactions.
+ * Returns counts of actions taken for logging.
+ */
+export async function processDuplicateActions(
+  octokit: Octokit,
+  owner: string,
+  repo: string,
+  actions: DuplicateAction[],
+  currentSkill: string
+): Promise<{ updated: number; reacted: number; skipped: number; failed: number }> {
+  let updated = 0;
+  let reacted = 0;
+  let skipped = 0;
+  let failed = 0;
+
+  for (const action of actions) {
+    try {
+      if (action.type === 'update_warden') {
+        if (!action.existingComment.body) {
+          skipped++;
+          continue;
+        }
+        const newBody = updateWardenCommentBody(action.existingComment.body, currentSkill);
+        // Only update if body actually changed (skill wasn't already listed)
+        if (newBody) {
+          await updateWardenComment(octokit, owner, repo, action.existingComment.id, newBody);
+          // Update in-memory body so subsequent triggers see the updated content
+          action.existingComment.body = newBody;
+          updated++;
+        } else {
+          skipped++;
+        }
+      } else if (action.type === 'react_external') {
+        if (!action.existingComment.commentNodeId) {
+          skipped++;
+          continue;
+        }
+        await addReactionToComment(octokit, action.existingComment.commentNodeId);
+        reacted++;
+      }
+    } catch (error) {
+      console.warn(`Failed to process duplicate action for ${action.finding.title}: ${error}`);
+      failed++;
+    }
+  }
+
+  return { updated, reacted, skipped, failed };
+}
+
+/**
+ * Convert a Finding to an ExistingComment for cross-trigger deduplication.
+ * Returns null if the finding has no location.
+ */
+export function findingToExistingComment(finding: Finding, skill?: string): ExistingComment | null {
+  if (!finding.location) {
+    return null;
+  }
+
+  return {
+    id: -1, // Newly posted comments don't have IDs yet
+    path: finding.location.path,
+    line: finding.location.endLine ?? finding.location.startLine,
+    title: finding.title,
+    description: finding.description,
+    findingId: finding.id,
+    contentHash: generateContentHash(finding.title, finding.description),
+    isWarden: true,
+    skills: skill ? [skill] : [],
+    severity: finding.severity,
+    ...(finding.confidence ? { confidence: finding.confidence } : {}),
+  };
+}
+
+// -----------------------------------------------------------------------------
+// Intra-batch consolidation
+// -----------------------------------------------------------------------------
+
+/**
+ * Result from consolidating findings within a single batch.
+ */
+export interface ConsolidateResult {
+  findings: Finding[];
+  removedCount: number;
+  removedFindings: Finding[];
+  usage?: UsageStats;
+}
+
+/** Schema for LLM consolidation response: groups of finding indices that share a root cause. */
+const ConsolidationGroupsSchema = z.array(
+  z.array(z.number().int())
+);
+
+/**
+ * Consolidate findings within a single batch to remove duplicates that describe
+ * the same root cause, regardless of wording or location.
+ *
+ * 1. Hash dedup: remove exact duplicates (same path:line:contentHash)
+ * 2. LLM consolidation: group remaining findings by semantic issue identity
+ *
+ * For each group, keeps the highest-severity finding.
+ */
+export async function consolidateBatchFindings(
+  findings: Finding[],
+  options: ConsolidateOptions = {}
+): Promise<ConsolidateResult> {
+  if (findings.length <= 1) {
+    return { findings, removedCount: 0, removedFindings: [] };
+  }
+
+  // Phase 1: Hash dedup within batch
+  const seen = new Set<string>();
+  const hashDeduped: Finding[] = [];
+  const hashRemovedFindings: Finding[] = [];
+
+  for (const f of findings) {
+    const hash = generateContentHash(f.title, f.description);
+    const line = findingLine(f);
+    const path = f.location?.path ?? '';
+    const key = `${path}:${line}:${hash}`;
+
+    if (seen.has(key)) {
+      hashRemovedFindings.push(f);
+      continue;
+    }
+    seen.add(key);
+    hashDeduped.push(f);
+  }
+
+  const hashRemovedCount = findings.length - hashDeduped.length;
+
+  if (hashRemovedCount > 0) {
+    console.log(`Consolidate: ${hashRemovedCount} exact duplicate findings removed within batch`);
+  }
+
+  // A locationless winner would suppress an otherwise postable inline comment.
+  const withLocations = hashDeduped.filter((finding) => finding.location);
+  if (withLocations.length <= 1 || options.hashOnly || !canUseRuntimeAuth(options)) {
+    return { findings: hashDeduped, removedCount: hashRemovedCount, removedFindings: hashRemovedFindings };
+  }
+
+  // Compare across files: the same defect may be anchored in distant hunks or tests.
+  const findingsList = formatIndexedFindingsForPrompt(withLocations, {
+    includeSeverity: true,
+    includeVerification: true,
+  });
+
+  const prompt = joinPromptSections([
+    `<task>
+Group findings that describe the SAME root cause or bug.
+</task>`,
+    `<findings>
+${findingsList}
+</findings>`,
+    `<deduplication_rules>
+Return a JSON array of arrays, where each inner array contains the 1-based indices of findings that describe the same root cause.
+Group by semantic meaning, not exact wording of titles, descriptions, or evidence. Reports of the same defect may point to different lines, files, callers, or tests.
+Sharing an issue category is not enough: independent bugs requiring separate fixes are separate findings, even if nearby. Keep uncertain matches and findings with additional independent bugs separate.
+Singletons (findings with no duplicates) should not appear in any group.
+</deduplication_rules>`,
+    buildJsonOutputSection('Return the JSON array. Return [] if no findings share a root cause.'),
+  ]);
+
+  const result = await getRuntime(options.runtime ?? 'claude').runAuxiliary({
+    task: 'deduplication',
+    agentName: options.agentName,
+    apiKey: options.apiKey,
+    prompt,
+    schema: ConsolidationGroupsSchema,
+    model: options.model,
+    effort: options.effort,
+    maxTokens: FINDING_COMPARISON_MAX_TOKENS,
+    maxRetries: options.maxRetries,
+  });
+
+  if (!result.success) {
+    console.warn(`LLM batch consolidation failed, keeping all findings: ${result.error}`);
+    return { findings: hashDeduped, removedCount: hashRemovedCount, removedFindings: hashRemovedFindings, usage: result.usage };
+  }
+
+  const { absorbed, replacements } = applyMergeGroups(withLocations, result.data);
+
+  if (absorbed.size === 0) {
+    return { findings: hashDeduped, removedCount: hashRemovedCount, removedFindings: hashRemovedFindings, usage: result.usage };
+  }
+
+  const consolidated = hashDeduped
+    .filter((f) => !absorbed.has(f))
+    .map((f) => replacements.get(f) ?? f);
+  const totalRemoved = hashRemovedCount + absorbed.size;
+
+  console.log(`Consolidate: ${absorbed.size} findings merged by LLM (same root cause)`);
+
+  return { findings: consolidated, removedCount: totalRemoved, removedFindings: [...hashRemovedFindings, ...absorbed], usage: result.usage };
+}
+
+/**
+ * Deduplicate findings against existing comments.
+ * Returns non-duplicate findings and actions to take for duplicates.
+ *
+ * Deduplication is two-pass:
+ * 1. Exact content hash match - instant match
+ * 2. LLM semantic comparison for remaining findings (if API key provided)
+ *
+ * For duplicates:
+ * - If matching a Warden comment: action to update attribution with new skill
+ * - If matching an external comment: action to add reaction
+ */
+export async function deduplicateFindings(
+  findings: Finding[],
+  existingComments: ExistingComment[],
+  options: DeduplicateOptions = {}
+): Promise<DeduplicateResult> {
+  if (findings.length === 0 || existingComments.length === 0) {
+    return { newFindings: findings, duplicateActions: [] };
+  }
+
+  // Build maps of existing comments by location+hash for fast lookup
+  const existingByKey = new Map<string, ExistingComment>();
+  const wardenByKey = new Map<string, ExistingComment>();
+  for (const c of existingComments) {
+    const key = `${c.path}:${c.line}:${c.contentHash}`;
+    existingByKey.set(key, c);
+    if (c.isWarden) {
+      wardenByKey.set(key, c);
+    }
+  }
+
+  // First pass: find exact matches (same content at same location)
+  const hashDedupedFindings: Finding[] = [];
+  const duplicateActions: DuplicateAction[] = [];
+
+  for (const finding of findings) {
+    const hash = generateContentHash(finding.title, finding.description);
+    const line = finding.location?.endLine ?? finding.location?.startLine ?? 0;
+    const path = finding.location?.path ?? '';
+    const key = `${path}:${line}:${hash}`;
+
+    let matchingComment = existingByKey.get(key);
+
+    // If no primary location match, check additional locations against our own comments.
+    // This handles winner-flip scenarios where a merged finding's primary location changed
+    // between runs but an additional location matches a previous Warden comment.
+    if (!matchingComment && finding.additionalLocations) {
+      for (const loc of finding.additionalLocations) {
+        const addlLine = loc.endLine ?? loc.startLine;
+        const addlKey = `${loc.path}:${addlLine}:${hash}`;
+        const wardenMatch = wardenByKey.get(addlKey);
+        if (wardenMatch) {
+          matchingComment = wardenMatch;
+          break;
+        }
+      }
+    }
+
+    if (matchingComment) {
+      const duplicateFinding = matchingComment.isWarden && matchingComment.findingId
+        ? { ...finding, id: matchingComment.findingId, reportedId: matchingComment.findingId }
+        : finding;
+      duplicateActions.push({
+        type: matchingComment.isWarden ? 'update_warden' : 'react_external',
+        originalFindingId: finding.id,
+        finding: duplicateFinding,
+        existingComment: matchingComment,
+        matchType: 'hash',
+      });
+    } else {
+      hashDedupedFindings.push(finding);
+    }
+  }
+
+  if (duplicateActions.length > 0) {
+    console.log(`Dedup: ${duplicateActions.length} findings matched by content hash`);
+  }
+
+  // If hash-only mode, no runtime auth, or no remaining findings, stop here.
+  if (options.hashOnly || !canUseRuntimeAuth(options) || hashDedupedFindings.length === 0) {
+    return { newFindings: hashDedupedFindings, duplicateActions };
+  }
+
+  // Second pass: LLM semantic comparison for remaining findings
+  const semanticResult = await findSemanticDuplicates(hashDedupedFindings, existingComments, options.apiKey, options);
+
+  if (semanticResult.matches.size > 0) {
+    console.log(`Dedup: ${semanticResult.matches.size} findings identified as semantic duplicates by LLM`);
+  }
+
+  const newFindings: Finding[] = [];
+  for (const finding of hashDedupedFindings) {
+    const matchingComment = semanticResult.matches.get(finding.id);
+    if (matchingComment) {
+      const duplicateFinding = matchingComment.isWarden && matchingComment.findingId
+        ? { ...finding, id: matchingComment.findingId, reportedId: matchingComment.findingId }
+        : finding;
+      duplicateActions.push({
+        type: matchingComment.isWarden ? 'update_warden' : 'react_external',
+        originalFindingId: finding.id,
+        finding: duplicateFinding,
+        existingComment: matchingComment,
+        matchType: 'semantic',
+      });
+    } else {
+      newFindings.push(finding);
+    }
+  }
+
+  return { newFindings, duplicateActions, dedupUsage: semanticResult.usage };
+}

@@ -1,0 +1,116 @@
+---
+title: Skill Entries
+description: Configure skills, filters, remotes, and per-skill overrides.
+editUrl: false
+---
+
+Skills define what Warden analyzes and when.
+
+## Fields
+
+<dl class="sentry-key-value-list">
+  <div>
+    <dt>
+      <code>name</code>
+      <span class="sentry-property-meta">string</span>
+    </dt>
+    <dd>Skill name or path.</dd>
+  </div>
+  <div>
+    <dt>
+      <code>paths</code>
+      <span class="sentry-property-meta">string[]</span>
+    </dt>
+    <dd>Files to include as glob patterns.</dd>
+  </div>
+  <div>
+    <dt>
+      <code>ignorePaths</code>
+      <span class="sentry-property-meta">string[]</span>
+    </dt>
+    <dd>Files to exclude as glob patterns.</dd>
+  </div>
+  <div>
+    <dt>
+      <code>failOn</code>
+      <span class="sentry-property-meta">severity</span>
+    </dt>
+    <dd>Minimum severity to fail: <code>critical</code>, <code>high</code>, <code>medium</code>, <code>low</code>, <code>info</code>, <code>off</code>.</dd>
+  </div>
+  <div>
+    <dt>
+      <code>reportOn</code>
+      <span class="sentry-property-meta">severity</span>
+    </dt>
+    <dd>Minimum severity to report.</dd>
+  </div>
+  <div>
+    <dt>
+      <code>remote</code>
+      <span class="sentry-property-meta">optional</span>
+    </dt>
+    <dd>GitHub repository for remote skills: <code>owner/repo</code> or <code>owner/repo@sha</code>.</dd>
+  </div>
+  <div>
+    <dt>
+      <code>model</code>
+      <span class="sentry-property-meta">optional</span>
+    </dt>
+    <dd>Override the main agent model for this skill. See <a href="/config/models/">Models and Runtimes</a>.</dd>
+  </div>
+  <div>
+    <dt>
+      <code>maxTurns</code>
+      <span class="sentry-property-meta">number</span>
+    </dt>
+    <dd>Optional max agentic turns per hunk.</dd>
+  </div>
+  <div>
+    <dt>
+      <code>verification</code>
+      <span class="sentry-property-meta">optional</span>
+    </dt>
+    <dd>Override candidate finding verification for this skill. Set <code>enabled = false</code> to skip the second-pass check. Overrides <code>defaults.verification</code>; overridable per trigger.</dd>
+  </div>
+</dl>
+
+## Filters
+
+Use `paths` and `ignorePaths` to scope a skill:
+
+```toml title="warden.toml"
+[[skills]]
+name = "api-review"
+paths = ["src/api/**/*.ts"]
+ignorePaths = ["**/*.test.ts"]
+
+[[skills.triggers]]
+type = "pull_request"
+actions = ["opened", "synchronize", "reopened", "labeled"]
+draft = false
+labels = ["Warden"]
+```
+
+## Skill References
+
+```toml title="warden.toml"
+# Built-in skill
+[[skills]]
+name = "security-review"
+
+# Relative path
+[[skills]]
+name = "./custom-skills/my-review"
+
+# Remote skill
+[[skills]]
+name = "api-review"
+remote = "your-org/warden-skills"
+
+# Pinned remote skill
+[[skills]]
+name = "api-review"
+remote = "your-org/warden-skills@abc123def"
+```
+
+See [skill discovery](/skills/discovery/) for resolution order.

@@ -1,0 +1,136 @@
+{
+  "id": "sonnet-4-6-claude-sdk-vs-pi-runtime-comparison-2026-06-04",
+  "description": "Sanitized derived summary for the Sonnet 4.6 Claude SDK versus Pi benchmark analysis.",
+  "notes": [
+    "Stable-row aggregates come from committed benchmark result JSON files.",
+    "Child-span counts come from targeted diagnostic reruns after Warden trace recording captured runtime child spans.",
+    "The targeted reruns are representative diagnostics, not the scoring source of truth for the benchmark rows.",
+    "Raw JSONL artifacts remain withheld pending sensitive-data review because spans can include prompts, source snippets, and tool results."
+  ],
+  "stableRows": {
+    "claudeSdk": {
+      "runId": "sentry-security-review-claude-sonnet-4-6-traced-corpus-2026-06-04-001",
+      "runtime": "claude",
+      "model": "claude-sonnet-4-6",
+      "chunksAnalyzed": 156,
+      "chunksFailed": 0,
+      "knownFound": 24,
+      "knownFindingCount": 86,
+      "findingsTotal": 32,
+      "scan": {
+        "inputTokens": 42264775,
+        "outputTokens": 889761,
+        "cacheReadInputTokens": 31946921,
+        "cacheCreationInputTokens": 10305549,
+        "costUSD": 61.61321505
+      },
+      "verification": {
+        "inputTokens": 23389793,
+        "outputTokens": 200858,
+        "cacheReadInputTokens": 18998093,
+        "cacheCreationInputTokens": 4390414,
+        "costUSD": 41.967014000000006
+      },
+      "merge": {
+        "costUSD": 0.012381999999999999
+      },
+      "totalCostUSD": 103.59261104999999,
+      "traceSummaryTurns": 939
+    },
+    "pi": {
+      "runId": "sentry-security-review-pi-sonnet-4-6-traced-corpus-2026-06-03-001",
+      "runtime": "pi",
+      "model": "anthropic/claude-sonnet-4-6",
+      "chunksAnalyzed": 156,
+      "chunksFailed": 0,
+      "knownFound": 25,
+      "knownFindingCount": 86,
+      "findingsTotal": 32,
+      "scan": {
+        "inputTokens": 6668001,
+        "outputTokens": 365046,
+        "cacheReadInputTokens": 5589344,
+        "cacheCreationInputTokens": 1077717,
+        "costUSD": 11.196751950000001
+      },
+      "verification": {
+        "inputTokens": 2992179,
+        "outputTokens": 142560,
+        "cacheReadInputTokens": 2386764,
+        "cacheCreationInputTokens": 604909,
+        "costUSD": 8.540593249999999
+      },
+      "merge": {
+        "costUSD": 0.10323
+      },
+      "totalCostUSD": 19.8405752,
+      "traceSummaryTurns": 628
+    }
+  },
+  "targetedReruns": [
+    {
+      "file": "src/sentry/replays/usecases/replay_counts.py",
+      "claudeSdk": {
+        "scanCostUSD": 0.551229,
+        "inputTokens": 346668,
+        "outputTokens": 8366,
+        "turns": 9,
+        "toolExecutions": 7
+      },
+      "pi": {
+        "scanCostUSD": 0.09733665,
+        "inputTokens": 19770,
+        "outputTokens": 3398,
+        "turns": 3,
+        "toolExecutions": 2
+      }
+    },
+    {
+      "file": "src/sentry/api/endpoints/project_rules.py",
+      "claudeSdk": {
+        "scanCostUSD": 1.8748863,
+        "inputTokens": 2232980,
+        "outputTokens": 20101,
+        "turns": 47,
+        "toolExecutions": 41
+      },
+      "pi": {
+        "scanCostUSD": 0.27461505,
+        "inputTokens": 176380,
+        "outputTokens": 6511,
+        "turns": 18,
+        "toolExecutions": 15
+      }
+    }
+  ],
+  "targetedChunks": [
+    {
+      "file": "src/sentry/api/endpoints/project_rules.py",
+      "lineRange": "607-808",
+      "claudeSdk": {
+        "scanCostUSD": 0.886317,
+        "inputTokens": 1386970,
+        "outputTokens": 9419,
+        "cacheReadInputTokens": 1291615,
+        "cacheCreationInputTokens": 95310,
+        "turns": 28,
+        "toolExecutions": 27,
+        "toolCounts": {
+          "Read": 10,
+          "Grep": 16,
+          "Glob": 1
+        }
+      },
+      "pi": {
+        "scanCostUSD": 0.01334325,
+        "inputTokens": 6733,
+        "outputTokens": 8,
+        "cacheReadInputTokens": 3485,
+        "cacheCreationInputTokens": 3245,
+        "turns": 1,
+        "toolExecutions": 0,
+        "toolCounts": {}
+      }
+    }
+  ]
+}

@@ -2,7 +2,7 @@
   "mcpServers": {
     "sentry": {
       "type": "http",
-      "url": "https://mcp.sentry.dev/mcp/sentry/warden?experimental=1"
+      "url": "https://mcp.sentry.dev/mcp/sentry/warden"
     }
   }
 }

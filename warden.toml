@@ -1,25 +1,43 @@
 version = 1
 
 [defaults]
+runtime = "pi"
 # Fail check on high+ severity findings (critical, high)
 failOn = "high"
 # Show annotations for medium+ severity findings
 reportOn = "medium"
-# Exclude build output from all skills
-ignorePaths = ["dist/**", "evals/**"]
+# Exclude build output and internal eval fixtures from all skills
+ignorePaths = ["dist/**", "packages/evals/**"]
 
 [[skills]]
-name = "find-warden-bugs"
-paths = ["src/**/*.ts"]
-ignorePaths = ["src/**/*.test.ts"]
+name = "security-review"
+paths = [
+  "packages/warden/src/**/*.ts",
+  ".github/workflows/*.yml",
+  ".github/workflows/*.yaml",
+  ".github/actions/**/*.yml",
+  ".github/actions/**/*.yaml",
+  "action.yml",
+  "action.yaml",
+]
+ignorePaths = ["packages/warden/src/**/*.test.ts"]
 
 [[skills.triggers]]
 type = "pull_request"
 actions = ["opened", "synchronize", "reopened"]
 
 [[skills]]
-name = "code-simplifier"
-remote = "getsentry/sentry-skills"
+name = "code-review"
+paths = [
+  "packages/warden/src/**/*.ts",
+  ".github/workflows/*.yml",
+  ".github/workflows/*.yaml",
+  ".github/actions/**/*.yml",
+  ".github/actions/**/*.yaml",
+  "action.yml",
+  "action.yaml",
+]
 
 [[skills.triggers]]
-type = "local"
+type = "pull_request"
+actions = ["opened", "synchronize", "reopened"]

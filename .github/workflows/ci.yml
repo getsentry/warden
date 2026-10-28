@@ -1,7 +1,11 @@
 name: CI
 
 permissions:
+  actions: read
+  checks: write
   contents: read
+  pull-requests: read
+  statuses: write
 
 on:
   push:
@@ -25,13 +29,61 @@ jobs:
 
       - run: pnpm typecheck
       - run: pnpm lint
-      - run: pnpm test
+      - name: Service and React dashboard tests
+        run: pnpm --filter @sentry/warden-service-api test && pnpm --filter @sentry/warden-service test && pnpm --filter warden-service-app test
+      - name: Test
+        env:
+          VITEST_JUNIT: test-results.junit.xml
+        run: pnpm test:coverage
+
+      - name: Publish test report
+        uses: mikepenz/action-junit-report@cf701569b05ccdd861a76b8607a66d76f6fd4857
+        if: ${{ !cancelled() && hashFiles('test-results.junit.xml') != '' }}
+        with:
+          report_paths: test-results.junit.xml
+          check_name: Unit Test Results
+          comment: false
+          fail_on_failure: false
+          require_tests: true
+          include_passed: true
+          detailed_summary: true
+
+      - name: Verify coverage report
+        if: ${{ success() }}
+        run: test -f coverage/lcov.info
+
+      - name: Coverage report
+        uses: getsentry/codecov-action@0.3.7
+        if: ${{ success() && hashFiles('coverage/lcov.info') != '' }}
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          files: ./coverage/lcov.info
+          coverage-format: lcov
+          disable-search: true
+          enable-tests: false
+          flags: unittests
+          name: unit-tests
+          informational-project: true
+          informational-patch: true
+          fail-ci-if-error: true
       - run: pnpm build
       - run: pnpm build:action
+      - name: Smoke test action built-in skill resolution
+        run: |
+          GITHUB_ACTION_PATH="$PWD" node --input-type=module -e "
+            const skills = await import('./packages/warden/dist/skills/loader.js');
+            const skill = await skills.resolveSkillAsync('security-review');
+            if (skill.name !== 'security-review') {
+              throw new Error('Expected security-review built-in skill, got ' + skill.name);
+            }
+          "
 
-      - run: pnpm pack
+      - run: pnpm --filter @sentry/warden-service-api pack
+      - run: pnpm --filter @sentry/warden pack
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: ${{ github.sha }}
-          path: "*.tgz"
+          path: |
+            *.tgz
+          if-no-files-found: error

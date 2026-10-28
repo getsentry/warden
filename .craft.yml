@@ -2,7 +2,13 @@ changelog:
   policy: auto
 preReleaseCommand: bash bin/bump-version.sh
 targets:
-  - name: github
-    tagPrefix: v
+  - name: npm
+    id: "@sentry/warden-service-api"
+    includeNames: /^sentry-warden-service-api-\d.*\.tgz$/
+    access: public
   - name: npm
     id: "@sentry/warden"
+    includeNames: /^sentry-warden-\d.*\.tgz$/
+    access: public
+  - name: github
+    tagPrefix: v

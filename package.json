@@ -1,90 +1,99 @@
 {
-  "name": "@sentry/warden",
-  "version": "0.20.0",
-  "description": "Event-driven agent that reacts to GitHub events and executes skills via Claude Code SDK",
+  "name": "warden-monorepo",
+  "private": true,
   "type": "module",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
-  "bin": {
-    "warden": "dist/cli/index.js"
-  },
   "packageManager": "pnpm@10.28.0",
   "scripts": {
-    "cli": "tsx src/cli/index.ts",
-    "build": "tsc",
-    "build:action": "ncc build src/action/main.ts -o dist/action --no-source-map-register --license licenses.txt",
-    "dev": "tsc --watch",
-    "lint": "eslint src",
-    "lint:fix": "eslint src --fix",
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "test:examples": "vitest run --config vitest.integration.config.ts",
-    "test:evals": "vitest run --config vitest.evals.config.ts",
-    "typecheck": "tsc --noEmit",
-    "update-pricing": "tsx scripts/update-pricing.ts",
-    "docs": "pnpm --filter dex-docs dev",
-    "prepare": "simple-git-hooks"
+    "cli": "pnpm --filter @sentry/warden cli",
+    "clean:dist": "rm -rf dist packages/*/dist",
+    "build": "pnpm --filter @sentry/warden-service-api build && pnpm --filter @sentry/warden-service build && pnpm --filter warden-service-app build && pnpm --filter @sentry/warden build",
+    "build:action": "pnpm --filter @sentry/warden build:action",
+    "dev": "pnpm --filter @sentry/warden dev",
+    "lint": "oxlint . && pnpm --filter warden-service-app lint:types",
+    "lint:fix": "oxlint --fix . && pnpm --filter warden-service-app lint:types",
+    "test": "pnpm --filter @sentry/warden-service-api test && pnpm --filter @sentry/warden-service test && pnpm --filter warden-service-app test && pnpm --filter @sentry/warden test",
+    "test:coverage": "pnpm --filter @sentry/warden test:coverage",
+    "test:watch": "pnpm --filter @sentry/warden test:watch",
+    "test:examples": "pnpm --filter @sentry/warden test:examples",
+    "evals": "pnpm -C packages/evals evals",
+    "evals:scaffold": "pnpm -C packages/evals scaffold",
+    "typecheck": "pnpm --filter @sentry/warden-service-api build && pnpm --filter @sentry/warden-service build && pnpm --filter warden-service-app typecheck && pnpm --filter @sentry/warden typecheck && pnpm -C packages/evals typecheck",
+    "generate:jsonl-schema": "pnpm --filter @sentry/warden generate:jsonl-schema",
+    "docs": "pnpm --filter warden-docs dev",
+    "docs:check": "pnpm -C packages/docs check",
+    "prepare": "simple-git-hooks",
+    "pack:warden": "pnpm --filter @sentry/warden pack"
   },
   "simple-git-hooks": {
     "pre-commit": "pnpm lint-staged && pnpm typecheck"
   },
   "lint-staged": {
-    "src/**/*.ts": [
-      "eslint --fix"
+    "packages/warden/src/**/*.ts": [
+      "oxlint --fix"
+    ],
+    "packages/evals/src/**/*.ts": [
+      "oxlint --fix"
+    ],
+    "packages/evals/scripts/**/*.ts": [
+      "oxlint --fix"
+    ],
+    "packages/evals/*.ts": [
+      "oxlint --fix"
     ],
     "packages/docs/**/*.astro": [
       "pnpm -C packages/docs build"
+    ],
+    "apps/warden-service/**/*.{ts,tsx}": [
+      "oxlint --fix"
+    ],
+    "packages/warden-service*/src/**/*.ts": [
+      "oxlint --fix"
     ]
   },
-  "keywords": [
-    "github",
-    "automation",
-    "claude",
-    "ai",
-    "code-review",
-    "security"
-  ],
-  "author": "Sentry",
-  "license": "FSL-1.1-ALv2",
-  "repository": "https://github.com/getsentry/warden",
-  "bugs": {
-    "url": "https://github.com/getsentry/warden/issues"
-  },
-  "homepage": "https://warden.sentry.dev",
-  "dependencies": {
-    "@anthropic-ai/claude-agent-sdk": "^0.2.22",
-    "@anthropic-ai/sdk": "^0.72.1",
-    "@inquirer/select": "^5.0.4",
-    "@octokit/rest": "^22.0.1",
-    "@sentry/node": "^10.38.0",
-    "chalk": "^5.6.2",
-    "dotenv": "^17.2.3",
-    "fast-glob": "^3.3.3",
-    "figures": "^6.1.0",
-    "ignore": "^7.0.5",
-    "ink": "^5.2.1",
-    "ink-spinner": "^5.0.0",
-    "nanoid": "^5.1.6",
-    "react": "^18.3.1",
-    "smol-toml": "^1.6.0",
-    "yaml": "^2.8.2",
-    "zod": "^4.3.6"
-  },
   "devDependencies": {
-    "@eslint/js": "^9.39.2",
-    "@types/node": "^25.0.10",
-    "@types/react": "^18.3.27",
+    "@types/node": "^25.9.1",
+    "@types/react": "^19.2.15",
+    "@types/react-dom": "^19.2.7",
     "@vercel/ncc": "^0.38.4",
-    "eslint": "^9.39.2",
+    "@vitest/coverage-v8": "^4.1.11",
     "ink-testing-library": "^4.0.0",
-    "lint-staged": "^16.2.7",
+    "lint-staged": "^17.0.5",
+    "oxlint": "^1.66.0",
+    "oxlint-tsgolint": "^7.0.2003",
     "simple-git-hooks": "^2.13.1",
-    "tsx": "^4.19.0",
-    "typescript": "^5.9.3",
-    "typescript-eslint": "^8.54.0",
-    "vitest": "^4.0.18"
+    "tsx": "^4.23.12",
+    "typescript": "^6.0.3",
+    "vite": "^8.2.2",
+    "vitest": "^4.1.11"
   },
   "engines": {
     "node": ">=20.0.0"
+  },
+  "pnpm": {
+    "overrides": {
+      "@esbuild-kit/core-utils>esbuild": "0.25.12",
+      "@vercel/fun>@tootallnate/once": "2.0.1",
+      "@vercel/fun>tar": "7.5.22",
+      "@vercel/python-analysis>js-yaml": "4.3.2",
+      "@vercel/python-analysis>minimatch": "10.2.5",
+      "@vercel/static-config>ajv": "8.18.0",
+      "brace-expansion@<1.1.21": "1.1.21",
+      "brace-expansion@>=4.0.0 <5.0.12": "5.0.12",
+      "devalue@<5.9.3": "5.9.3",
+      "fast-uri@>=3.0.0 <3.1.8": "3.1.8",
+      "http-cache-semantics@<4.3.0": "4.3.0",
+      "path-to-regexp@6.1.0": "6.3.0",
+      "path-to-regexp@8.2.0": "8.4.2",
+      "path-to-regexp@8.3.0": "8.4.2",
+      "postcss-nested>postcss-selector-parser": "7.1.6",
+      "sharp@<0.35.5": "0.35.5",
+      "smol-toml@<1.9.0": "1.9.0",
+      "source-map-js@<1.2.2": "1.2.2",
+      "undici@5.28.4": "6.28.1",
+      "undici@5.29.0": "6.28.1",
+      "undici@>=8.0.0 <8.10.2": "8.10.2",
+      "react": "19.2.6",
+      "react-dom": "19.2.6"
+    }
   }
 }

@@ -1,0 +1,30 @@
+{
+  "given": "a robots.txt golden test disallows a prefix that also blocks a documented public metadata endpoint",
+  "files": [
+    "fixtures/robots-prefix-blocks-public-metadata/__static_test.ts"
+  ],
+  "should_find": [
+    {
+      "finding": "robots.txt Disallow /mcp is a prefix rule that blocks the public /mcp.json metadata endpoint from crawlers",
+      "severity": "high"
+    }
+  ],
+  "should_not_find": [
+    "the test file being test-only makes the finding low severity"
+  ],
+  "supporting_files": [
+    "fixtures/robots-prefix-blocks-public-metadata/LICENSE.md"
+  ],
+  "notes": {
+    "source": "https://github.com/getsentry/warden/issues/317",
+    "repository": "getsentry/warden",
+    "source_ref": "69ea9ccd221a02cdcf39e7811609a2f83f2998c5",
+    "source_files": [
+      {
+        "fixturePath": "fixtures/robots-prefix-blocks-public-metadata/__static_test.ts",
+        "sourcePath": "evals/fixtures/robots-prefix-blocks-public-metadata/__static_test.ts",
+        "ref": "69ea9ccd221a02cdcf39e7811609a2f83f2998c5"
+      }
+    ]
+  }
+}

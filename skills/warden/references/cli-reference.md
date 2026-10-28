@@ -1,12 +1,21 @@
 # CLI Reference
 
+## Contents
+
+- Usage
+- Commands
+- Targets
+- Options
+- Per-Command Options
+- Severity Levels
+- Exit Codes
+- Examples
+
 ## Usage
 
 ```
 warden [command] [targets...] [options]
 ```
-
-Analyze code for security issues and code quality.
 
 ## Commands
 
@@ -33,15 +42,15 @@ Ambiguous targets (no path separator, no extension) are resolved by checking if 
 
 | Option | Description |
 |--------|-------------|
-| `--skill <name>` | Run only this skill (default: run all built-in skills) |
-| `--config <path>` | Path to warden.toml (default: `./warden.toml`) |
+| `--skill <name>` | Run only this skill by name or path; names fall back to built-ins |
+| `--config-path <path>` | Path to warden.toml or a directory containing it (default: `./warden.toml`). `--config` is a deprecated alias. |
 | `-m, --model <model>` | Model to use (fallback when not set in config) |
 | `--json` | Output results as JSON |
 | `-o, --output <path>` | Write full run output to a JSONL file |
 | `--fail-on <severity>` | Exit with code 1 if findings >= severity |
 | `--report-on <severity>` | Only show findings >= severity in output |
 | `--fix` | Automatically apply all suggested fixes |
-| `--parallel <n>` | Max concurrent skill executions (default: 4) |
+| `--parallel <n>` | Max concurrent hunk analyses across skills (default: 4) |
 | `--git` | Force ambiguous targets to be treated as git refs |
 | `--offline` | Use cached remote skills without network access |
 | `-q, --quiet` | Errors and final summary only |
@@ -83,8 +92,6 @@ Ambiguous targets (no path separator, no extension) are resolved by checking if 
 
 ## Severity Levels
 
-Used in `--fail-on` and `--report-on`:
-
 | Level | Meaning |
 |-------|---------|
 | `high` | Must fix before merge |
@@ -107,7 +114,7 @@ warden init
 
 # Interactive skill selection
 warden add
-warden add <skill-name>
+warden add security-review
 warden add --list
 
 # Remote skills
