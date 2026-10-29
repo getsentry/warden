@@ -330,6 +330,7 @@ const HELP_COMMANDS: Record<HelpTarget, HelpCommandSpec> = {
       'warden add',
       'warden add security-review',
       'warden add code-review',
+      'warden add integrity-review',
       'warden add --remote your-org/warden-skills --skill api-review',
     ],
   },

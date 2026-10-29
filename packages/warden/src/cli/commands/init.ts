@@ -75,6 +75,7 @@ function generateWardenToml(): string {
 # Add built-in reviews with:
 #   warden add security-review
 #   warden add code-review
+#   warden add integrity-review
 
 version = 1
 
@@ -91,6 +92,7 @@ reportOn = "medium"
 # Add built-in reviews with:
 #   warden add security-review
 #   warden add code-review
+#   warden add integrity-review
 #
 # Example skill with path filters and triggers:
 #
@@ -426,6 +428,7 @@ export async function runInit(options: CLIOptions, reporter: Reporter): Promise<
   reporter.bold('Next steps:');
   reporter.text(`  1. Add built-in reviews: ${chalk.cyan('warden add security-review')}`);
   reporter.text(`     ${chalk.cyan('warden add code-review')}`);
+  reporter.text(`     ${chalk.cyan('warden add integrity-review')}`);
   reporter.text(`  2. Set ${chalk.cyan('WARDEN_MODEL')} and the WARDEN-prefixed provider API key for that model`);
   reporter.text(`  3. Add the same values to organization or repository secrets`);
 

@@ -27,6 +27,39 @@ warden add code-review
 warden --skill code-review
 ```
 
+## integrity-review
+
+`integrity-review` looks for changes that would harm the organization through
+their own behavior, or that hide what they do: destructive operations, date or
+condition triggers, install and build hooks, dependency and registry tampering,
+disabled tests or security tooling, audit logging removal, infrastructure
+privilege grants, obfuscated code, misleading comments, text aimed at automated
+reviewers, and changes outside the pull request's stated scope.
+
+```bash
+warden add integrity-review
+warden --skill integrity-review
+```
+
+It complements the other two: `security-review` finds weaknesses an outside
+party can exploit, `code-review` finds unintended bugs, and `integrity-review`
+finds changes where the code itself is the problem. Shared cases such as a
+concealed auth bypass are reported once by each skill from its own angle.
+
+Do not narrow `integrity-review` with `paths`. Lockfiles, vendored code,
+generated files, fixtures, CI config, and infrastructure are where harmful
+changes hide because reviewers skip them. If cost matters, lower its `effort`
+instead; it judges effects from the hunk, file list, and PR text rather than
+tracing deep call paths.
+
+## How They Fit Together
+
+| Skill | Finds | Does not find |
+| --- | --- | --- |
+| `security-review` | Exploitable weaknesses: auth bypass, injection, XSS, SSRF, secrets exposure | Changes whose own behavior is the harm |
+| `code-review` | Unintended correctness bugs and regressions | Security or integrity issues |
+| `integrity-review` | Destructive, concealed, or trigger-gated changes; reviewer-directed text | Exploitable weaknesses, ordinary bugs |
+
 Built-ins are first passes. Add project-specific skills for domain rules,
 framework conventions, API contracts, and product-specific invariants.
 

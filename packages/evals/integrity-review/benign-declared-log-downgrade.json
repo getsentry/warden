@@ -1,0 +1,22 @@
+{
+  "given": "an OAuth token error handler that logs routine client errors at info with a stated reason and the full record retained, and a token rate-limit bucket that is option-gated and falls back to the existing per-user limit when the option is unset or unreadable",
+  "files": [
+    "fixtures/benign-declared-log-downgrade/oauth_token.py",
+    "fixtures/benign-declared-log-downgrade/ratelimit.py"
+  ],
+  "should_find": [
+    {
+      "finding": "no findings: the log downgrade is declared, scoped, and keeps the record, and the rate-limit split falls back to the existing limit rather than to no limit",
+      "required": false
+    }
+  ],
+  "should_not_find": [
+    "logging OAuth token errors at info reported as observability or audit suppression",
+    "the token rate-limit bucket reported as weakening or removing rate limiting",
+    "the option read failure fallback reported as a control being disabled",
+    "catching TokenError reported as swallowing exceptions on a security path"
+  ],
+  "notes": {
+    "source": "Modeled on three closed getsentry/sentry pull requests from a 500-PR backtest that the source skill flagged as PASS_WITH_NOTES and the audit confirmed as correctly empty: a declared OAuth error-to-info downgrade, a declared exception-to-warning downgrade for handled 400s, and an option-gated token rate-limit bucket whose fallback is the existing limit."
+  }
+}
