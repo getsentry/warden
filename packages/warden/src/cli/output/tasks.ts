@@ -111,6 +111,13 @@ function summarizeRunFailure(args: {
       message: `Provider unavailable: all ${totalHunks} chunk${totalHunks === 1 ? '' : 's'} failed to analyze. Warden stopped early.`,
     };
   }
+  if (allAnalysisFailuresHaveCode(hunkFailures, 'context_overflow')) {
+    return {
+      code: 'context_overflow',
+      message: `Context window exceeded: all ${totalHunks} chunk${totalHunks === 1 ? '' : 's'} failed to analyze. `
+        + 'The review context grew larger than the model context window.',
+    };
+  }
   const extractionCodes = extractionFailureCodes(hunkFailures);
   const primaryExtractionCode = extractionCodes?.[0];
   if (primaryExtractionCode) {

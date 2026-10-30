@@ -496,7 +496,9 @@ async function analyzeHunk(
                 ? 'max_turns'
                 : resultMessage.status === 'provider_error'
                   ? 'provider_unavailable'
-                  : 'sdk_error';
+                  : resultMessage.status === 'context_overflow'
+                    ? 'context_overflow'
+                    : 'sdk_error';
             const failureMessage = `Runtime execution failed: ${errorSummary}`;
             const openReason = recordCircuitFailure(
               options,
@@ -1272,6 +1274,16 @@ async function runSkillAnalysis(
       throw new SkillRunnerError(
         `Provider unavailable: all ${totalHunks} chunk${totalHunks === 1 ? '' : 's'} failed to analyze. Warden stopped early.`,
         { code: 'provider_unavailable' },
+      );
+    }
+    if (
+      analysisFailures.length > 0
+      && analysisFailures.every((failure) => failure.code === 'context_overflow')
+    ) {
+      throw new SkillRunnerError(
+        `Context window exceeded: all ${totalHunks} chunk${totalHunks === 1 ? '' : 's'} failed to analyze. `
+          + 'The review context grew larger than the model context window.',
+        { code: 'context_overflow' },
       );
     }
     throw new SkillRunnerError(
