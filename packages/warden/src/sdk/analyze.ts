@@ -496,7 +496,9 @@ async function analyzeHunk(
                 ? 'max_turns'
                 : resultMessage.status === 'provider_error'
                   ? 'provider_unavailable'
-                  : 'sdk_error';
+                  : resultMessage.status === 'context_overflow'
+                    ? 'context_overflow'
+                    : 'sdk_error';
             const failureMessage = `Runtime execution failed: ${errorSummary}`;
             const openReason = recordCircuitFailure(
               options,

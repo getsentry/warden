@@ -561,7 +561,7 @@ The final line of a completed run is a `type: "summary"` record. It carries aggr
 
 **HunkFailure**: `{ type: "analysis" | "extraction", filename: string, lineRange: string, code: ErrorCode, message: string, preview?: string, attempts?: int }`
 
-**ErrorCode**: one of `"auth_failed"`, `"provider_unavailable"`, `"sdk_error"`, `"subprocess_failure"`, `"max_turns"`, `"aborted"`, `"all_hunks_failed"`, `"invalid_model_selector"`, `"skill_resolution_failed"`, `"extraction_invalid_json"`, `"extraction_unbalanced_json"`, `"extraction_no_findings_json"`, `"extraction_missing_findings_key"`, `"extraction_findings_not_array"`, `"extraction_llm_failed"`, `"extraction_llm_timeout"`, `"extraction_no_api_key"`, `"unknown"`. Stable public contract.
+**ErrorCode**: one of `"auth_failed"`, `"provider_unavailable"`, `"sdk_error"`, `"subprocess_failure"`, `"max_turns"`, `"aborted"`, `"all_hunks_failed"`, `"invalid_model_selector"`, `"skill_resolution_failed"`, `"extraction_invalid_json"`, `"extraction_unbalanced_json"`, `"extraction_no_findings_json"`, `"extraction_missing_findings_key"`, `"extraction_findings_not_array"`, `"extraction_llm_failed"`, `"extraction_llm_timeout"`, `"extraction_no_api_key"`, `"unknown"`, `"context_overflow"`. Stable public contract.
 
 **BySeverity**: `{ high: int, medium: int, low: int }`. Legacy 5-level keys (`critical`, `info`) are still accepted on read for backward compatibility with older logs and normalized to `high`/`low`; new output is strictly 3-level.
 

@@ -542,6 +542,59 @@ describe('analyzeFile', () => {
     expect(result.responseModels).toEqual(['claude-sonnet-4-5-20260929']);
   });
 
+  it('keeps analyzing other hunks when one hunk overflows the context window', async () => {
+    const controller = new AbortController();
+    const circuitBreaker = new ProviderFailureCircuitBreaker({
+      maxConsecutiveProviderFailures: 1,
+      abortController: controller,
+    });
+    const runSkill = vi.fn().mockResolvedValue({
+      result: {
+        status: 'context_overflow',
+        text: '',
+        errors: ["This endpoint's maximum context length is 500000 tokens. However, you requested about 501873 tokens."],
+        usage: makeUsage(),
+      },
+    });
+    vi.mocked(getRuntime).mockReturnValue({
+      name: 'pi',
+      runSkill,
+      runAuxiliary: vi.fn(),
+      runSynthesis: vi.fn(),
+    } as unknown as Runtime);
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    const result = await analyzeFile(
+      {
+        name: 'security-review',
+        description: 'Security review.',
+        prompt: 'Return findings as JSON.',
+      },
+      makePreparedFile(2),
+      '/tmp/repo',
+      {
+        abortController: controller,
+        circuitBreaker,
+        concurrency: 1,
+        retry: {
+          maxRetries: 0,
+          initialDelayMs: 1,
+          backoffMultiplier: 1,
+          maxDelayMs: 1,
+        },
+      },
+    );
+
+    expect(runSkill).toHaveBeenCalledTimes(2);
+    expect(controller.signal.aborted).toBe(false);
+    expect(circuitBreaker.reason).toBeUndefined();
+    expect(result.hunkFailures.map((failure) => failure.code)).toEqual([
+      'context_overflow',
+      'context_overflow',
+    ]);
+    consoleSpy.mockRestore();
+  });
+
   it('opens the shared circuit after consecutive provider failures', async () => {
     const controller = new AbortController();
     const circuitBreaker = new ProviderFailureCircuitBreaker({

@@ -20,6 +20,7 @@ import {
 } from '@earendil-works/pi-coding-agent';
 import {
   Type,
+  isContextOverflow,
   type AssistantMessage,
   type Api,
   type Model,
@@ -72,6 +73,13 @@ const MUTATING_TOOLS: ToolName[] = ['Write', 'Edit', 'Bash'];
 const UNSUPPORTED_TOOLS: ToolName[] = ['WebFetch', 'WebSearch'];
 const DEFAULT_PI_PROVIDER_MAX_RETRIES = 2;
 const PI_SKILL_PROVIDER_MAX_RETRIES = 0;
+/**
+ * Output cap for each skill agent turn. Without it, Pi requests the model's full
+ * output limit and then shrinks it with a chars/4 input estimate. For models
+ * whose output limit is close to the context window, that estimate can miss and
+ * the provider rejects the request as too large.
+ */
+const PI_SKILL_MAX_TOKENS = 64_000;
 const PI_MODEL_REFRESH_TIMEOUT_MS = 15_000;
 /**
  * Share one network catalog refresh per provider across concurrent Pi prompts.
@@ -475,9 +483,10 @@ function statusFromPiMessage(message: AssistantMessage, hitMaxTurns: boolean): S
     case 'toolUse':
       return 'provider_error';
     case 'error':
-      return message.errorMessage && isAuthenticationErrorMessage(message.errorMessage)
-        ? 'auth_error'
-        : 'provider_error';
+      if (message.errorMessage && isAuthenticationErrorMessage(message.errorMessage)) {
+        return 'auth_error';
+      }
+      return isContextOverflow(message) ? 'context_overflow' : 'provider_error';
     case 'aborted':
       return 'aborted';
     default:
@@ -755,13 +764,15 @@ async function runPiPrompt(options: PiPromptOptions): Promise<PiPromptResult> {
       settingsManager,
     });
     session = result.session;
-    if (options.maxTokens !== undefined) {
+    const maxTokens = options.maxTokens;
+    if (maxTokens !== undefined) {
       // Preserve Pi's provider/auth wrapper while forwarding the caller's cap.
-      // Otherwise structured calls silently use the model's full output limit.
+      // Otherwise calls silently use the model's full output limit. Never ask
+      // for more than the model allows, since providers reject that request.
       const stream = session.agent.streamFunction.bind(session.agent);
       session.agent.streamFunction = (model, context, streamOptions) => stream(model, context, {
         ...streamOptions,
-        maxTokens: options.maxTokens,
+        maxTokens: model.maxTokens > 0 ? Math.min(maxTokens, model.maxTokens) : maxTokens,
       });
     }
     if (result.modelFallbackMessage) {
@@ -1033,6 +1044,7 @@ export const piRuntime: Runtime = {
           'gen_ai.agent.name': skillName,
           ...(model ? { 'gen_ai.request.model': model } : {}),
           'warden.request.max_turns': maxTurns,
+          'gen_ai.request.max_tokens': PI_SKILL_MAX_TOKENS,
         },
       },
       async (span) => {
@@ -1050,6 +1062,7 @@ export const piRuntime: Runtime = {
             legacyAnthropicApiKey: apiKey,
             toolNames: skillTools.toolNames,
             maxTurns,
+            maxTokens: PI_SKILL_MAX_TOKENS,
             effort,
             maxRetries: PI_SKILL_PROVIDER_MAX_RETRIES,
             abortController,
@@ -1057,7 +1070,7 @@ export const piRuntime: Runtime = {
             traceRecorder: request.traceRecorder,
           });
           run.warnings.unshift(...skillTools.warnings);
-          const result = normalizePiResult(run);
+          const result = normalizePiResult(run, PI_SKILL_MAX_TOKENS);
 
           if (result) {
             if (run.lastAssistant?.provider) {

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, beforeAll, afterAll } from 'vitest';
 import { z } from 'zod';
+import type * as PiAi from '@earendil-works/pi-ai';
 import {
   DefaultResourceLoader,
   ModelRuntime,
@@ -75,11 +76,15 @@ const piMocks = vi.hoisted(() => {
   };
 });
 
-vi.mock('@earendil-works/pi-ai', () => ({
-  Type: {
-    Unsafe: vi.fn((schema: unknown) => schema),
-  },
-}));
+vi.mock('@earendil-works/pi-ai', async (importOriginal) => {
+  const actual = await importOriginal<typeof PiAi>();
+  return {
+    Type: {
+      Unsafe: vi.fn((schema: unknown) => schema),
+    },
+    isContextOverflow: actual.isContextOverflow,
+  };
+});
 
 vi.mock('./pi-file-tools.js', () => ({
   createCheckoutFileTools: vi.fn((_cwd: string, toolNames: readonly string[]) =>
@@ -186,9 +191,45 @@ describe('piRuntime.runSkill', () => {
     piMocks.listeners = [];
     piMocks.resourceLoaderOptions = [];
     piMocks.customTools = [];
+    piMocks.streamFunction.mockReset();
+    piMocks.session.agent.streamFunction = piMocks.streamFunction;
     piMocks.session.prompt.mockImplementation(async () => emitSuccessfulRun());
     piMocks.modelRuntime.getModel.mockReturnValue(piMocks.model);
     piMocks.modelRuntime.getModels.mockReturnValue([piMocks.model]);
+  });
+
+  it.each([
+    { modelMaxTokens: 450_000, expected: 64_000 },
+    { modelMaxTokens: 32_000, expected: 32_000 },
+  ])('caps skill output at $expected tokens when the model allows $modelMaxTokens', async ({ modelMaxTokens, expected }) => {
+    const model = { ...piMocks.model, maxTokens: modelMaxTokens };
+    piMocks.session.prompt.mockImplementation(async () => {
+      await piMocks.session.agent.streamFunction(model, { messages: [] }, { reasoning: 'high' });
+      emitSuccessfulRun();
+    });
+
+    const result = await piRuntime.runSkill(baseSkillRequest());
+
+    expect(result.result?.status).toBe('success');
+    expect(piMocks.streamFunction).toHaveBeenCalledWith(model, { messages: [] }, {
+      reasoning: 'high', maxTokens: expected,
+    });
+  });
+
+  it('reports a provider context overflow apart from other provider errors', async () => {
+    piMocks.session.prompt.mockImplementation(async () => emitSuccessfulRun(assistantMessage({
+      stopReason: 'error',
+      content: [],
+      errorMessage: "400 This endpoint's maximum context length is 500000 tokens. However, you requested about "
+        + '501873 tokens (64385 of text input, 818 of tool input, 436670 in the output).',
+    })));
+
+    const result = await piRuntime.runSkill(baseSkillRequest());
+
+    expect(result.result).toMatchObject({
+      status: 'context_overflow',
+      errors: [expect.stringContaining('maximum context length')],
+    });
   });
 
   it('leaves the model untouched when no base URL override is set', async () => {
