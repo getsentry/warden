@@ -967,6 +967,35 @@ describe('runSkill', () => {
     expect([...controllers][0]!.signal.aborted).toBe(true);
   });
 
+  it('reports all-context-overflow failures without authentication guidance', async () => {
+    vi.mocked(getRuntime).mockReturnValue({
+      name: 'pi',
+      runSkill: vi.fn().mockResolvedValue({
+        result: {
+          status: 'context_overflow',
+          text: '',
+          errors: ["This endpoint's maximum context length is 500000 tokens."],
+          usage: makeUsage(),
+        },
+      }),
+      runAuxiliary: vi.fn(),
+      runSynthesis: vi.fn(),
+    } as unknown as Runtime);
+
+    await expect(runSkill(
+      {
+        name: 'security-review',
+        description: 'Security review.',
+        prompt: 'Return findings as JSON.',
+      },
+      makeContextWithOneHunk(),
+      { runtime: 'pi', verifyFindings: false },
+    )).rejects.toMatchObject({
+      code: 'context_overflow',
+      message: expect.not.stringContaining('authentication'),
+    });
+  });
+
   it('reports all-extraction failures without authentication guidance', async () => {
     vi.mocked(getRuntime).mockReturnValue({
       name: 'pi',

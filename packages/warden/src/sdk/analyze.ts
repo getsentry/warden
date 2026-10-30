@@ -1276,6 +1276,16 @@ async function runSkillAnalysis(
         { code: 'provider_unavailable' },
       );
     }
+    if (
+      analysisFailures.length > 0
+      && analysisFailures.every((failure) => failure.code === 'context_overflow')
+    ) {
+      throw new SkillRunnerError(
+        `Context window exceeded: all ${totalHunks} chunk${totalHunks === 1 ? '' : 's'} failed to analyze. `
+          + 'The review context grew larger than the model context window.',
+        { code: 'context_overflow' },
+      );
+    }
     throw new SkillRunnerError(
       `All ${totalHunks} chunk${totalHunks === 1 ? '' : 's'} failed to analyze. ` +
       `This usually indicates an authentication problem. ${allHunksFailedGuidance(options.runtime)}`,
