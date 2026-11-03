@@ -8,22 +8,47 @@
 import { initSentry, flushSentry } from '../sentry.js';
 import { ActionFailedError } from './workflow/base.js';
 import { runAction } from './runner.js';
+import { ActionCancellation, createActionSignalHandler } from './cancellation.js';
 
-async function flushActionTelemetry(): Promise<void> {
-  if (!(await flushSentry())) {
+const CANCELLATION_TELEMETRY_FLUSH_TIMEOUT_MS = 3_000;
+
+async function flushActionTelemetry(timeoutMs?: number): Promise<void> {
+  if (!(await flushSentry(timeoutMs))) {
     console.warn('::warning::Timed out while flushing Sentry telemetry');
   }
 }
 
-initSentry('action');
-runAction()
-  .then(() => flushActionTelemetry())
-  .catch(async (error) => {
+async function main(): Promise<void> {
+  const cancellation = new ActionCancellation();
+  const handleSignal = createActionSignalHandler({ cancellation });
+  const onSigint = () => handleSignal('SIGINT');
+  const onSigterm = () => handleSignal('SIGTERM');
+  process.on('SIGINT', onSigint);
+  process.on('SIGTERM', onSigterm);
+
+  try {
+    await runAction(cancellation);
+    await flushActionTelemetry(
+      cancellation.requested ? CANCELLATION_TELEMETRY_FLUSH_TIMEOUT_MS : undefined,
+    );
+    if (cancellation.requested) {
+      process.exitCode = cancellation.exitCode;
+    }
+  } catch (error) {
     if (error instanceof ActionFailedError) {
       console.error(`::error::${error.message}`);
     } else {
       console.error(`::error::Unexpected error: ${error}`);
     }
-    await flushActionTelemetry();
-    process.exit(1);
-  });
+    await flushActionTelemetry(
+      cancellation.requested ? CANCELLATION_TELEMETRY_FLUSH_TIMEOUT_MS : undefined,
+    );
+    process.exitCode = cancellation.requested ? cancellation.exitCode : 1;
+  } finally {
+    process.off('SIGINT', onSigint);
+    process.off('SIGTERM', onSigterm);
+  }
+}
+
+initSentry('action');
+void main();

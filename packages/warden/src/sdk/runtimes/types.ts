@@ -144,6 +144,7 @@ export interface SynthesisRunRequest<T> {
   maxTokens?: number;
   timeout?: number;
   maxRetries?: number;
+  abortController?: AbortController;
 }
 
 export interface Runtime {

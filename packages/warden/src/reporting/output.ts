@@ -142,11 +142,18 @@ export const TriggerRunResultSchema = z.discriminatedUnion('status', [
     report: z.never().optional(),
     error: TriggerErrorSchema,
   }),
+  TriggerRunResultBaseSchema.extend({
+    status: z.literal('pending'),
+    report: z.never().optional(),
+    error: z.never().optional(),
+  }),
 ]);
 
 export const FindingsOutputSchema = z.object({
   version: z.literal('1'),
   timestamp: z.string().datetime(),
+  /** Final run disposition. Optional while older analyze artifacts remain replayable. */
+  outcome: z.enum(['success', 'failure', 'cancelled', 'skipped']).optional(),
   runAttempt: z.string().optional(),
   /** Which build of Warden produced this run. */
   harness: HarnessSchema.optional(),
@@ -243,6 +250,7 @@ export interface ReplayTriggerResult {
   skillName: string;
   report?: SkillReport;
   error?: unknown;
+  pending?: boolean;
   findingProcessingEvents?: FindingProcessingEvent[];
   auxiliaryModel?: string;
   synthesisModel?: string;
@@ -269,6 +277,7 @@ export interface BuildFindingsOutputOptions {
   timestamp?: string;
   runId?: string;
   runAttempt?: string;
+  outcome?: NonNullable<FindingsOutput['outcome']>;
   actionRef?: string;
   triggerResults?: ReplayTriggerResult[];
   resolvedDefaults?: z.infer<typeof ResolvedDefaultsSchema>;
@@ -374,6 +383,15 @@ function serializeTriggerResult(result: ReplayTriggerResult): z.infer<typeof Tri
     };
   }
 
+  if (result.pending) {
+    return {
+      triggerId: result.triggerId,
+      triggerName: result.triggerName,
+      skillName: result.skillName,
+      status: 'pending',
+    };
+  }
+
   return {
     triggerId: result.triggerId,
     triggerName: result.triggerName,
@@ -448,6 +466,7 @@ export function buildFindingsOutput(
   const output = {
     version: '1',
     timestamp: options.timestamp ?? new Date().toISOString(),
+    ...(options.outcome && { outcome: options.outcome }),
     runAttempt: options.runAttempt ?? process.env['GITHUB_RUN_ATTEMPT'],
     harness: { name: 'warden' as const, version: getVersion(), actionRef: options.actionRef },
     repository: {

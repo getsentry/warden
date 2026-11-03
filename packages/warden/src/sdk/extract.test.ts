@@ -146,6 +146,23 @@ describe('mergeCrossLocationFindings', () => {
     expect(result.mergedCount).toBe(0);
   });
 
+  it('does not start consolidation after cancellation', async () => {
+    const findings = [
+      makeFinding({ id: 'f1', location: { path: 'src/a.ts', startLine: 1 } }),
+      makeFinding({ id: 'f2', location: { path: 'src/b.ts', startLine: 1 } }),
+    ];
+    const abortController = new AbortController();
+    abortController.abort();
+
+    const result = await mergeCrossLocationFindings(findings, {
+      apiKey: 'test-key',
+      abortController,
+    });
+
+    expect(result.findings).toEqual(findings);
+    expect(mockCallHaiku).not.toHaveBeenCalled();
+  });
+
   it('returns unchanged when LLM says no groups', async () => {
     const findings = [
       makeFinding({ id: 'f1', title: 'Issue A', location: { path: 'src/a.ts', startLine: 1 } }),
@@ -188,6 +205,7 @@ describe('mergeCrossLocationFindings', () => {
       runSynthesis,
     } as unknown as ReturnType<typeof runtimes.getRuntime>);
 
+    const abortController = new AbortController();
     try {
       const result = await mergeCrossLocationFindings(findings, {
         apiKey: 'test-key',
@@ -195,11 +213,13 @@ describe('mergeCrossLocationFindings', () => {
         runtime: 'pi',
         model: 'openrouter/openai/gpt-5.6-luna',
         effort: 'high',
+        abortController,
       });
       expect(result.mergedCount).toBe(0);
       expect(runSynthesis).toHaveBeenCalledWith(expect.objectContaining({
         model: 'openrouter/openai/gpt-5.6-luna',
         effort: 'high',
+        abortController,
       }));
     } finally {
       getRuntimeSpy.mockRestore();

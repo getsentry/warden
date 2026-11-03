@@ -113,6 +113,7 @@ import {
 } from './base.js';
 import { runScheduleWorkflow } from './schedule.js';
 import { clearSkillsCache } from '../../skills/loader.js';
+import { ActionCancellation } from '../cancellation.js';
 
 // Type the mocks
 const mockRunSkill = vi.mocked(runSkill);
@@ -660,7 +661,7 @@ describe('runScheduleWorkflow', () => {
       expect(mockSetFailed).not.toHaveBeenCalled();
     });
 
-    it('records error and calls handleTriggerErrors when trigger throws', async () => {
+    it('isolates trigger aborts when continuing after a failure', async () => {
       // Use multi-trigger fixture so not all triggers fail
       mockResolveSkillAsync.mockResolvedValue({
         name: 'test-skill-a',
@@ -670,8 +671,14 @@ describe('runScheduleWorkflow', () => {
 
       // First trigger fails, second succeeds
       mockRunSkill
-        .mockRejectedValueOnce(new Error('Skill failed'))
-        .mockResolvedValueOnce(createSkillReport());
+        .mockImplementationOnce(async (_skill, _context, options) => {
+          options?.abortController?.abort();
+          throw new Error('Skill failed');
+        })
+        .mockImplementationOnce(async (_skill, _context, options) => {
+          expect(options?.abortController?.signal.aborted).toBe(false);
+          return createSkillReport();
+        });
 
       // Should not throw since only one of two triggers failed
       await runScheduleWorkflow(
@@ -684,6 +691,7 @@ describe('runScheduleWorkflow', () => {
       expect(consoleErrorSpy).toHaveBeenCalledWith(
         expect.stringContaining('Trigger test-skill-a failed')
       );
+      expect(mockCreateOrUpdateIssue).toHaveBeenCalledTimes(1);
     });
 
     it('fails when all triggers throw', async () => {
@@ -813,6 +821,39 @@ describe('runScheduleWorkflow', () => {
       // The final write never has a 'pending' skip reason.
       const finalOptions = mockWriteFindingsOutput.mock.calls[0]?.[3];
       expect(finalOptions?.skippedTriggers?.some((t) => t.reason === 'pending')).toBe(false);
+    });
+
+    it('flushes an in-progress report and finalizes as cancelled before creating an issue', async () => {
+      const cancellation = new ActionCancellation();
+      const finding = createFinding();
+      let notifyStarted!: () => void;
+      const started = new Promise<void>((resolve) => {
+        notifyStarted = resolve;
+      });
+      mockRunSkill.mockImplementation(async (_skill, _context, options) => {
+        notifyStarted();
+        await new Promise<void>((resolve) => {
+          options?.abortController?.signal.addEventListener('abort', () => resolve(), { once: true });
+        });
+        return createSkillReport({ findings: [finding] });
+      });
+
+      const workflow = runScheduleWorkflow(
+        mockOctokit,
+        createDefaultInputs(),
+        SCHEDULE_FIXTURES,
+        cancellation,
+      );
+      await started;
+      cancellation.request('SIGTERM');
+      await workflow;
+
+      const finalCall = mockWriteFindingsOutput.mock.calls.at(-1);
+      expect(finalCall?.[0]).toEqual([
+        expect.objectContaining({ findings: [finding] }),
+      ]);
+      expect(finalCall?.[3]?.outcome).toBe('cancelled');
+      expect(mockCreateOrUpdateIssue).not.toHaveBeenCalled();
     });
 
     it('marks a trigger with no matching files as skipped for no_changes', async () => {
