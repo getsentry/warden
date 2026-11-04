@@ -59,6 +59,10 @@ inputs:
     description: 'Maximum number of concurrent trigger executions'
     required: false
     default: '5'
+  incremental:
+    description: 'Skip hunks an earlier Warden run on this PR already reviewed with the same skill config. Requires post-checks and checks: read.'
+    required: false
+    default: 'false'
   action-ref:
     description: 'The action ref that produced this run, surfaced in the findings output harness field'
     required: false
@@ -114,6 +118,7 @@ runs:
         INPUT_FAIL_CHECK: ${{ inputs.fail-check }}
         INPUT_POST_CHECKS: ${{ inputs.post-checks }}
         INPUT_PARALLEL: ${{ inputs.parallel }}
+        INPUT_INCREMENTAL: ${{ inputs.incremental }}
         INPUT_ACTION_REF: ${{ inputs.action-ref }}
         INPUT_SERVICE_URL: ${{ inputs.service-url }}
         INPUT_SERVICE_TOKEN: ${{ inputs.service-token }}

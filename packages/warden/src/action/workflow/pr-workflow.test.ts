@@ -399,6 +399,73 @@ describe('runPRWorkflow', () => {
       );
     });
 
+    it('analyze mode with incremental review skips hunks an earlier clean run reviewed', async () => {
+      const prFiles = [
+        {
+          filename: 'src/test.ts',
+          status: 'modified',
+          additions: 1,
+          deletions: 0,
+          patch: '@@ -1,5 +1,10 @@\n+console.log("test")',
+        },
+      ];
+      let baselineChecks: unknown[] = [];
+      const octokit = mockOctokit as unknown as {
+        paginate: ReturnType<typeof vi.fn>;
+        pulls: { listCommits: ReturnType<typeof vi.fn> };
+        checks: { listForRef: ReturnType<typeof vi.fn> };
+        repos: { compareCommitsWithBasehead: ReturnType<typeof vi.fn> };
+      };
+      octokit.pulls.listCommits = vi.fn();
+      octokit.paginate.mockImplementation((method: unknown) =>
+        Promise.resolve(
+          method === octokit.pulls.listCommits
+            ? [{ sha: PREVIOUS_HEAD_SHA }, { sha: PR_HEAD_SHA }]
+            : prFiles
+        )
+      );
+      octokit.checks.listForRef = vi.fn(() => Promise.resolve({ data: { check_runs: baselineChecks } }));
+      octokit.repos = {
+        compareCommitsWithBasehead: vi.fn(() => Promise.resolve({ data: { files: prFiles } })),
+      };
+
+      const firstReport = createSkillReport();
+      mockRunSkillTask.mockResolvedValueOnce({ name: 'test-trigger', report: firstReport });
+      await runPRWorkflow(
+        mockOctokit,
+        createDefaultInputs({ mode: 'analyze', incremental: true }),
+        'pull_request',
+        EVENT_PAYLOAD_PATH,
+        FIXTURES_DIR
+      );
+
+      expect(mockRunSkillTask.mock.calls[0]?.[0].runnerOptions?.skipHunks?.size).toBe(0);
+      const externalId = firstReport.incremental?.externalId;
+      expect(externalId).toMatch(/^warden-incremental:v1:/);
+      expect(firstReport.incremental?.complete).toBe(true);
+
+      baselineChecks = [
+        { name: 'warden: test-skill', status: 'completed', conclusion: 'success', external_id: externalId },
+      ];
+      mockRunSkillTask.mockResolvedValueOnce({ name: 'test-trigger', report: createSkillReport() });
+      await runPRWorkflow(
+        mockOctokit,
+        createDefaultInputs({ mode: 'analyze', incremental: true }),
+        'pull_request',
+        EVENT_PAYLOAD_PATH,
+        FIXTURES_DIR
+      );
+
+      const skipHunks = mockRunSkillTask.mock.calls[1]?.[0].runnerOptions?.skipHunks;
+      expect([...(skipHunks?.get('src/test.ts') ?? [])]).toEqual([0]);
+      expect(octokit.checks.listForRef).toHaveBeenCalledWith(
+        expect.objectContaining({ ref: PREVIOUS_HEAD_SHA })
+      );
+      expect(octokit.checks.listForRef).not.toHaveBeenCalledWith(
+        expect.objectContaining({ ref: PR_HEAD_SHA })
+      );
+    });
+
     it('analyze mode lists a schedule-only skill as configured but not triggered on a PR run', async () => {
       await runPRWorkflow(
         mockOctokit,
@@ -1256,6 +1323,51 @@ describe('runPRWorkflow', () => {
             title: 'Warden failed',
             summary: expect.stringContaining('Failed to resolve stale comments'),
           }),
+        })
+      );
+    });
+
+    it('report mode keeps comments on carried-forward hunks open and records the baseline', async () => {
+      const report = createSkillReport({
+        incremental: {
+          externalId: 'warden-incremental:v1:abc',
+          baselineSha: PREVIOUS_HEAD_SHA,
+          carriedRanges: [{ path: 'src/test.ts', startLine: 8, endLine: 12 }],
+          complete: true,
+        },
+      });
+      const findingsFile = writeFindingsArtifact([report], [
+        {
+          triggerName: 'test-skill',
+          skillName: 'test-skill',
+          report,
+        },
+      ]);
+      mockFetchExistingComments.mockResolvedValue([
+        createExistingWardenComment({ skills: ['test-skill'], contentHash: 'carried-hash' }),
+      ]);
+
+      try {
+        await runPRWorkflow(
+          mockOctokit,
+          createDefaultInputs({ mode: 'report', findingsFile }),
+          'pull_request',
+          EVENT_PAYLOAD_PATH,
+          FIXTURES_DIR
+        );
+      } finally {
+        rmSync(dirname(findingsFile), { recursive: true, force: true });
+      }
+
+      expect(mockOctokit.graphql).not.toHaveBeenCalledWith(
+        expect.stringContaining('resolveReviewThread'),
+        expect.anything()
+      );
+      expect(evaluateFixAttempts).not.toHaveBeenCalled();
+      expect(mockOctokit.checks.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: 'warden: test-skill',
+          external_id: 'warden-incremental:v1:abc',
         })
       );
     });

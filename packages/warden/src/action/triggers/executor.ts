@@ -9,7 +9,7 @@
 import { Sentry } from '../../sentry.js';
 import { ActionFailedError } from '../workflow/base.js';
 import type { ResolvedTrigger } from '../../config/loader.js';
-import type { EventContext, SkillReport, SeverityThreshold, ConfidenceThreshold } from '../../types/index.js';
+import type { EventContext, SkillReport, SeverityThreshold, ConfidenceThreshold, IncrementalReview } from '../../types/index.js';
 import type { RenderResult } from '../../output/types.js';
 import type { OutputMode } from '../../cli/output/tty.js';
 import { resolveSkillAsync } from '../../skills/loader.js';
@@ -27,6 +27,16 @@ import type { ProviderFailureCircuitBreaker } from '../../sdk/circuit-breaker.js
 import { assertValidPiModelSelectors } from '../../sdk/runtimes/model-selectors.js';
 import { isWardenOffline } from '../../sdk/offline.js';
 import { captureActionTriggerError } from '../error-reporting.js';
+import type { SkillDefinition } from '../../config/schema.js';
+import type { SkipHunks } from '../../sdk/types.js';
+import {
+  baselineExternalId,
+  incrementalExternalId,
+  planIncrementalReview,
+  reviewedEverything,
+  type IncrementalBaselineSource,
+  type IncrementalPolicy,
+} from '../incremental.js';
 
 /** Log-mode output for CI: no TTY, no color. */
 const CI_OUTPUT_MODE: OutputMode = { isTTY: false, supportsColor: false, columns: 120 };
@@ -73,6 +83,8 @@ export interface TriggerCheckCompleteOptions {
   reportOn?: SeverityThreshold;
   minConfidence?: ConfidenceThreshold;
   failCheck?: boolean;
+  /** Marks the check as an incremental review baseline when set. */
+  externalId?: string;
 }
 
 /**
@@ -110,6 +122,8 @@ export interface TriggerExecutorDeps {
   checks?: TriggerCheckReporter;
   /** Lower-authority repository memory recalled once for the Action run. */
   historicalEvidence?: string;
+  /** Baseline lookup for incremental review. Omit to review the full PR. */
+  incremental?: IncrementalBaselineSource;
 }
 
 /**
@@ -191,20 +205,31 @@ export async function executeTrigger(
       const requestChanges = trigger.requestChanges ?? deps.globalRequestChanges;
       const failCheck = trigger.failCheck ?? deps.globalFailCheck;
       const skillRoot = trigger.useBuiltinSkill ? undefined : (trigger.skillRoot ?? context.repoPath);
+      const resolveSkill = () => resolveSkillAsync(trigger.skill, skillRoot, {
+        remote: trigger.remote,
+        offline: isWardenOffline(),
+      });
+      const triggerContext = filterContextByPaths(context, trigger.filters);
 
       try {
         assertValidPiModelSelectors([trigger]);
+
+        const incremental = deps.incremental
+          ? await prepareIncrementalReview(deps.incremental, trigger, triggerContext, resolveSkill, {
+              failOn,
+              reportOn,
+              minConfidence,
+              failCheck,
+            })
+          : undefined;
 
         const taskOptions: SkillTaskOptions = {
           name: trigger.name,
           displayName: trigger.skill,
           triggerName: trigger.name,
           failOn,
-          resolveSkill: () => resolveSkillAsync(trigger.skill, skillRoot, {
-            remote: trigger.remote,
-            offline: isWardenOffline(),
-          }),
-          context: filterContextByPaths(context, trigger.filters),
+          resolveSkill: incremental ? () => Promise.resolve(incremental.skill) : resolveSkill,
+          context: triggerContext,
           runnerOptions: {
             apiKey: anthropicApiKey,
             model: trigger.model,
@@ -225,6 +250,7 @@ export async function executeTrigger(
             abortController: deps.abortController,
             circuitBreaker: deps.circuitBreaker,
             historicalEvidence: deps.historicalEvidence,
+            skipHunks: incremental?.skipHunks,
           },
         };
 
@@ -258,6 +284,10 @@ export async function executeTrigger(
           );
         }
 
+        if (incremental) {
+          report.incremental = { ...incremental.review, complete: reviewedEverything(report) };
+        }
+
         console.log(`Found ${report.findings.length} findings`);
 
         // Update skill check with results
@@ -268,6 +298,7 @@ export async function executeTrigger(
               reportOn,
               minConfidence,
               failCheck,
+              externalId: baselineExternalId(report),
             });
           } catch (error) {
             console.error(`::warning::Failed to update skill check for ${trigger.skill}: ${error}`);
@@ -337,4 +368,49 @@ export async function executeTrigger(
       }
     },
   );
+}
+
+interface PreparedIncrementalReview {
+  skill: SkillDefinition;
+  skipHunks: SkipHunks;
+  review: Omit<IncrementalReview, 'complete'>;
+}
+
+/**
+ * Resolve the skill early to fingerprint it, then match the PR diff against
+ * the newest baseline. Returns undefined when the skill cannot be resolved so
+ * the normal path reports the resolution error.
+ */
+async function prepareIncrementalReview(
+  source: IncrementalBaselineSource,
+  trigger: ResolvedTrigger,
+  context: EventContext,
+  resolveSkill: () => Promise<SkillDefinition>,
+  policy: IncrementalPolicy
+): Promise<PreparedIncrementalReview | undefined> {
+  if (!context.pullRequest) return undefined;
+
+  let skill: SkillDefinition;
+  try {
+    skill = await resolveSkill();
+  } catch {
+    return undefined;
+  }
+
+  const externalId = incrementalExternalId(trigger, skill, policy);
+  const baseline = await source.baselineFor(externalId);
+  if (!baseline) {
+    console.log('Incremental review: no earlier baseline for this skill config, reviewing the full PR');
+    return { skill, skipHunks: new Map(), review: { externalId, carriedRanges: [] } };
+  }
+
+  const plan = planIncrementalReview(context.pullRequest.files, baseline.reviewed);
+  console.log(
+    `Incremental review: ${plan.carriedRanges.length} hunk(s) unchanged since ${baseline.sha.slice(0, 7)}`
+  );
+  return {
+    skill,
+    skipHunks: plan.skipHunks,
+    review: { externalId, baselineSha: baseline.sha, carriedRanges: plan.carriedRanges },
+  };
 }

@@ -8,6 +8,7 @@ import {
   updateCoreCheck,
   failSkillCheck,
   createFailedSkillCheck,
+  createCompletedSkillCheck,
 } from './github-checks.js';
 import type { Finding, SkillReport } from '../types/index.js';
 
@@ -51,6 +52,40 @@ describe('check details URL', () => {
       'Failed to set details URL for check 123: Error: Bad credentials'
     );
     warn.mockRestore();
+  });
+});
+
+describe('incremental baseline marker', () => {
+  const options = { owner: 'getsentry', repo: 'warden', headSha: 'abc123', externalId: 'warden-incremental:v1:abc' };
+  const highFinding: Finding = {
+    id: 'f1',
+    severity: 'high',
+    confidence: 'high',
+    title: 'Bad thing',
+    description: 'Bad',
+    location: { path: 'a.ts', startLine: 1 },
+  };
+
+  function mockChecks() {
+    const create = vi.fn().mockResolvedValue({ data: { id: 1, html_url: '' } });
+    return { octokit: { checks: { create, update: vi.fn().mockResolvedValue({ data: {} }) } } as never, create };
+  }
+
+  it('records external_id on a passing skill check', async () => {
+    const { octokit, create } = mockChecks();
+    await createCompletedSkillCheck(octokit, { skill: 's', summary: '', findings: [] }, options);
+    expect(create).toHaveBeenCalledWith(expect.objectContaining({ external_id: 'warden-incremental:v1:abc' }));
+  });
+
+  it('never records external_id on a failing skill check', async () => {
+    const { octokit, create } = mockChecks();
+    await createCompletedSkillCheck(
+      octokit,
+      { skill: 's', summary: '', findings: [highFinding] },
+      { ...options, failOn: 'high', failCheck: true }
+    );
+    expect(create.mock.calls[0]?.[0]).toMatchObject({ conclusion: 'failure' });
+    expect(create.mock.calls[0]?.[0].external_id).toBeUndefined();
   });
 });
 

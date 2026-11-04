@@ -755,6 +755,53 @@
         "runtime": {
           "type": "string"
         },
+        "incremental": {
+          "type": "object",
+          "properties": {
+            "externalId": {
+              "type": "string"
+            },
+            "baselineSha": {
+              "type": "string"
+            },
+            "carriedRanges": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "path": {
+                    "type": "string"
+                  },
+                  "startLine": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  "endLine": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  }
+                },
+                "required": [
+                  "path",
+                  "startLine",
+                  "endLine"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "complete": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "externalId",
+            "carriedRanges",
+            "complete"
+          ],
+          "additionalProperties": false
+        },
         "run": {
           "$ref": "#/$defs/RunMetadata"
         },

@@ -46,6 +46,8 @@ export interface UpdateSkillCheckOptions extends CheckOptions {
   conclusion?: CheckConclusion;
   /** Optional check output title override. */
   title?: string;
+  /** Incremental review baseline marker. Only recorded when the check does not fail. */
+  externalId?: string;
 }
 
 /**
@@ -250,6 +252,7 @@ function buildSkillCheckPayload(
   options: UpdateSkillCheckOptions
 ): {
   conclusion: CheckConclusion;
+  external_id?: string;
   output: {
     title: string;
     summary: string;
@@ -270,8 +273,13 @@ function buildSkillCheckPayload(
     ? 'No issues'
     : `${filteredCount} issue${filteredCount === 1 ? '' : 's'}`);
 
+  // A failing check must never become a baseline: carrying its findings
+  // forward would let a later push pass without re-reviewing them.
+  const isBaseline = options.externalId !== undefined && (conclusion === 'success' || conclusion === 'neutral');
+
   return {
     conclusion,
+    ...(isBaseline ? { external_id: options.externalId } : {}),
     output: {
       title,
       summary,
@@ -298,6 +306,7 @@ export async function createCompletedSkillCheck(
     status: 'completed',
     conclusion: payload.conclusion,
     completed_at: new Date().toISOString(),
+    external_id: payload.external_id,
     output: payload.output,
   });
   await setCheckDetailsUrl(octokit, options, data);
@@ -327,6 +336,7 @@ export async function updateSkillCheck(
     status: 'completed',
     conclusion: payload.conclusion,
     completed_at: new Date().toISOString(),
+    external_id: payload.external_id,
     output: payload.output,
   });
 }

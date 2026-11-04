@@ -43,6 +43,8 @@ export interface ActionInputs {
   postChecks: boolean;
   /** Max concurrent trigger executions */
   parallel: number;
+  /** Skip hunks an earlier clean run on this PR already reviewed */
+  incremental?: boolean;
   /** The action ref that produced this run, surfaced in the findings output harness field */
   actionRef?: string;
   serviceUrl?: string;
@@ -144,6 +146,7 @@ export function parseActionInputs(): ActionInputs {
     failCheck,
     postChecks,
     parallel: Number.isNaN(parallelParsed) ? DEFAULT_CONCURRENCY : parallelParsed,
+    incremental: parseBooleanInput(getInput('incremental')),
     actionRef: getInput('action-ref') || undefined,
     serviceUrl: getInput('service-url') || undefined,
     serviceToken: getInput('service-token') || process.env['WARDEN_SERVICE_TOKEN'] || undefined,

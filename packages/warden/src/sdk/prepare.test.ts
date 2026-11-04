@@ -75,6 +75,36 @@ describe('prepareFiles', () => {
     writeFileSync(join(repoPath, 'src/file.ts'), `${lines.join('\n')}\n`);
   }
 
+  it('leaves out hunks listed in skipHunks without reporting the file as skipped', () => {
+    const repoPath = mkdtempSync(join(tmpdir(), 'warden-prepare-skip-'));
+    tempDirs.push(repoPath);
+    mkdirSync(join(repoPath, 'src'), { recursive: true });
+    writeFileSync(
+      join(repoPath, 'src/file.ts'),
+      `${Array.from({ length: 120 }, (_, i) => `line ${i + 1}`).join('\n')}\n`
+    );
+    writeFileSync(join(repoPath, 'src/done.ts'), 'done\n');
+    const context = makeContext([
+      {
+        filename: 'src/file.ts',
+        status: 'modified',
+        patch: '@@ -1,1 +1,2 @@\n line 1\n+line 2\n@@ -100,1 +101,2 @@\n line 101\n+line 102',
+      },
+      { filename: 'src/done.ts', status: 'modified', patch: '@@ -0,0 +1,1 @@\n+done' },
+    ], repoPath);
+
+    const result = prepareFiles(context, {
+      skipHunks: new Map([
+        ['src/file.ts', new Set([0])],
+        ['src/done.ts', new Set([0])],
+      ]),
+    });
+
+    expect(result.skippedFiles).toEqual([]);
+    expect(result.files.map((file) => file.filename)).toEqual(['src/file.ts']);
+    expect(result.files[0]?.hunks.map((hunk) => hunk.hunk.newStart)).toEqual([101]);
+  });
+
   it('skips files with empty patch content (zero-line hunks)', () => {
     const context = makeContext([
       { filename: 'empty.ts', patch: '@@ -0,0 +0,0 @@\n' },
