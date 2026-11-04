@@ -7,8 +7,8 @@
  * commit's PR diff, and skips current hunks whose content was already
  * reviewed there. Hunks match on file path plus hunk body, not line numbers,
  * so rebases and merges from the base branch do not trigger re-review of
- * code the PR did not change. Only checks written by the configured GitHub
- * App count, so look-alike checks from other apps cannot skip review.
+ * code the PR did not change. Only checks written by the GitHub App named in
+ * `incrementalApp` count, so look-alike checks from other apps cannot skip review.
  *
  * Every lookup fails open: if the baseline cannot be found or read, the skill
  * reviews the full PR as it would without incremental review.
@@ -54,7 +54,11 @@ export interface IncrementalBaseline {
 
 /** Looks up baselines for the current pull request. */
 export interface IncrementalBaselineSource {
-  baselineFor(externalId: string): Promise<IncrementalBaseline | undefined>;
+  /**
+   * Newest baseline whose check has this `external_id` and was written by
+   * `trustedApp`. Other apps can create look-alike checks.
+   */
+  baselineFor(externalId: string, trustedApp: string): Promise<IncrementalBaseline | undefined>;
 }
 
 function sha256(value: string): string {
@@ -211,14 +215,17 @@ export function hasOpenCarriedComment(
   return comments.some((c) => c.isWarden && !c.isResolved && isOnCarriedHunk(c, ranges));
 }
 
+/** Baselines are keyed by check id and the app that wrote the check. */
+function baselineKey(externalId: string, app: string): string {
+  return `${app}\n${externalId}`;
+}
+
 interface BaselineSourceOptions {
   owner: string;
   repo: string;
   pullNumber: number;
   headSha: string;
   baseSha: string;
-  /** Slug of the GitHub App whose checks count as baselines. Other apps can create look-alike checks. */
-  trustedApp: string;
   warn?: (message: string) => void;
 }
 
@@ -260,11 +267,13 @@ export function createIncrementalBaselineSource(
         });
         for (const check of data.check_runs) {
           const id = check.external_id;
-          if (!id?.startsWith(EXTERNAL_ID_PREFIX) || found.has(id)) continue;
-          if (check.app?.slug !== options.trustedApp) continue;
+          const app = check.app?.slug;
+          if (!id?.startsWith(EXTERNAL_ID_PREFIX) || !app) continue;
+          const key = baselineKey(id, app);
+          if (found.has(key)) continue;
           if (!check.name.startsWith('warden: ') || check.status !== 'completed') continue;
           if (check.conclusion !== 'success' && check.conclusion !== 'neutral') continue;
-          found.set(id, sha);
+          found.set(key, sha);
         }
       }
     } catch (error) {
@@ -291,9 +300,9 @@ export function createIncrementalBaselineSource(
   };
 
   return {
-    async baselineFor(externalId) {
+    async baselineFor(externalId, trustedApp) {
       baselineShas ??= findBaselineShas();
-      const sha = (await baselineShas).get(externalId);
+      const sha = (await baselineShas).get(baselineKey(externalId, trustedApp));
       if (!sha) return undefined;
 
       let index = indexes.get(sha);

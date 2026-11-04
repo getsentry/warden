@@ -246,6 +246,12 @@ function inheritRepoLayerDefaults(base?: Defaults, repo?: Defaults): Defaults | 
     inherited.runtime = base.runtime;
   }
 
+  // The app that writes Warden's checks is a property of the workflow run, so
+  // repo skills trust the same app as org skills unless the repo names one.
+  if (base?.incrementalApp !== undefined && inherited.incrementalApp === undefined) {
+    inherited.incrementalApp = base.incrementalApp;
+  }
+
   // Offline is sticky across layers: either layer can force offline for the run.
   if (base?.offline === true || repo?.offline === true) {
     inherited.offline = true;
@@ -466,6 +472,10 @@ export interface ResolvedTrigger {
   requestChanges?: boolean;
   /** Fail the check run when findings exceed failOn */
   failCheck?: boolean;
+  /** Incremental PR review (merged: trigger > skill > defaults) */
+  incremental?: boolean;
+  /** GitHub App slug whose checks count as incremental baselines (defaults only) */
+  incrementalApp?: string;
   /** Model (merged: trigger > skill > defaults > cli > env) */
   model?: string;
   /** Max agentic turns (merged: trigger > skill > defaults) */
@@ -635,6 +645,8 @@ export function resolveSkillConfigs(
         reportOnSuccess: skill.reportOnSuccess ?? defaults?.reportOnSuccess,
         requestChanges: skill.requestChanges ?? defaults?.requestChanges,
         failCheck: skill.failCheck ?? defaults?.failCheck,
+        incremental: skill.incremental ?? defaults?.incremental,
+        incrementalApp: defaults?.incrementalApp,
         model: baseModel,
         maxTurns: baseMaxTurns,
         effort,
@@ -672,6 +684,8 @@ export function resolveSkillConfigs(
           reportOnSuccess: trigger.reportOnSuccess ?? skill.reportOnSuccess ?? defaults?.reportOnSuccess,
           requestChanges: trigger.requestChanges ?? skill.requestChanges ?? defaults?.requestChanges,
           failCheck: trigger.failCheck ?? skill.failCheck ?? defaults?.failCheck,
+          incremental: trigger.incremental ?? skill.incremental ?? defaults?.incremental,
+          incrementalApp: defaults?.incrementalApp,
           model: emptyToUndefined(trigger.model) ?? baseModel,
           maxTurns: trigger.maxTurns ?? baseMaxTurns,
           effort,

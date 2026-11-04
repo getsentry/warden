@@ -160,6 +160,8 @@ describe('executeTrigger', () => {
       },
     };
 
+    const incrementalTrigger: ResolvedTrigger = { ...mockTrigger, incremental: true, incrementalApp: 'sentry-warden' };
+
     beforeEach(() => {
       vi.mocked(resolveSkillAsync).mockResolvedValue({
         name: 'test-skill',
@@ -176,19 +178,19 @@ describe('executeTrigger', () => {
         return { name: 'test-trigger', report: createReport() };
       });
       const { buildReviewedHunkIndex } = await import('../incremental.js');
-      const baselineFor = vi.fn(async (_externalId: string) => ({
+      const baselineFor = vi.fn(async (_externalId: string, _trustedApp: string) => ({
         sha: 'prev123',
         reviewed: buildReviewedHunkIndex([{ filename: 'src/a.ts', patch }]),
       }));
 
-      const result = await executeTrigger(mockTrigger, {
+      const result = await executeTrigger(incrementalTrigger, {
         ...mockDeps,
         context: incrementalContext,
         incremental: { baselineFor },
       });
 
       expect(resolveSkillAsync).toHaveBeenCalledTimes(1);
-      expect(baselineFor).toHaveBeenCalledWith(expect.stringMatching(/^warden-incremental:v1:/));
+      expect(baselineFor).toHaveBeenCalledWith(expect.stringMatching(/^warden-incremental:v1:/), 'sentry-warden');
       const runnerOptions = vi.mocked(runSkillTask).mock.calls[0]?.[0].runnerOptions;
       expect([...(runnerOptions?.skipHunks?.get('src/a.ts') ?? [])]).toEqual([0]);
       expect(result.report?.incremental).toEqual({
@@ -208,7 +210,7 @@ describe('executeTrigger', () => {
     it('reviews the full PR and still records a baseline when none exists', async () => {
       vi.mocked(runSkillTask).mockResolvedValue({ name: 'test-trigger', report: createReport() });
 
-      const result = await executeTrigger(mockTrigger, {
+      const result = await executeTrigger(incrementalTrigger, {
         ...mockDeps,
         context: incrementalContext,
         incremental: { baselineFor: async () => undefined },
@@ -227,7 +229,7 @@ describe('executeTrigger', () => {
         return { name: 'test-trigger', report: createReport() };
       });
 
-      const result = await executeTrigger(mockTrigger, {
+      const result = await executeTrigger(incrementalTrigger, {
         ...mockDeps,
         context: incrementalContext,
         abortController,
@@ -248,7 +250,7 @@ describe('executeTrigger', () => {
       vi.mocked(runSkillTask).mockResolvedValue({ name: 'test-trigger', report: createReport() });
       const baselineFor = vi.fn();
 
-      const result = await executeTrigger(mockTrigger, {
+      const result = await executeTrigger(incrementalTrigger, {
         ...mockDeps,
         context: incrementalContext,
         incremental: { baselineFor },
@@ -257,6 +259,38 @@ describe('executeTrigger', () => {
       expect(baselineFor).not.toHaveBeenCalled();
       expect(result.report?.incremental).toBeUndefined();
       expect(vi.mocked(runSkillTask).mock.calls[0]?.[0].runnerOptions?.skipHunks).toBeUndefined();
+    });
+
+    it('reviews the full PR for skills without incremental on', async () => {
+      vi.mocked(runSkillTask).mockResolvedValue({ name: 'test-trigger', report: createReport() });
+      const baselineFor = vi.fn();
+
+      const result = await executeTrigger({ ...incrementalTrigger, incremental: false }, {
+        ...mockDeps,
+        context: incrementalContext,
+        incremental: { baselineFor },
+      });
+
+      expect(baselineFor).not.toHaveBeenCalled();
+      expect(result.report?.incremental).toBeUndefined();
+      expect(vi.mocked(runSkillTask).mock.calls[0]?.[0].runnerOptions?.skipHunks).toBeUndefined();
+    });
+
+    it('reviews the full PR and warns when incrementalApp is not set', async () => {
+      vi.mocked(runSkillTask).mockResolvedValue({ name: 'test-trigger', report: createReport() });
+      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      const baselineFor = vi.fn();
+
+      const result = await executeTrigger({ ...incrementalTrigger, incrementalApp: undefined }, {
+        ...mockDeps,
+        context: incrementalContext,
+        incremental: { baselineFor },
+      });
+
+      expect(baselineFor).not.toHaveBeenCalled();
+      expect(result.report?.incremental).toBeUndefined();
+      expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('defaults.incrementalApp'));
+      consoleErrorSpy.mockRestore();
     });
   });
 

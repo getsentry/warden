@@ -59,14 +59,6 @@ inputs:
     description: 'Maximum number of concurrent trigger executions'
     required: false
     default: '5'
-  incremental:
-    description: 'Skip hunks an earlier Warden run on this PR already reviewed with the same skill config. Requires post-checks, checks: read, and incremental-app.'
-    required: false
-    default: 'false'
-  incremental-app:
-    description: 'Slug of the GitHub App that writes Warden checks (github-actions for the default token). Only its checks count as incremental baselines.'
-    required: false
-    default: ''
   action-ref:
     description: 'The action ref that produced this run, surfaced in the findings output harness field'
     required: false
@@ -122,8 +114,6 @@ runs:
         INPUT_FAIL_CHECK: ${{ inputs.fail-check }}
         INPUT_POST_CHECKS: ${{ inputs.post-checks }}
         INPUT_PARALLEL: ${{ inputs.parallel }}
-        INPUT_INCREMENTAL: ${{ inputs.incremental }}
-        INPUT_INCREMENTAL_APP: ${{ inputs.incremental-app }}
         INPUT_ACTION_REF: ${{ inputs.action-ref }}
         INPUT_SERVICE_URL: ${{ inputs.service-url }}
         INPUT_SERVICE_TOKEN: ${{ inputs.service-token }}

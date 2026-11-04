@@ -628,26 +628,20 @@ function createTriggerCheckReporter(
   };
 }
 
-/** Build the incremental baseline source when the `incremental` input is on. */
+/** Build the incremental baseline source when any matched trigger has `incremental` on. */
 function incrementalSourceFor(
   octokit: Octokit,
   context: EventContext,
-  inputs: ActionInputs
+  matchedTriggers: readonly ResolvedTrigger[]
 ): IncrementalBaselineSource | undefined {
-  if (!inputs.incremental || context.eventType !== 'pull_request' || !context.pullRequest) {
-    return undefined;
-  }
-  if (!inputs.incrementalApp) {
-    warnAction('Incremental review needs incremental-app to know which checks to trust, reviewing the full PR');
-    return undefined;
-  }
+  if (context.eventType !== 'pull_request' || !context.pullRequest) return undefined;
+  if (!matchedTriggers.some((trigger) => trigger.incremental)) return undefined;
   return createIncrementalBaselineSource(octokit, {
     owner: context.repository.owner,
     repo: context.repository.name,
     pullNumber: context.pullRequest.number,
     headSha: context.pullRequest.headSha,
     baseSha: context.pullRequest.baseSha,
-    trustedApp: inputs.incrementalApp,
     warn: warnAction,
   });
 }
@@ -2087,7 +2081,7 @@ async function runAnalyzeMode(
     },
     () => executeAllTriggers(matchedTriggers, context, runnerConcurrency, inputs, {
       memoryRecall,
-      incremental: incrementalSourceFor(octokit, context, inputs),
+      incremental: incrementalSourceFor(octokit, context, matchedTriggers),
       onTriggerComplete: (completedSoFar) => {
         const reportsSoFar = completedSoFar.flatMap((r) => (r.report ? [r.report] : []));
         writeFindingsOutputLive(reportsSoFar, context, [], {
@@ -2461,7 +2455,7 @@ export async function runPRWorkflow(
           () => executeAllTriggers(matchedTriggers, context, runnerConcurrency, inputs, {
             checks: createTriggerCheckReporter(octokit, context, postChecks),
             memoryRecall,
-            incremental: incrementalSourceFor(octokit, context, inputs),
+            incremental: incrementalSourceFor(octokit, context, matchedTriggers),
             onTriggerComplete: (completedSoFar) => {
               const reportsSoFar = completedSoFar.flatMap((r) => (r.report ? [r.report] : []));
               writeFindingsOutputLive(reportsSoFar, context, [], {

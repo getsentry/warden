@@ -254,8 +254,8 @@ describe('createIncrementalBaselineSource', () => {
     pullNumber: 7,
     headSha: 'head',
     baseSha: 'base',
-    trustedApp: 'sentry-warden',
   };
+  const trustedApp = 'sentry-warden';
 
   it('uses the newest earlier commit with a matching clean check', async () => {
     const { octokit, compareCommitsWithBasehead } = mockOctokit({
@@ -265,7 +265,7 @@ describe('createIncrementalBaselineSource', () => {
     });
     const source = createIncrementalBaselineSource(octokit as never, { ...options, warn: vi.fn() });
 
-    const baseline = await source.baselineFor(externalId);
+    const baseline = await source.baselineFor(externalId, trustedApp);
 
     expect(baseline?.sha).toBe('c2');
     expect(baseline?.reviewed.size).toBe(2);
@@ -278,7 +278,7 @@ describe('createIncrementalBaselineSource', () => {
     const { octokit } = mockOctokit({ c3: [checkRun({ name: 'lint' })] });
     const source = createIncrementalBaselineSource(octokit as never, { ...options, warn: vi.fn() });
 
-    expect(await source.baselineFor(externalId)).toBeUndefined();
+    expect(await source.baselineFor(externalId, trustedApp)).toBeUndefined();
   });
 
   it('ignores look-alike checks from another app', async () => {
@@ -288,14 +288,25 @@ describe('createIncrementalBaselineSource', () => {
     });
     const source = createIncrementalBaselineSource(octokit as never, { ...options, warn: vi.fn() });
 
-    expect(await source.baselineFor(externalId)).toBeUndefined();
+    expect(await source.baselineFor(externalId, trustedApp)).toBeUndefined();
+  });
+
+  it('matches each lookup against its own trusted app', async () => {
+    const { octokit } = mockOctokit({
+      c3: [checkRun({ app: { slug: 'some-other-app' } })],
+      c2: [checkRun()],
+    });
+    const source = createIncrementalBaselineSource(octokit as never, { ...options, warn: vi.fn() });
+
+    expect((await source.baselineFor(externalId, trustedApp))?.sha).toBe('c2');
+    expect((await source.baselineFor(externalId, 'some-other-app'))?.sha).toBe('c3');
   });
 
   it('shares commit lookups across skills', async () => {
     const { octokit, listForRef } = mockOctokit({ c3: [checkRun()] });
     const source = createIncrementalBaselineSource(octokit as never, { ...options, warn: vi.fn() });
 
-    await Promise.all([source.baselineFor(externalId), source.baselineFor('warden-incremental:v1:other')]);
+    await Promise.all([source.baselineFor(externalId, trustedApp), source.baselineFor('warden-incremental:v1:other', trustedApp)]);
 
     expect(octokit.paginate).toHaveBeenCalledTimes(1);
     expect(listForRef).toHaveBeenCalledTimes(3);
@@ -307,7 +318,7 @@ describe('createIncrementalBaselineSource', () => {
     const warn = vi.fn();
     const source = createIncrementalBaselineSource(octokit as never, { ...options, warn });
 
-    expect(await source.baselineFor(externalId)).toBeUndefined();
+    expect(await source.baselineFor(externalId, trustedApp)).toBeUndefined();
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('reviewing the full PR'));
   });
 
@@ -316,7 +327,7 @@ describe('createIncrementalBaselineSource', () => {
     const warn = vi.fn();
     const source = createIncrementalBaselineSource(octokit as never, { ...options, warn });
 
-    expect(await source.baselineFor(externalId)).toBeUndefined();
+    expect(await source.baselineFor(externalId, trustedApp)).toBeUndefined();
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('could not load the diff'));
   });
 });

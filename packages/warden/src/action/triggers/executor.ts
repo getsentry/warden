@@ -122,7 +122,7 @@ export interface TriggerExecutorDeps {
   checks?: TriggerCheckReporter;
   /** Lower-authority repository memory recalled once for the Action run. */
   historicalEvidence?: string;
-  /** Baseline lookup for incremental review. Omit to review the full PR. */
+  /** Baseline lookup for triggers with `incremental` on. Omit to review the full PR. */
   incremental?: IncrementalBaselineSource;
 }
 
@@ -214,7 +214,7 @@ export async function executeTrigger(
       try {
         assertValidPiModelSelectors([trigger]);
 
-        const incremental = deps.incremental
+        const incremental = deps.incremental && trigger.incremental
           ? await prepareIncrementalReview(deps.incremental, trigger, triggerContext, resolveSkill, {
               failOn,
               reportOn,
@@ -392,6 +392,12 @@ async function prepareIncrementalReview(
   policy: IncrementalPolicy
 ): Promise<PreparedIncrementalReview | undefined> {
   if (!context.pullRequest) return undefined;
+  if (!trigger.incrementalApp) {
+    console.error(
+      `::warning::Incremental review for ${trigger.name} needs defaults.incrementalApp to know which checks to trust, reviewing the full PR`
+    );
+    return undefined;
+  }
 
   let skill: SkillDefinition;
   try {
@@ -401,7 +407,7 @@ async function prepareIncrementalReview(
   }
 
   const externalId = incrementalExternalId(trigger, skill, policy);
-  const baseline = await source.baselineFor(externalId);
+  const baseline = await source.baselineFor(externalId, trigger.incrementalApp);
   if (!baseline) {
     console.log('Incremental review: no earlier baseline for this skill config, reviewing the full PR');
     return { skill, skipHunks: new Map(), review: { externalId, carriedRanges: [] } };

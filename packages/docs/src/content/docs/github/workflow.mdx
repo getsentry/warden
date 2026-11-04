@@ -165,30 +165,41 @@ inputs; the findings file does not store a copy of `warden.toml`.
 ## Incremental Review
 
 By default, every push re-reviews every hunk in the pull request. Set
-`incremental: true` on the step that runs analysis (`mode: analyze` or
-`mode: run`) to review only hunks that changed since the last clean Warden run
-on the same pull request.
+`incremental = true` in `warden.toml` to have a skill review only hunks that
+changed since its last clean run on the same pull request. Like `failCheck`, it
+can be set in `[defaults]`, per skill, or per trigger, so each skill picks its
+own mode.
+
+```toml title="warden.toml"
+[defaults]
+incremental = true
+incrementalApp = "github-actions"
+
+[[skills]]
+name = "code-review"
+
+[[skills]]
+name = "security-review"
+# Re-review every hunk on every push.
+incremental = false
+```
+
+Set `incrementalApp` to the slug of the GitHub App that writes Warden's
+checks: `github-actions` when the report or run step uses the default
+`GITHUB_TOKEN`, or your app's slug when it uses a GitHub App token. Warden only
+trusts baselines from that app, so look-alike checks from other apps cannot
+make it skip hunks. Without `incrementalApp`, Warden warns and reviews the full
+PR. With a base config, repo-defined skills inherit the base `incrementalApp`,
+and the repo config cannot change the mode of skills the base config defines.
+
+The analysis step needs `checks: read`:
 
 ```yaml
 permissions:
   contents: read
   pull-requests: read
   checks: read
-
-steps:
-  - name: Analyze
-    uses: getsentry/warden@v0
-    with:
-      mode: analyze
-      incremental: true
-      incremental-app: github-actions
 ```
-
-Set `incremental-app` to the slug of the GitHub App that writes Warden's
-checks: `github-actions` when the report or run step uses the default
-`GITHUB_TOKEN`, or your app's slug when it uses a GitHub App token. Warden only
-trusts baselines from that app, so look-alike checks from other apps cannot
-make it skip hunks. Without `incremental-app`, Warden reviews the full PR.
 
 When a skill check completes without failing, Warden tags it with a
 fingerprint of the skill prompt, Warden version, and the settings that affect
@@ -211,8 +222,8 @@ stale-comment pass on them until their hunk changes, and it does not dismiss an
 earlier blocking review while any of them are unresolved. A skipped hunk is not
 re-checked against changes elsewhere in the pull request.
 
-The analysis token needs `checks: read`. Baselines come from per-skill check
-runs, so incremental review has no effect with `post-checks: false`.
+Baselines come from per-skill check runs, so incremental review has no effect
+with `post-checks: false`. The CLI ignores `incremental`.
 
 ## Required Status Checks
 
@@ -328,19 +339,5 @@ never reports and the required check blocks every PR indefinitely.
       <span class="sentry-property-meta">number</span>
     </dt>
     <dd>Maximum concurrent matched trigger executions and hunk analyses unless <code>runner.concurrency</code> is set. Default: <code>5</code>.</dd>
-  </div>
-  <div>
-    <dt>
-      <code>incremental</code>
-      <span class="sentry-property-meta">boolean</span>
-    </dt>
-    <dd>Skip hunks that an earlier clean run on the same pull request already reviewed. See <a href="#incremental-review">Incremental Review</a>. Default: <code>false</code>.</dd>
-  </div>
-  <div>
-    <dt>
-      <code>incremental-app</code>
-      <span class="sentry-property-meta">string</span>
-    </dt>
-    <dd>Slug of the GitHub App that writes Warden checks, such as <code>github-actions</code>. Only its checks count as incremental baselines. Required for incremental review.</dd>
   </div>
 </dl>

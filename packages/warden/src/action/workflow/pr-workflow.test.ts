@@ -27,6 +27,8 @@ const EMPTY_AUXILIARY_MODEL_FIXTURES_DIR = join(FIXTURES_DIR, 'empty-auxiliary-m
 const LAYERED_AUXILIARY_MODEL_FIXTURES_DIR = join(FIXTURES_DIR, 'layered-auxiliary-model');
 const NO_MATCH_EMPTY_AUXILIARY_MODEL_FIXTURES_DIR = join(FIXTURES_DIR, 'no-match-empty-auxiliary-model');
 const SCHEDULE_ONLY_FIXTURES_DIR = join(FIXTURES_DIR, 'schedule');
+const INCREMENTAL_FIXTURES_DIR = join(FIXTURES_DIR, 'incremental');
+const INCREMENTAL_NO_APP_FIXTURES_DIR = join(FIXTURES_DIR, 'incremental-no-app');
 const EVENT_PAYLOAD_PATH = join(FIXTURES_DIR, 'event-payloads/pull_request_opened.json');
 const PR_HEAD_SHA = 'abc123def456';
 const PREVIOUS_HEAD_SHA = 'previous123sha456';
@@ -433,10 +435,10 @@ describe('runPRWorkflow', () => {
       mockRunSkillTask.mockResolvedValueOnce({ name: 'test-trigger', report: firstReport });
       await runPRWorkflow(
         mockOctokit,
-        createDefaultInputs({ mode: 'analyze', incremental: true, incrementalApp: 'sentry-warden' }),
+        createDefaultInputs({ mode: 'analyze' }),
         'pull_request',
         EVENT_PAYLOAD_PATH,
-        FIXTURES_DIR
+        INCREMENTAL_FIXTURES_DIR
       );
 
       expect(mockRunSkillTask.mock.calls[0]?.[0].runnerOptions?.skipHunks?.size).toBe(0);
@@ -456,10 +458,10 @@ describe('runPRWorkflow', () => {
       mockRunSkillTask.mockResolvedValueOnce({ name: 'test-trigger', report: createSkillReport() });
       await runPRWorkflow(
         mockOctokit,
-        createDefaultInputs({ mode: 'analyze', incremental: true, incrementalApp: 'sentry-warden' }),
+        createDefaultInputs({ mode: 'analyze' }),
         'pull_request',
         EVENT_PAYLOAD_PATH,
-        FIXTURES_DIR
+        INCREMENTAL_FIXTURES_DIR
       );
 
       const skipHunks = mockRunSkillTask.mock.calls[1]?.[0].runnerOptions?.skipHunks;
@@ -472,18 +474,34 @@ describe('runPRWorkflow', () => {
       );
     });
 
-    it('analyze mode reviews the full PR when incremental-app is not set', async () => {
+    it('analyze mode reviews the full PR when incrementalApp is not set', async () => {
       mockRunSkillTask.mockResolvedValueOnce({ name: 'test-trigger', report: createSkillReport() });
       await runPRWorkflow(
         mockOctokit,
-        createDefaultInputs({ mode: 'analyze', incremental: true }),
+        createDefaultInputs({ mode: 'analyze' }),
+        'pull_request',
+        EVENT_PAYLOAD_PATH,
+        INCREMENTAL_NO_APP_FIXTURES_DIR
+      );
+
+      expect(mockRunSkillTask.mock.calls[0]?.[0].runnerOptions?.skipHunks).toBeUndefined();
+      expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('defaults.incrementalApp'));
+    });
+
+    it('analyze mode does not look up baselines when no skill has incremental on', async () => {
+      const octokit = mockOctokit as unknown as { checks: { listForRef: ReturnType<typeof vi.fn> } };
+      octokit.checks.listForRef = vi.fn();
+      mockRunSkillTask.mockResolvedValueOnce({ name: 'test-trigger', report: createSkillReport() });
+      await runPRWorkflow(
+        mockOctokit,
+        createDefaultInputs({ mode: 'analyze' }),
         'pull_request',
         EVENT_PAYLOAD_PATH,
         FIXTURES_DIR
       );
 
       expect(mockRunSkillTask.mock.calls[0]?.[0].runnerOptions?.skipHunks).toBeUndefined();
-      expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('incremental-app'));
+      expect(octokit.checks.listForRef).not.toHaveBeenCalled();
     });
 
     it('analyze mode lists a schedule-only skill as configured but not triggered on a PR run', async () => {
