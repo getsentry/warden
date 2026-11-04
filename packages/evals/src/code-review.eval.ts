@@ -7,8 +7,9 @@ import {
 } from './harness.js';
 import { discoverEvalScenarios } from './index.js';
 import { formatEvalId, formatEvalTestName } from './names.js';
+import { resolveEvalProvider } from './provider.js';
 
-const apiKey = process.env['ANTHROPIC_API_KEY'] ?? '';
+const provider = resolveEvalProvider();
 const evals = discoverEvalScenarios({
   category: 'code-review',
   skill: '../warden/src/builtin-skills/code-review/SKILL.md',
@@ -22,15 +23,17 @@ describeEval(
   'code-review',
   {
     harness: createWardenEvalHarness({
-      apiKey,
+      apiKey: provider.apiKey,
+      model: provider.model,
+      runtime: provider.runtime,
       maxTurns: 8,
       timeoutMs: CODE_REVIEW_RUN_TIMEOUT_MS,
       postProcessFindings: false,
       verbose: true,
     }),
-    judges: [createWardenEvalJudge(apiKey)],
+    judges: [createWardenEvalJudge({ apiKey: provider.apiKey, model: provider.judgeModel })],
     judgeThreshold: 1,
-    skipIf: () => !apiKey,
+    skipIf: () => !provider.enabled,
   },
   (it) => {
     for (const meta of evals) {

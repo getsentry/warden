@@ -176,9 +176,6 @@ importers:
 
   packages/evals:
     dependencies:
-      '@anthropic-ai/sdk':
-        specifier: ^0.98.0
-        version: 0.98.0(zod@4.4.3)
       '@octokit/rest':
         specifier: ^22.0.1
         version: 22.0.1
