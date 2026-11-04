@@ -8,7 +8,7 @@ import {
   type Harness,
   type JsonValue,
 } from 'vitest-evals/harness';
-import { runJudge } from './judge.js';
+import { runJudge, type JudgeOptions } from './judge.js';
 import { runEvalSkill, type RunEvalOptions } from './runner.js';
 import { evalPassed, type EvalMeta, type JudgeResponse } from './types.js';
 import { usageToSummary } from './usage.js';
@@ -160,7 +160,8 @@ export function createWardenEvalHarness(options: RunEvalOptions): Harness<EvalMe
   };
 }
 
-export function createWardenEvalJudge(apiKey: string) {
+/** Create the LLM judge that scores Warden findings against eval assertions. */
+export function createWardenEvalJudge(options: JudgeOptions) {
   return createJudge<JudgeContext<EvalMeta, JsonValue>>('WardenEvalJudge', async ({ input, run }) => {
     const output = WardenEvalOutputSchema.safeParse(run.output);
     if (!output.success) {
@@ -174,7 +175,7 @@ export function createWardenEvalJudge(apiKey: string) {
 
     const meta = input;
     const findings = output.data.findings;
-    const judgeResult = await runJudge(meta, findings, apiKey);
+    const judgeResult = await runJudge(meta, findings, options);
     if (judgeResult.error) {
       return {
         score: 0,

@@ -15,6 +15,8 @@ export interface RunEvalOptions {
   model?: string;
   /** Override the runtime from the YAML spec */
   runtime?: RuntimeName;
+  /** Model for auxiliary and synthesis calls. Uses the runtime default when unset. */
+  auxiliaryModel?: string;
   /** Maximum turns per agent invocation. Keeps live evals bounded. */
   maxTurns?: number;
   /** Maximum wall-clock time for one Warden skill run before aborting. */
@@ -193,6 +195,8 @@ export async function runEvalSkill(
           apiKey: options.apiKey,
           model,
           runtime,
+          auxiliaryModel: options.auxiliaryModel,
+          synthesisModel: options.auxiliaryModel,
           maxTurns: options.maxTurns,
           abortController,
           verifyFindings: options.verifyFindings,

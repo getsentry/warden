@@ -84,7 +84,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 90
     env:
-      ANTHROPIC_API_KEY: ${{ secrets.WARDEN_ANTHROPIC_API_KEY }}
+      # Pi provider/model selector for every eval and the judge. Override with the
+      # WARDEN_EVAL_MODEL repo variable; add the matching WARDEN_<PROVIDER>_API_KEY below.
+      WARDEN_EVAL_MODEL: ${{ vars.WARDEN_EVAL_MODEL || 'openrouter/anthropic/claude-sonnet-4.6' }}
+      WARDEN_EVAL_JUDGE_MODEL: ${{ vars.WARDEN_EVAL_JUDGE_MODEL }}
+      WARDEN_OPENROUTER_API_KEY: ${{ secrets.WARDEN_OPENROUTER_API_KEY }}
+      WARDEN_ANTHROPIC_API_KEY: ${{ secrets.WARDEN_ANTHROPIC_API_KEY }}
+      WARDEN_OPENAI_API_KEY: ${{ secrets.WARDEN_OPENAI_API_KEY }}
       EVAL_SCORE_BASELINE: "0.75"
     steps:
       - uses: actions/checkout@v4
@@ -97,12 +103,28 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      - name: Verify eval secret
+      - name: Verify eval credentials
+        id: verify
         run: |
-          if [ -z "$ANTHROPIC_API_KEY" ]; then
-            echo "WARDEN_ANTHROPIC_API_KEY is required to run evals in CI" >&2
-            exit 1
+          status=0
+          models=("$WARDEN_EVAL_MODEL")
+          if [ -n "$WARDEN_EVAL_JUDGE_MODEL" ] && [ "$WARDEN_EVAL_JUDGE_MODEL" != "$WARDEN_EVAL_MODEL" ]; then
+            models+=("$WARDEN_EVAL_JUDGE_MODEL")
           fi
+          for model in "${models[@]}"; do
+            if [[ "$model" != */* ]]; then
+              echo "::error::Eval model '$model' must be a provider/model selector"
+              status=1
+              continue
+            fi
+            provider="${model%%/*}"
+            key_var="WARDEN_$(echo "$provider" | tr '[:lower:]-' '[:upper:]_')_API_KEY"
+            if [ -z "${!key_var:-}" ]; then
+              echo "::error::$key_var is required to run evals with $model"
+              status=1
+            fi
+          done
+          exit "$status"
 
       - name: Run evals
         env:
@@ -126,7 +148,8 @@ jobs:
 
       - name: Create eval status check
         uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b  # v7
-        if: ${{ !cancelled() }}
+        # Without credentials no evals ran; the verify step already failed the job.
+        if: ${{ !cancelled() && steps.verify.outcome == 'success' }}
         with:
           script: |
             const fs = require('fs');

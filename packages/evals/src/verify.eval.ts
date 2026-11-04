@@ -6,8 +6,9 @@ import {
   VerificationEvalOutputSchema,
 } from './verify.js';
 import { formatEvalTestName } from './names.js';
+import { resolveEvalProvider } from './provider.js';
 
-const apiKey = process.env['ANTHROPIC_API_KEY'] ?? '';
+const provider = resolveEvalProvider();
 const evals = discoverVerificationEvalScenarios({
   category: 'verification',
   skill: '../warden/src/builtin-skills/security-review/SKILL.md',
@@ -19,12 +20,14 @@ describeEval(
   'verification',
   {
     harness: createVerificationEvalHarness({
-      apiKey,
+      apiKey: provider.apiKey,
+      model: provider.model,
+      runtime: provider.runtime,
       verbose: true,
     }),
     judges: [createVerificationEvalJudge()],
     judgeThreshold: 1,
-    skipIf: () => !apiKey,
+    skipIf: () => !provider.enabled,
   },
   (it) => {
     for (const meta of evals) {

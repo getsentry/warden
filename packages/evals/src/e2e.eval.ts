@@ -7,20 +7,24 @@ import {
 } from './harness.js';
 import { discoverEvals } from './index.js';
 import { formatEvalId, formatEvalTestName } from './names.js';
+import { resolveEvalProvider } from './provider.js';
 
-const apiKey = process.env['ANTHROPIC_API_KEY'] ?? '';
+const provider = resolveEvalProvider();
 const evals = discoverEvals();
 
 describeEval(
   'e2e',
   {
     harness: createWardenEvalHarness({
-      apiKey,
+      apiKey: provider.apiKey,
+      model: provider.model,
+      runtime: provider.runtime,
+      auxiliaryModel: provider.auxiliaryModel,
       verbose: true,
     }),
-    judges: [createWardenEvalJudge(apiKey)],
+    judges: [createWardenEvalJudge({ apiKey: provider.apiKey, model: provider.judgeModel })],
     judgeThreshold: 1,
-    skipIf: () => !apiKey,
+    skipIf: () => !provider.enabled,
   },
   (it) => {
     for (const meta of evals) {

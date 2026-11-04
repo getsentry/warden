@@ -1,9 +1,7 @@
-import Anthropic from '@anthropic-ai/sdk';
-import { anthropicUsageToStats, parseJsonFromOutput, type Finding, type UsageStats } from '@sentry/warden';
+import { getRuntime, type Finding, type UsageStats } from '@sentry/warden';
 import type { EvalMeta, JudgeResponse } from './types.js';
-import { DEFAULT_EVAL_MODEL, JudgeResponseSchema } from './types.js';
+import { JudgeResponseSchema } from './types.js';
 
-const JUDGE_MODEL = DEFAULT_EVAL_MODEL;
 const JUDGE_MAX_TOKENS = 4096;
 const JUDGE_TIMEOUT_MS = 30_000;
 
@@ -11,19 +9,6 @@ export interface JudgeResult {
   response: JudgeResponse;
   usage: UsageStats;
   error?: string;
-}
-
-function emptyUsage(): UsageStats {
-  return {
-    inputTokens: 0,
-    outputTokens: 0,
-    cacheReadInputTokens: 0,
-    cacheCreationInputTokens: 0,
-    cacheCreation5mInputTokens: 0,
-    cacheCreation1hInputTokens: 0,
-    webSearchRequests: 0,
-    costUSD: 0,
-  };
 }
 
 /**
@@ -101,79 +86,46 @@ Requirements:
 - Keep reasoning to one sentence`;
 }
 
+export interface JudgeOptions {
+  /** Pi model selector for the judge, e.g. `openrouter/anthropic/claude-sonnet-4.6`. */
+  model: string;
+  /** Anthropic key for Warden's legacy `apiKey` option. Other providers read their env key. */
+  apiKey?: string;
+}
+
 /**
  * Run the LLM judge to evaluate agent findings against eval assertions.
  */
 export async function runJudge(
   meta: EvalMeta,
   findings: Finding[],
-  apiKey: string
+  options: JudgeOptions
 ): Promise<JudgeResult> {
-  const client = new Anthropic({ apiKey, timeout: JUDGE_TIMEOUT_MS, maxRetries: 0 });
-
-  const prompt = buildJudgePrompt(meta, findings);
-
-  const messages: Anthropic.MessageParam[] = [
-    { role: 'user', content: prompt },
-  ];
-
-  let response: Anthropic.Message;
-  try {
-    response = await client.messages.create({
-      model: JUDGE_MODEL,
-      max_tokens: JUDGE_MAX_TOKENS,
-      messages,
-    });
-  } catch (error) {
-    const reason = `Judge API call failed: ${error instanceof Error ? error.message : String(error)}`;
-    // On API failure, return a judge response marking everything as failed
-    const failedExpectations = meta.should_find.map(() => ({
-      met: false,
-      matchedFindingIndex: null,
-      reasoning: reason,
-    }));
-    const failedAntiExpectations = meta.should_not_find.map(() => ({
-      violated: false,
-      violatingFindingIndex: null,
-      reasoning: 'Judge API call failed, assuming no violation',
-    }));
-    return {
-      response: { expectations: failedExpectations, antiExpectations: failedAntiExpectations },
-      usage: emptyUsage(),
-      error: reason,
-    };
-  }
-
-  const usage = anthropicUsageToStats(JUDGE_MODEL, response.usage);
-
-  const textBlock = response.content.find(
-    (b): b is Anthropic.TextBlock => b.type === 'text'
-  );
-
-  if (!textBlock) {
-    return {
-      response: buildFallbackResponse(meta, 'No text in judge response'),
-      usage,
-      error: 'No text in judge response',
-    };
-  }
-
-  const parsed = await parseJsonFromOutput({
-    output: textBlock.text,
+  const result = await getRuntime('pi').runAuxiliary({
+    task: 'eval_judge',
+    agentName: 'eval-judge',
+    apiKey: options.apiKey || undefined,
+    prompt: buildJudgePrompt(meta, findings),
     schema: JudgeResponseSchema,
+    model: options.model,
+    maxTokens: JUDGE_MAX_TOKENS,
+    timeout: JUDGE_TIMEOUT_MS,
+    maxRetries: 0,
   });
 
-  if (!parsed.success) {
-    const reason = `Judge response parse failed: ${parsed.error}`;
+  if (!result.success) {
+    const reason = `Judge call failed: ${result.error}`;
     return {
       response: buildFallbackResponse(meta, reason),
-      usage,
+      usage: result.usage,
       error: reason,
     };
   }
 
+  const { usage } = result;
+
   // Validate array lengths match assertions
-  const judgeResp = parsed.data;
+  const judgeResp = result.data;
   if (judgeResp.expectations.length !== meta.should_find.length) {
     return {
       response: buildFallbackResponse(meta, `Judge returned ${judgeResp.expectations.length} verdicts, expected ${meta.should_find.length}`),
