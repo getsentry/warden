@@ -80,7 +80,7 @@ def build_issue_body(
         lines.append("")
         lines.append("| Severity | Skill | File | Title |")
         lines.append("|----------|-------|------|-------|")
-        # verified.jsonl holds verdict data only; take the details from all-findings.jsonl
+        # Verify agents return verdict fields (references/verify-prompt.md), so take severity, skill, file and title from all-findings.jsonl
         by_id = {f["findingId"]: f for f in all_findings if "findingId" in f}
         for v in verified:
             f = {**by_id.get(v.get("findingId"), {}), **v}
