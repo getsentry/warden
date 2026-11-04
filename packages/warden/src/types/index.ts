@@ -344,6 +344,14 @@ export const HunkTraceSchema = z.object({
 export type HunkTrace = z.infer<typeof HunkTraceSchema>;
 
 // Skill report output
+/** Hunks a skill's deterministic gate kept from the model. */
+export const HunkGateSchema = z.object({
+  /** Hunks dropped because no gate signal matched. */
+  skippedHunks: z.number().int().nonnegative(),
+  /** True when only the hunks touched by the triggering push were eligible. */
+  pushScoped: z.boolean(),
+});
+
 export const SkillReportSchema = z.object({
   skill: z.string(),
   summary: z.string(),
@@ -354,12 +362,7 @@ export const SkillReportSchema = z.object({
   /** Files that were skipped due to chunking patterns */
   skippedFiles: z.array(SkippedFileSchema).optional(),
   /** Hunks a skill's deterministic gate kept from the model. */
-  hunkGate: z.object({
-    /** Hunks dropped because no gate signal matched. */
-    skippedHunks: z.number().int().nonnegative(),
-    /** True when only the hunks touched by the triggering push were eligible. */
-    pushScoped: z.boolean(),
-  }).optional(),
+  hunkGate: HunkGateSchema.optional(),
   /** Number of hunks that failed to analyze (SDK errors, API errors, etc.) */
   failedHunks: z.number().int().nonnegative().optional(),
   /** Number of hunks where findings extraction failed (JSON parse errors) */

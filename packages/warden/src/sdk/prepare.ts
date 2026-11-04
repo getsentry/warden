@@ -10,7 +10,7 @@ import {
 } from '../diff/index.js';
 import type { PreparedFile, PrepareFilesOptions, PrepareFilesResult } from './types.js';
 import { applyScanPolicy } from './scan-policy.js';
-import { applyIntegrityGate } from './integrity-gate.js';
+import { applyIntegrityGate, integrityGateAlwaysScans } from './integrity-gate.js';
 
 function matchingChunkingSkipPattern(
   filename: string,
@@ -61,6 +61,7 @@ export function prepareFiles(
     scan: options.scan,
     diffContextSource: context.diffContextSource,
     enforceChangedLineBudget: context.explicitFileTargets !== true,
+    alwaysScan: options.alwaysScan,
   });
   skippedFiles.push(...scanPolicy.skippedFiles);
 
@@ -135,7 +136,7 @@ export function prepareSkillFiles(
   context: EventContext,
   options: PrepareFilesOptions = {}
 ): PrepareSkillFilesResult {
-  const prepared = prepareFiles(context, options);
+  const prepared = prepareFiles(context, { ...options, alwaysScan: integrityGateAlwaysScans(skill) });
   const gate = applyIntegrityGate(skill, context, prepared.files);
   if (!gate) return prepared;
   return {

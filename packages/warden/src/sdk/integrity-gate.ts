@@ -239,6 +239,15 @@ function isBuiltinIntegrityReview(skill: SkillDefinition): boolean {
   );
 }
 
+/**
+ * Files the built-in integrity-review skill reads even though the default scan
+ * policy ignores them. Lockfiles are where pin and source tampering hides, and
+ * the gate keeps routine lockfile churn away from the model.
+ */
+export function integrityGateAlwaysScans(skill: SkillDefinition): ((filename: string) => boolean) | undefined {
+  return isBuiltinIntegrityReview(skill) ? (filename) => LOCKFILE_PATH.test(filename) : undefined;
+}
+
 export interface HunkGateResult {
   files: PreparedFile[];
   skippedHunks: number;

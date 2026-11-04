@@ -178,6 +178,8 @@ export interface PrepareFilesOptions {
   scan?: ScanConfig;
   /** Chunking configuration for file patterns and coalescing */
   chunking?: AnalysisChunkingConfig;
+  /** Files read even when built-in ignores or scan budgets would drop them; user ignores still apply. */
+  alwaysScan?: (filename: string) => boolean;
 }
 
 /**

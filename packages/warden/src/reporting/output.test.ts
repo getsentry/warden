@@ -207,6 +207,7 @@ describe('findings output schema', () => {
       runtime: 'pi',
       auxiliaryUsageAttribution: { verification: { model: 'verifier', runtime: 'claude' } },
       failedHunks: 1,
+      hunkGate: { skippedHunks: 3, pushScoped: true },
     });
     const output = buildFindingsOutput([report], createContext(), [], {
       timestamp: '2026-01-01T00:00:00.000Z',
@@ -227,6 +228,7 @@ describe('findings output schema', () => {
         summary: 'Found 1 issue',
         runtime: 'pi',
         auxiliaryUsageAttribution: { verification: { model: 'verifier', runtime: 'claude' } },
+        hunkGate: { skippedHunks: 3, pushScoped: true },
       },
     });
     expect(output.triggerResults?.[0]).not.toHaveProperty('report.metadata');
