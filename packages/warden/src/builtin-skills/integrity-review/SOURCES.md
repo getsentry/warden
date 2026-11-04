@@ -23,9 +23,9 @@
 4. **Verdicts collapsed into severity.**
    - Reason: `BLOCK`, `NEEDS_PEER_REVIEW`, `PASS_WITH_NOTES`, `PASS` have no Warden equivalent; `failOn` thresholds take that role.
    - Decision: `critical` folds into `high`; `high`, `medium`, `low` map directly. Intent indicators become a severity modifier and a `verification` bullet.
-5. **Regex pre-scanner dropped.**
-   - Reason: the source spec reports 9 confirmed findings from 86 medium/high leads on 600 PRs, with 17 of 26 non-clean verdicts coming from PRs with no leads. The model carries detection. The script also needs Bash and Python on the runner, which the built-ins avoid.
-   - Decision: `allowed-tools: Read Grep Glob`. A deterministic PR-level pre-pass, if wanted, is a Warden pipeline feature.
+5. **Regex pre-scanner replaced by a cost gate in Warden.**
+   - Reason: the source scanner produced leads for the model to confirm, and missed most verdicts (17 of 26 non-clean verdicts came from PRs with no leads), so it was dropped as a detector. Cost is a separate problem: the skill runs on every hunk and push and finds nothing on almost all of them.
+   - Decision: `allowed-tools: Read Grep Glob`. Warden runs a deterministic gate (`src/sdk/integrity-gate.ts`) that only decides which hunks reach the model, never what is reported. Its signals are broader than the source scanner's leads to protect recall.
 6. **Name changed from `insider-threat-pr-review` to `integrity-review`.**
    - Reason: the name appears in check names and PR comments; the source skill itself forbids accusatory language toward the author.
 7. **Author metadata not used.**
@@ -41,7 +41,8 @@
 | Evidence requirements | Complete | Mechanism, trigger, scope, impact, declaration. |
 | False-positive controls | Complete | Exclusions cover declared deprecations, reversible migrations, test-only bypasses, placeholders, matching lockfile updates, and the other built-ins' scopes. |
 | Severity calibration | Complete | Tied to blast radius; raised for concealment, lowered for unconfirmed preconditions. |
-| PR-wide signals under per-hunk analysis | Partial | File-list guidance in the catalog. Deterministic PR-level leads would need a harness feature. |
+| PR-wide signals under per-hunk analysis | Partial | File-list guidance in the catalog. The gate is per hunk; reviewer-directed PR text is its only PR-level signal. |
+| Gate pass rate | Measured | 80 merged `getsentry/sentry` PRs (2026-11-04): 83 of 679 hunks (12%) and 28 PRs had at least one hunk pass. Recall of the gate itself is not measured beyond the eval fixtures. |
 | Declaration-based findings in evals | Gap | Harness supplies no PR title or body. In-code narrative mismatch (docstring versus behavior) is covered by `misdescribed-gate-removal`. |
 | Real-traffic precision | Measured | 500 closed PRs: 1 finding, 0 audited disagreements, 25 of the source skill's 26 flags correctly silenced. Benign eval scenarios encode the recurring patterns: declared log downgrades, option-gated limits with safe fallback, encoded assets in fixtures. |
 | Real-traffic recall | Gap | 449 of 500 zero-finding rows are unaudited. The only true positive is one misdescribed gate removal; no malicious PRs were present in either sample. |

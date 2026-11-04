@@ -28,7 +28,7 @@ import {
   type FileAnalysisResult,
   type ChunkAnalysisResult,
 } from './types.js';
-import { prepareFiles } from './prepare.js';
+import { emptyRunSummary, prepareSkillFiles } from './prepare.js';
 import type { EventContext, SkillReport, UsageStats, HunkFailure, HunkTrace, VerifierRejections } from '../types/index.js';
 import type { SourceSnippet, SourceSnippetLine } from '../types/index.js';
 import { AsyncWorkQueue } from '../utils/index.js';
@@ -1058,7 +1058,7 @@ async function runSkillAnalysis(
     throw new SkillRunnerError('Pull request context required for skill execution');
   }
 
-  const { files: fileHunks, skippedFiles } = prepareFiles(context, {
+  const { files: fileHunks, skippedFiles, hunkGate } = prepareSkillFiles(skill, context, {
     contextLines: options.contextLines,
     ignore: options.ignore,
     scan: options.scan,
@@ -1068,7 +1068,7 @@ async function runSkillAnalysis(
   if (fileHunks.length === 0) {
     const report: SkillReport = {
       skill: skill.name,
-      summary: 'No code changes to analyze',
+      summary: emptyRunSummary(hunkGate),
       findings: [],
       usage: emptyUsage(),
       durationMs: Date.now() - startTime,
@@ -1077,6 +1077,9 @@ async function runSkillAnalysis(
     };
     if (skippedFiles.length > 0) {
       report.skippedFiles = skippedFiles;
+    }
+    if (hunkGate) {
+      report.hunkGate = hunkGate;
     }
     return report;
   }
@@ -1330,6 +1333,9 @@ async function runSkillAnalysis(
   report.runtime = options.runtime ?? 'pi';
   if (skippedFiles.length > 0) {
     report.skippedFiles = skippedFiles;
+  }
+  if (hunkGate) {
+    report.hunkGate = hunkGate;
   }
   if (totalFailedHunks > 0) {
     report.failedHunks = totalFailedHunks;

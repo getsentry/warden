@@ -11,7 +11,8 @@ import type { SkillDefinition } from '../../config/schema.js';
 import { Sentry, emitSkillMetrics, logger } from '../../sentry.js';
 import { SkillRunnerError, WardenAuthenticationError, classifyError, type ProviderErrorContext } from '../../sdk/errors.js';
 import {
-  prepareFiles,
+  prepareSkillFiles,
+  emptyRunSummary,
   analyzeFile,
   aggregateUsage,
   aggregateAuxiliaryUsage,
@@ -328,7 +329,7 @@ export async function runSkillTask(
         }
 
         // Prepare files (parse patches into hunks)
-        const { files: preparedFiles, skippedFiles } = prepareFiles(context, {
+        const { files: preparedFiles, skippedFiles, hunkGate } = prepareSkillFiles(skill, context, {
           contextLines: runnerOptions.contextLines,
           ignore: runnerOptions.ignore,
           scan: runnerOptions.scan,
@@ -339,13 +340,14 @@ export async function runSkillTask(
           // No files to analyze - skip
           const skippedReport: SkillReport = {
             skill: skill.name,
-            summary: 'No code changes to analyze',
+            summary: emptyRunSummary(hunkGate),
             findings: [],
             usage: { inputTokens: 0, outputTokens: 0, costUSD: 0 },
             durationMs: Date.now() - startTime,
             model: runnerOptions?.model,
             runtime,
             skippedFiles: skippedFiles.length > 0 ? skippedFiles : undefined,
+            hunkGate,
           };
           span.setAttribute('warden.finding.count', 0);
           callbacks.onSkillSkipped(name);
@@ -670,6 +672,9 @@ export async function runSkillTask(
         };
         if (skippedFiles.length > 0) {
           report.skippedFiles = skippedFiles;
+        }
+        if (hunkGate) {
+          report.hunkGate = hunkGate;
         }
         if (totalFailedHunks > 0) {
           report.failedHunks = totalFailedHunks;

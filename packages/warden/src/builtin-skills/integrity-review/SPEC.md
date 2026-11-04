@@ -76,7 +76,9 @@ When both skills are enabled, the handoff rule in `SKILL.md` keeps duplicate fin
 
 - **Paths.** Do not narrow this skill with `paths` filters. Lockfiles, vendored directories, generated files, fixtures, CI config, and infrastructure are classic hiding places precisely because reviewers skip them. Use `ignorePaths` only for content that cannot execute or configure anything, such as images.
 - **Org `ignorePaths`.** Base configs that ignore `tests/**`, `fixtures/**`, or `docs/**` for all skills hide test deletions and reviewer-directed text in those paths from this skill. Prefer skill-level ignores on `security-review` and `code-review` over defaults that apply to every skill.
-- **Cost.** This is a second pass on every PR with no natural path filter. It makes effect-level judgments from the hunk, the file list, and the PR text rather than deep cross-file tracing, so it is a candidate for a lower `effort` than `security-review`. Measure before lowering.
+- **Gate.** `src/sdk/integrity-gate.ts` checks each hunk in code before any model call and skips hunks with no signal: install and prepare hooks, encoded or high-entropy literals, deletion-heavy hunks, governance and CI files, registry and dependency sources, date or random checks next to deletes, destructive commands, removed or suppressed controls, early allows next to access checks, infrastructure privilege grants, and reviewer-directed text. Reviewer-directed text in the PR title or body disables the gate for that run. The gate applies only to the package's own skill, not to a repo-local override with the same name. On 80 merged `getsentry/sentry` PRs it passed 12% of hunks (83 of 679) and at least one hunk in 28 PRs; all five positive eval fixtures pass it.
+- **Triggers.** Run on `opened`, `ready_for_review`, and `synchronize` with `draft = false`. On `synchronize`, only hunks that overlap the push (`before...head`) are eligible. When GitHub cannot compare the push (force-push, more than 300 files), the full PR diff is used. Comments from a push-scoped run are never auto-resolved as stale, because hunks outside the push were not re-read.
+- **Cost.** It makes effect-level judgments from the hunk, the file list, and the PR text rather than deep cross-file tracing, so it is also a candidate for a lower `effort` than `security-review`. Measure before lowering.
 - **Trust.** Load this skill from the base branch or the org config checkout, never from the PR under review. Warden's `base-config-path` layering satisfies this.
 
 ## Reference Architecture
@@ -84,7 +86,7 @@ When both skills are enabled, the handoff rule in `SKILL.md` keeps duplicate fin
 - `SKILL.md` contains the boundary with other built-ins, the finding requirements, the category table, the severity rubric, exclusions, and the finding format.
 - `references/threat-catalog.md` contains per-category "looks like", "benign version", and "check" notes, plus guidance for PR-wide signals under Warden's per-hunk analysis.
 - `SOURCES.md` records provenance and the decisions made when adapting the source skill to Warden.
-- `scripts/`, `assets/`, and `references/evidence/` are unused. The source skill shipped a regex pre-scanner; it is intentionally not included (see `SOURCES.md`).
+- `scripts/`, `assets/`, and `references/evidence/` are unused. The deterministic pre-pass lives in Warden (`src/sdk/integrity-gate.ts`), not in the skill, so the skill keeps `Read Grep Glob` only (see `SOURCES.md`).
 
 ## Evaluation
 
@@ -103,11 +105,12 @@ When both skills are enabled, the handoff rule in `SKILL.md` keeps duplicate fin
 
 ## Known Limitations
 
-1. **Per-hunk view.** PR-wide signals such as mass deletion ratios and lockfile-without-manifest are weaker when the agent sees one hunk at a time. The file list mitigates this; a deterministic PR-level pre-pass would be a Warden feature, not a skill change.
-2. **Diff-only view.** Runtime behavior, deployment config, org policy, other PRs, and the author's history are invisible. Questions that depend on them belong in the description as a question to the author, not as a finding.
-3. **Split changes.** A harmful change spread over several individually innocent PRs can pass per-PR review.
-4. **No author metadata.** Warden does not pass author information to skills. This is by design; the skill must never use it.
-5. **PR text in evals.** The eval harness does not supply a PR title or body, so declaration-based findings are exercised only in real runs.
+1. **Per-hunk view.** PR-wide signals such as mass deletion ratios and lockfile-without-manifest are weaker when the agent sees one hunk at a time. The file list mitigates this; the gate is per hunk too.
+2. **Gate recall.** A harmful hunk that matches no gate signal is never read. Signals favor recall over precision, but recall on real traffic is unmeasured. Add a signal whenever a missed case is found, and keep the eval fixtures passing the gate.
+3. **Diff-only view.** Runtime behavior, deployment config, org policy, other PRs, and the author's history are invisible. Questions that depend on them belong in the description as a question to the author, not as a finding.
+4. **Split changes.** A harmful change spread over several individually innocent PRs can pass per-PR review.
+5. **No author metadata.** Warden does not pass author information to skills. This is by design; the skill must never use it.
+6. **PR text in evals.** The eval harness does not supply a PR title or body, so declaration-based findings are exercised only in real runs.
 
 ## Maintenance Notes
 

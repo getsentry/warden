@@ -48,9 +48,31 @@ concealed auth bypass are reported once by each skill from its own angle.
 
 Do not narrow `integrity-review` with `paths`. Lockfiles, vendored code,
 generated files, fixtures, CI config, and infrastructure are where harmful
-changes hide because reviewers skip them. If cost matters, lower its `effort`
-instead; it judges effects from the hunk, file list, and PR text rather than
-tracing deep call paths.
+changes hide because reviewers skip them.
+
+Most hunks never reach a model. Warden first checks each hunk in code for
+install or prepare hooks, encoded or high-entropy strings, deletion-heavy
+hunks, workflow and `CODEOWNERS` changes, date or random checks next to
+deletes, destructive commands, removed or suppressed controls, privilege
+grants in infrastructure files, and text addressed to automated reviewers.
+Hunks that match none are skipped. Text addressed to reviewers in the PR title
+or body sends every hunk through.
+
+Run it when a PR opens, when it leaves draft, and on each push. On a push it
+reviews only the hunks that push touched; when GitHub cannot compare the push,
+such as after a force-push, it reviews the whole PR diff.
+
+```toml title="warden.toml"
+[[skills]]
+name = "integrity-review"
+
+[[skills.triggers]]
+type = "pull_request"
+actions = ["opened", "ready_for_review", "synchronize"]
+draft = false
+```
+
+Add `ready_for_review` to the workflow's `pull_request` types as well.
 
 ## How They Fit Together
 

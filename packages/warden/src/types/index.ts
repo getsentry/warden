@@ -353,6 +353,13 @@ export const SkillReportSchema = z.object({
   usage: UsageStatsSchema.optional(),
   /** Files that were skipped due to chunking patterns */
   skippedFiles: z.array(SkippedFileSchema).optional(),
+  /** Hunks a skill's deterministic gate kept from the model. */
+  hunkGate: z.object({
+    /** Hunks dropped because no gate signal matched. */
+    skippedHunks: z.number().int().nonnegative(),
+    /** True when only the hunks touched by the triggering push were eligible. */
+    pushScoped: z.boolean(),
+  }).optional(),
   /** Number of hunks that failed to analyze (SDK errors, API errors, etc.) */
   failedHunks: z.number().int().nonnegative().optional(),
   /** Number of hunks where findings extraction failed (JSON parse errors) */
@@ -393,6 +400,7 @@ export type GitHubEventType = z.infer<typeof GitHubEventTypeSchema>;
 export const PullRequestActionSchema = z.enum([
   'opened',
   'synchronize',
+  'ready_for_review',
   'reopened',
   'closed',
   'labeled',
@@ -441,6 +449,11 @@ export const PullRequestContextSchema = z.object({
   headSha: z.string(),
   baseSha: z.string(),
   files: z.array(FileChangeSchema),
+  /** Changes in the push behind a `synchronize` event, when GitHub could compare it. */
+  push: z.object({
+    beforeSha: z.string(),
+    files: z.array(FileChangeSchema),
+  }).optional(),
 });
 export type PullRequestContext = z.infer<typeof PullRequestContextSchema>;
 

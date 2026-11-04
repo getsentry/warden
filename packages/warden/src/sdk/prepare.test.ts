@@ -3,7 +3,7 @@ import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, it, expect } from 'vitest';
-import { prepareFiles } from './prepare.js';
+import { prepareFiles, prepareSkillFiles } from './prepare.js';
 import type { EventContext, FileChange } from '../types/index.js';
 import { buildFileEventContext, buildLocalEventContext } from '../cli/context.js';
 
@@ -435,4 +435,26 @@ describe('prepareFiles', () => {
 
     expect(result.files[0]?.hunks[0]?.contextAfter).toEqual(['index context']);
   }, 30_000);
+});
+
+describe('prepareSkillFiles', () => {
+  const files = [
+    { filename: 'package.json', patch: '@@ -0,0 +1,3 @@\n+{\n+  "scripts": { "postinstall": "node x.js" }\n+}' },
+    { filename: 'src/sum.ts', patch: '@@ -0,0 +1,1 @@\n+export const sum = (a: number, b: number) => a + b;' },
+  ];
+  const skill = { name: 'integrity-review', description: '', prompt: '', rootDir: '/pkg/src/builtin-skills/integrity-review' };
+
+  it('applies the integrity-review gate to the built-in skill', () => {
+    const result = prepareSkillFiles(skill, makeContext(files));
+
+    expect(result.files.map((f) => f.filename)).toEqual(['package.json']);
+    expect(result.hunkGate).toEqual({ skippedHunks: 1, pushScoped: false });
+  });
+
+  it('leaves other skills untouched', () => {
+    const result = prepareSkillFiles({ ...skill, name: 'code-review', rootDir: '/pkg/src/builtin-skills/code-review' }, makeContext(files));
+
+    expect(result.files.map((f) => f.filename)).toEqual(['package.json', 'src/sum.ts']);
+    expect(result.hunkGate).toBeUndefined();
+  });
 });

@@ -43,6 +43,8 @@ const GitHubPullRequestSchema = z.object({
 
 const GitHubEventPayloadSchema = z.object({
   action: z.string(),
+  /** Head SHA before the push, sent on `synchronize` events. */
+  before: z.string().optional(),
   label: GitHubLabelSchema.optional(),
   repository: GitHubRepoSchema,
   pull_request: GitHubPullRequestSchema.optional(),
@@ -88,6 +90,10 @@ export async function buildEventContext(
       pr.number
     );
 
+    const push = payload.action === 'synchronize' && payload.before
+      ? await fetchPushChanges(octokit, repository.owner, repository.name, payload.before, pr.head.sha)
+      : undefined;
+
     pullRequest = {
       number: pr.number,
       title: pr.title,
@@ -100,6 +106,7 @@ export async function buildEventContext(
       headSha: pr.head.sha,
       baseSha: pr.base.sha,
       files,
+      ...(push ? { push } : {}),
     };
   }
 
@@ -120,6 +127,46 @@ export async function buildEventContext(
   }
 
   return result.data;
+}
+
+/** GitHub's compare API returns at most this many files and omits the rest. */
+const COMPARE_FILE_LIMIT = 300;
+
+/**
+ * Fetch the files changed by one push. Returns undefined when GitHub cannot
+ * compare the two SHAs (for example after a force-push dropped `before`) or
+ * the file list is truncated, so callers fall back to the full PR diff.
+ */
+async function fetchPushChanges(
+  octokit: Octokit,
+  owner: string,
+  repo: string,
+  beforeSha: string,
+  headSha: string
+): Promise<PullRequestContext['push']> {
+  try {
+    const { data } = await octokit.repos.compareCommitsWithBasehead({
+      owner,
+      repo,
+      basehead: `${beforeSha}...${headSha}`,
+    });
+    const files = data.files ?? [];
+    if (files.length >= COMPARE_FILE_LIMIT) {
+      return undefined;
+    }
+    return {
+      beforeSha,
+      files: files.map((file) => ({
+        filename: file.filename,
+        status: file.status as FileChange['status'],
+        additions: file.additions,
+        deletions: file.deletions,
+        patch: file.patch,
+      })),
+    };
+  } catch {
+    return undefined;
+  }
 }
 
 async function fetchPullRequestFiles(

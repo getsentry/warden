@@ -9,14 +9,20 @@ import { generateContentHash } from './dedup.js';
 export interface AnalyzedScope {
   /** Set of file paths that were in the diff */
   files: Set<string>;
+  /** Skills that only analyzed part of the diff (for example one push); their comments are never stale. */
+  partialSkills?: ReadonlySet<string>;
 }
 
 /**
  * Build the analyzed scope from file changes.
  */
-export function buildAnalyzedScope(fileChanges: FileChange[]): AnalyzedScope {
+export function buildAnalyzedScope(
+  fileChanges: FileChange[],
+  partialSkills?: ReadonlySet<string>
+): AnalyzedScope {
   return {
     files: new Set(fileChanges.map((f) => f.filename)),
+    ...(partialSkills && partialSkills.size > 0 ? { partialSkills } : {}),
   };
 }
 
@@ -97,6 +103,11 @@ export function findStaleComments(
 
     // Skip already-resolved comments (nothing to do)
     if (comment.isResolved) {
+      continue;
+    }
+
+    // A skill that skipped unchanged hunks cannot tell whether its older comments still apply.
+    if (comment.skills?.some((skill) => scope.partialSkills?.has(skill))) {
       continue;
     }
 

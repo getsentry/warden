@@ -5,10 +5,14 @@ import { buildEventContext, EventContextError } from './context.js';
 describe('buildEventContext', () => {
   const mockListFiles = vi.fn();
   const mockPaginate = vi.fn();
+  const mockCompare = vi.fn();
   const mockOctokit = {
     paginate: mockPaginate,
     pulls: {
       listFiles: mockListFiles,
+    },
+    repos: {
+      compareCommitsWithBasehead: mockCompare,
     },
   } as unknown as Octokit;
 
@@ -241,5 +245,56 @@ describe('buildEventContext', () => {
     const files = context.pullRequest!.files;
     expect(files).toHaveLength(1);
     expect(files[0]?.patch).toBeUndefined();
+  });
+
+  describe('synchronize push changes', () => {
+    const syncPayload = { ...validPayload, action: 'synchronize', before: 'before123' };
+
+    it('records the files changed by the push', async () => {
+      mockPaginate.mockResolvedValue([]);
+      mockCompare.mockResolvedValue({
+        data: { files: [{ filename: 'a.ts', status: 'modified', additions: 1, deletions: 0, patch: '@@ -1 +1 @@\n-a\n+b' }] },
+      });
+
+      const context = await buildEventContext('pull_request', syncPayload, '/test/repo', mockOctokit);
+
+      expect(mockCompare).toHaveBeenCalledWith({
+        owner: 'test-owner',
+        repo: 'test-repo',
+        basehead: 'before123...abc123def456',
+      });
+      expect(context.pullRequest?.push).toEqual({
+        beforeSha: 'before123',
+        files: [{ filename: 'a.ts', status: 'modified', additions: 1, deletions: 0, patch: '@@ -1 +1 @@\n-a\n+b' }],
+      });
+    });
+
+    it('omits push changes when GitHub cannot compare the push', async () => {
+      mockPaginate.mockResolvedValue([]);
+      mockCompare.mockRejectedValue(new Error('Not Found'));
+
+      const context = await buildEventContext('pull_request', syncPayload, '/test/repo', mockOctokit);
+
+      expect(context.pullRequest?.push).toBeUndefined();
+    });
+
+    it('omits push changes when the compare file list is truncated', async () => {
+      mockPaginate.mockResolvedValue([]);
+      mockCompare.mockResolvedValue({
+        data: { files: Array.from({ length: 300 }, (_, i) => ({ filename: `f${i}.ts`, status: 'modified', additions: 1, deletions: 0 })) },
+      });
+
+      const context = await buildEventContext('pull_request', syncPayload, '/test/repo', mockOctokit);
+
+      expect(context.pullRequest?.push).toBeUndefined();
+    });
+
+    it('does not compare on other actions', async () => {
+      mockPaginate.mockResolvedValue([]);
+
+      await buildEventContext('pull_request', { ...validPayload, before: 'before123' }, '/test/repo', mockOctokit);
+
+      expect(mockCompare).not.toHaveBeenCalled();
+    });
   });
 });

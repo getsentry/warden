@@ -836,6 +836,11 @@ function wouldPostBlockingReview(result: TriggerResult): boolean {
   return filteredFindings.length > 0 || (result.reportOnSuccess ?? false);
 }
 
+/** Skills whose reports covered only the triggering push, not the whole PR diff. */
+function pushScopedSkills(reports: SkillReport[]): Set<string> {
+  return new Set(reports.filter((r) => r.hunkGate?.pushScoped).map((r) => r.skill));
+}
+
 /**
  * Evaluate fix attempts on unresolved comments and resolve stale comments.
  *
@@ -852,7 +857,7 @@ async function evaluateFixesAndResolveStale(
   anthropicApiKey: string,
   auxiliaryOptions: AuxiliaryWorkflowOptions,
   gate: ReviewFeedbackGate,
-  options: { failOnWriteError?: boolean } = {}
+  options: { failOnWriteError?: boolean; partialScopeSkills?: ReadonlySet<string> } = {}
 ): Promise<{
   allResolved: boolean;
   autoResolvedByFixEvaluation: number;
@@ -1035,7 +1040,7 @@ async function evaluateFixesAndResolveStale(
   // Exclude comments already handled by fix evaluation (resolved or flagged as needing attention)
   if (context.pullRequest && wardenComments.length > 0 && canMutateFeedback) {
     try {
-      const scope = buildAnalyzedScope(context.pullRequest.files);
+      const scope = buildAnalyzedScope(context.pullRequest.files, options.partialScopeSkills);
       const commentsForStaleCheck = wardenComments.filter(
         (c) =>
           !activeWardenCommentIds.has(c.id) &&
@@ -2208,7 +2213,7 @@ async function runReportMode(
           allFindings, reviewPhase.activeWardenCommentIds,
           canResolveStale, inputs.anthropicApiKey,
           auxiliaryOptions, gate,
-          { failOnWriteError: true },
+          { failOnWriteError: true, partialScopeSkills: pushScopedSkills(reviewPhase.reports) },
         );
         resolveSpan.setAttribute(
           'warden.feedback.auto_resolve.fix_eval_count',
@@ -2472,6 +2477,7 @@ export async function runPRWorkflow(
               allFindings, reviewPhase.activeWardenCommentIds,
               canResolveStale, inputs.anthropicApiKey,
               auxiliaryOptions, gate,
+              { partialScopeSkills: pushScopedSkills(reviewPhase.reports) },
             );
             resolveSpan.setAttribute(
               'warden.feedback.auto_resolve.fix_eval_count',
