@@ -2,9 +2,16 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { describe, expect, it } from 'vitest';
-import { setupEvalRepo } from './runner.js';
+import { runLocalSkill } from '@sentry/warden';
+import type * as WardenPublic from '@sentry/warden';
+import { describe, expect, it, vi } from 'vitest';
+import { runEvalSkill, setupEvalRepo } from './runner.js';
 import type { EvalMeta } from './types.js';
+
+vi.mock('@sentry/warden', async (importOriginal) => ({
+  ...(await importOriginal<typeof WardenPublic>()),
+  runLocalSkill: vi.fn(),
+}));
 
 const evalsDir = join(import.meta.dirname, '..');
 const repoRoot = join(import.meta.dirname, '..', '..', '..');
@@ -120,5 +127,42 @@ describe('setupEvalRepo', () => {
       }
       rmSync(tempRoot, { recursive: true, force: true });
     }
+  });
+});
+
+describe('runEvalSkill', () => {
+  it('sends auxiliary and synthesis calls to the configured auxiliary model', async () => {
+    vi.mocked(runLocalSkill).mockResolvedValue({
+      context: { pullRequest: { files: [] } },
+      skill: { name: 'security-review' },
+      report: { skill: 'security-review', summary: 'clean', findings: [] },
+    } as unknown as Awaited<ReturnType<typeof runLocalSkill>>);
+    const meta: EvalMeta = {
+      name: 'sentry-preprod-size-analysis-base-artifact-access',
+      category: 'security-review',
+      skillName: 'security-review',
+      given: 'public size-analysis endpoint accepts a baseArtifactId',
+      skillPath: join(repoRoot, 'packages', 'warden', 'src', 'builtin-skills', 'security-review', 'SKILL.md'),
+      filePaths: [
+        join(evalsDir, 'fixtures', 'sentry-preprod-size-analysis-base-artifact-access', 'organization_preprod_size_analysis.py'),
+      ],
+      model: 'anthropic/claude-sonnet-4-6',
+      runtime: 'pi',
+      should_find: [],
+      should_not_find: [],
+    };
+
+    await runEvalSkill(meta, {
+      apiKey: '',
+      model: 'openrouter/anthropic/claude-sonnet-4.6',
+      runtime: 'pi',
+      auxiliaryModel: 'openrouter/anthropic/claude-sonnet-4.6',
+    });
+
+    expect(runLocalSkill).toHaveBeenCalledWith(expect.objectContaining({
+      model: 'openrouter/anthropic/claude-sonnet-4.6',
+      auxiliaryModel: 'openrouter/anthropic/claude-sonnet-4.6',
+      synthesisModel: 'openrouter/anthropic/claude-sonnet-4.6',
+    }));
   });
 });

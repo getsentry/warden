@@ -7,6 +7,7 @@ describe('resolveEvalProvider', () => {
       apiKey: '',
       model: undefined,
       runtime: undefined,
+      auxiliaryModel: undefined,
       judgeModel: DEFAULT_JUDGE_MODEL,
       enabled: false,
     });
@@ -28,7 +29,7 @@ describe('resolveEvalProvider', () => {
     expect(resolveEvalProvider({ ANTHROPIC_API_KEY: 'sk-ant' }).apiKey).toBe('sk-ant');
   });
 
-  it('routes evals and the judge through WARDEN_EVAL_MODEL on Pi', () => {
+  it('routes evals, auxiliary calls, and the judge through WARDEN_EVAL_MODEL on Pi', () => {
     const config = resolveEvalProvider({
       WARDEN_EVAL_MODEL: ' openrouter/anthropic/claude-sonnet-4.6 ',
       WARDEN_OPENROUTER_API_KEY: 'sk-or',
@@ -38,6 +39,7 @@ describe('resolveEvalProvider', () => {
       apiKey: '',
       model: 'openrouter/anthropic/claude-sonnet-4.6',
       runtime: 'pi',
+      auxiliaryModel: 'openrouter/anthropic/claude-sonnet-4.6',
       judgeModel: 'openrouter/anthropic/claude-sonnet-4.6',
       enabled: true,
     });

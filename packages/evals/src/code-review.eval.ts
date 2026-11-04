@@ -26,6 +26,7 @@ describeEval(
       apiKey: provider.apiKey,
       model: provider.model,
       runtime: provider.runtime,
+      auxiliaryModel: provider.auxiliaryModel,
       maxTurns: 8,
       timeoutMs: CODE_REVIEW_RUN_TIMEOUT_MS,
       postProcessFindings: false,

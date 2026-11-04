@@ -16,6 +16,11 @@ export interface EvalProviderConfig {
   model?: string;
   /** Runtime forced alongside a model override, since provider selectors need Pi. */
   runtime?: RuntimeName;
+  /**
+   * Model for Warden's auxiliary calls (extraction repair, verification, merge).
+   * Set with a model override so those calls use the same provider instead of Pi's default.
+   */
+  auxiliaryModel?: string;
   /** Pi model selector for the LLM judge. */
   judgeModel: string;
   /** Whether live evals have a configured model or Anthropic key to run with. */
@@ -37,8 +42,9 @@ function readModelSelector(env: NodeJS.ProcessEnv, name: string): string | undef
  * Resolve which model and credentials live evals use.
  *
  * Without `WARDEN_EVAL_MODEL`, scenarios keep their YAML models and evals run only
- * when an Anthropic key is present. With it, every scenario and the judge use that
- * selector, and credentials come from the provider's `WARDEN_<PROVIDER>_API_KEY`.
+ * when an Anthropic key is present. With it, every scenario, Warden's auxiliary
+ * calls, and the judge use that selector, and credentials come from the
+ * provider's `WARDEN_<PROVIDER>_API_KEY`.
  */
 export function resolveEvalProvider(env: NodeJS.ProcessEnv = process.env): EvalProviderConfig {
   const apiKey = env['WARDEN_ANTHROPIC_API_KEY'] || env['ANTHROPIC_API_KEY'] || '';
@@ -49,6 +55,7 @@ export function resolveEvalProvider(env: NodeJS.ProcessEnv = process.env): EvalP
     apiKey,
     model,
     runtime: model ? 'pi' : undefined,
+    auxiliaryModel: model,
     judgeModel,
     enabled: Boolean(model || apiKey),
   };

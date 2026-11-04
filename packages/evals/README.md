@@ -225,7 +225,9 @@ model. With only that default, evals are skipped unless `ANTHROPIC_API_KEY` or
 To run against any other provider, set:
 
 - `WARDEN_EVAL_MODEL`: a Pi `provider/model` selector that replaces every
-  scenario's model and forces the Pi runtime. Evals run whenever it is set.
+  scenario's model, including Warden's auxiliary calls (extraction repair,
+  verification, merge), and forces the Pi runtime. Evals run whenever it is
+  set.
 - `WARDEN_EVAL_JUDGE_MODEL`: optional judge model. Defaults to
   `WARDEN_EVAL_MODEL`.
 - The provider's Warden-prefixed key, e.g. `WARDEN_OPENROUTER_API_KEY`. Eval
