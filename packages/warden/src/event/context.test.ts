@@ -289,6 +289,15 @@ describe('buildEventContext', () => {
       expect(context.pullRequest?.push).toBeUndefined();
     });
 
+    it('omits push changes when the compare response has no file list', async () => {
+      mockPaginate.mockResolvedValue([]);
+      mockCompare.mockResolvedValue({ data: {} });
+
+      const context = await buildEventContext('pull_request', syncPayload, '/test/repo', mockOctokit);
+
+      expect(context.pullRequest?.push).toBeUndefined();
+    });
+
     it('does not compare on other actions', async () => {
       mockPaginate.mockResolvedValue([]);
 
