@@ -7,6 +7,7 @@ import {
   reviewedEverything,
   collectCarriedRanges,
   createIncrementalBaselineSource,
+  hasOpenCarriedComment,
   hunkFingerprint,
   incrementalExternalId,
   isOnCarriedHunk,
@@ -194,6 +195,26 @@ describe('isOnCarriedHunk', () => {
   it('matches a comment with no recorded skill', () => {
     expect(isOnCarriedHunk({ path: 'a.ts', line: 5 }, ranges)).toBe(true);
   });
+
+  it('matches a shifted comment by its current GitHub line', () => {
+    // Marker keeps the line from the original post; GitHub tracks the moved hunk.
+    expect(isOnCarriedHunk({ path: 'a.ts', line: 1, currentLine: 6, skills: ['security-review'] }, ranges)).toBe(true);
+  });
+});
+
+describe('hasOpenCarriedComment', () => {
+  const ranges = [{ path: 'a.ts', startLine: 5, endLine: 9, skill: 'security-review' }];
+  const comment = { id: 1, path: 'a.ts', line: 7, title: 't', description: 'd', contentHash: 'h', isWarden: true };
+
+  it('is true for an unresolved Warden comment on a carried hunk', () => {
+    expect(hasOpenCarriedComment([comment], ranges)).toBe(true);
+  });
+
+  it('ignores resolved, non-Warden, and uncarried comments', () => {
+    expect(hasOpenCarriedComment([{ ...comment, isResolved: true }], ranges)).toBe(false);
+    expect(hasOpenCarriedComment([{ ...comment, isWarden: false }], ranges)).toBe(false);
+    expect(hasOpenCarriedComment([{ ...comment, line: 20 }], ranges)).toBe(false);
+  });
 });
 
 describe('createIncrementalBaselineSource', () => {
@@ -205,6 +226,7 @@ describe('createIncrementalBaselineSource', () => {
       status: 'completed',
       conclusion: 'success',
       external_id: externalId,
+      app: { slug: 'sentry-warden' },
       ...overrides,
     };
   }
@@ -226,7 +248,14 @@ describe('createIncrementalBaselineSource', () => {
     return { octokit, listForRef, compareCommitsWithBasehead };
   }
 
-  const options = { owner: 'getsentry', repo: 'warden', pullNumber: 7, headSha: 'head', baseSha: 'base' };
+  const options = {
+    owner: 'getsentry',
+    repo: 'warden',
+    pullNumber: 7,
+    headSha: 'head',
+    baseSha: 'base',
+    trustedApp: 'sentry-warden',
+  };
 
   it('uses the newest earlier commit with a matching clean check', async () => {
     const { octokit, compareCommitsWithBasehead } = mockOctokit({
@@ -247,6 +276,16 @@ describe('createIncrementalBaselineSource', () => {
 
   it('ignores checks that Warden did not create', async () => {
     const { octokit } = mockOctokit({ c3: [checkRun({ name: 'lint' })] });
+    const source = createIncrementalBaselineSource(octokit as never, { ...options, warn: vi.fn() });
+
+    expect(await source.baselineFor(externalId)).toBeUndefined();
+  });
+
+  it('ignores look-alike checks from another app', async () => {
+    const { octokit } = mockOctokit({
+      c3: [checkRun({ app: { slug: 'some-other-app' } })],
+      c2: [checkRun({ app: null })],
+    });
     const source = createIncrementalBaselineSource(octokit as never, { ...options, warn: vi.fn() });
 
     expect(await source.baselineFor(externalId)).toBeUndefined();

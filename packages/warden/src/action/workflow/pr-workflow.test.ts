@@ -433,7 +433,7 @@ describe('runPRWorkflow', () => {
       mockRunSkillTask.mockResolvedValueOnce({ name: 'test-trigger', report: firstReport });
       await runPRWorkflow(
         mockOctokit,
-        createDefaultInputs({ mode: 'analyze', incremental: true }),
+        createDefaultInputs({ mode: 'analyze', incremental: true, incrementalApp: 'sentry-warden' }),
         'pull_request',
         EVENT_PAYLOAD_PATH,
         FIXTURES_DIR
@@ -445,12 +445,18 @@ describe('runPRWorkflow', () => {
       expect(firstReport.incremental?.complete).toBe(true);
 
       baselineChecks = [
-        { name: 'warden: test-skill', status: 'completed', conclusion: 'success', external_id: externalId },
+        {
+          name: 'warden: test-skill',
+          status: 'completed',
+          conclusion: 'success',
+          external_id: externalId,
+          app: { slug: 'sentry-warden' },
+        },
       ];
       mockRunSkillTask.mockResolvedValueOnce({ name: 'test-trigger', report: createSkillReport() });
       await runPRWorkflow(
         mockOctokit,
-        createDefaultInputs({ mode: 'analyze', incremental: true }),
+        createDefaultInputs({ mode: 'analyze', incremental: true, incrementalApp: 'sentry-warden' }),
         'pull_request',
         EVENT_PAYLOAD_PATH,
         FIXTURES_DIR
@@ -464,6 +470,20 @@ describe('runPRWorkflow', () => {
       expect(octokit.checks.listForRef).not.toHaveBeenCalledWith(
         expect.objectContaining({ ref: PR_HEAD_SHA })
       );
+    });
+
+    it('analyze mode reviews the full PR when incremental-app is not set', async () => {
+      mockRunSkillTask.mockResolvedValueOnce({ name: 'test-trigger', report: createSkillReport() });
+      await runPRWorkflow(
+        mockOctokit,
+        createDefaultInputs({ mode: 'analyze', incremental: true }),
+        'pull_request',
+        EVENT_PAYLOAD_PATH,
+        FIXTURES_DIR
+      );
+
+      expect(mockRunSkillTask.mock.calls[0]?.[0].runnerOptions?.skipHunks).toBeUndefined();
+      expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('incremental-app'));
     });
 
     it('analyze mode lists a schedule-only skill as configured but not triggered on a PR run', async () => {
@@ -2527,6 +2547,29 @@ describe('runPRWorkflow', () => {
   });
 
   describe('review dismissal', () => {
+    it('does not dismiss while a comment on a carried-forward hunk is open', async () => {
+      vi.mocked(mockOctokit.pulls.listReviews).mockResolvedValue({
+        data: [{ id: 42, state: 'CHANGES_REQUESTED', user: { login: 'warden[bot]' } }],
+      } as ListReviewsResponse);
+      mockFetchExistingComments.mockResolvedValue([
+        createExistingWardenComment({ skills: ['test-skill'], line: 10 }),
+      ]);
+      const report = createSkillReport({
+        findings: [],
+        incremental: {
+          externalId: 'warden-incremental:v1:abc',
+          baselineSha: PREVIOUS_HEAD_SHA,
+          carriedRanges: [{ path: 'src/test.ts', startLine: 8, endLine: 12 }],
+          complete: true,
+        },
+      });
+      mockRunSkillTask.mockResolvedValue({ name: 'test-trigger', report });
+
+      await runPRWorkflow(mockOctokit, createDefaultInputs({ failOn: 'high' }), 'pull_request', EVENT_PAYLOAD_PATH, FIXTURES_DIR);
+
+      expect(mockOctokit.pulls.dismissReview).not.toHaveBeenCalled();
+    });
+
     it('dismisses previous CHANGES_REQUESTED when all comments resolved', async () => {
       // Previous review was CHANGES_REQUESTED
       vi.mocked(mockOctokit.pulls.listReviews).mockResolvedValue({

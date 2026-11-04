@@ -181,7 +181,14 @@ steps:
     with:
       mode: analyze
       incremental: true
+      incremental-app: github-actions
 ```
+
+Set `incremental-app` to the slug of the GitHub App that writes Warden's
+checks: `github-actions` when the report or run step uses the default
+`GITHUB_TOKEN`, or your app's slug when it uses a GitHub App token. Warden only
+trusts baselines from that app, so look-alike checks from other apps cannot
+make it skip hunks. Without `incremental-app`, Warden reviews the full PR.
 
 When a skill check completes without failing, Warden tags it with a
 fingerprint of the skill prompt, Warden version, and the settings that affect
@@ -195,12 +202,13 @@ Warden falls back to a full review when:
 
 - no earlier commit has a matching check, for example on the first push, after
   a force push drops the old commits, or after a config or skill change
-- the earlier run failed its check, had hunk failures, or skipped files because
-  of scan limits
+- the earlier run failed its check, had hunk failures, skipped files because
+  of scan limits, or was cut short by a provider failure
 - the checks or the earlier diff cannot be read
 
 Comments on skipped hunks stay open. Warden does not run fix evaluation or the
-stale-comment pass on them until their hunk changes. A skipped hunk is not
+stale-comment pass on them until their hunk changes, and it does not dismiss an
+earlier blocking review while any of them are unresolved. A skipped hunk is not
 re-checked against changes elsewhere in the pull request.
 
 The analysis token needs `checks: read`. Baselines come from per-skill check
@@ -327,5 +335,12 @@ never reports and the required check blocks every PR indefinitely.
       <span class="sentry-property-meta">boolean</span>
     </dt>
     <dd>Skip hunks that an earlier clean run on the same pull request already reviewed. See <a href="#incremental-review">Incremental Review</a>. Default: <code>false</code>.</dd>
+  </div>
+  <div>
+    <dt>
+      <code>incremental-app</code>
+      <span class="sentry-property-meta">string</span>
+    </dt>
+    <dd>Slug of the GitHub App that writes Warden checks, such as <code>github-actions</code>. Only its checks count as incremental baselines. Required for incremental review.</dd>
   </div>
 </dl>

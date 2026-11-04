@@ -7,7 +7,8 @@
  * commit's PR diff, and skips current hunks whose content was already
  * reviewed there. Hunks match on file path plus hunk body, not line numbers,
  * so rebases and merges from the base branch do not trigger re-review of
- * code the PR did not change.
+ * code the PR did not change. Only checks written by the configured GitHub
+ * App count, so look-alike checks from other apps cannot skip review.
  *
  * Every lookup fails open: if the baseline cannot be found or read, the skill
  * reviews the full PR as it would without incremental review.
@@ -180,18 +181,34 @@ export function collectCarriedRanges(reports: readonly SkillReport[]): SkillCarr
   );
 }
 
-/** Whether a comment sits on a hunk its skill carried forward without re-review. */
+/**
+ * Whether a comment sits on a hunk its skill carried forward without re-review.
+ * Checks both the line from the Warden marker, which keeps the line the
+ * finding was first posted on, and GitHub's current line, which follows the
+ * hunk when a rebase or base merge shifts it.
+ */
 export function isOnCarriedHunk(
-  comment: Pick<ExistingComment, 'path' | 'line' | 'skills'>,
+  comment: Pick<ExistingComment, 'path' | 'line' | 'currentLine' | 'skills'>,
   ranges: readonly SkillCarriedRange[]
 ): boolean {
+  const lines = comment.currentLine === undefined ? [comment.line] : [comment.line, comment.currentLine];
   return ranges.some(
     (range) =>
       range.path === comment.path &&
-      comment.line >= range.startLine &&
-      comment.line <= range.endLine &&
+      lines.some((line) => line >= range.startLine && line <= range.endLine) &&
       (!comment.skills?.length || comment.skills.includes(range.skill))
   );
+}
+
+/**
+ * Whether an unresolved Warden comment sits on a carried hunk. Its finding
+ * was not re-checked, so the run cannot prove a blocking review is clear.
+ */
+export function hasOpenCarriedComment(
+  comments: readonly ExistingComment[],
+  ranges: readonly SkillCarriedRange[]
+): boolean {
+  return comments.some((c) => c.isWarden && !c.isResolved && isOnCarriedHunk(c, ranges));
 }
 
 interface BaselineSourceOptions {
@@ -200,6 +217,8 @@ interface BaselineSourceOptions {
   pullNumber: number;
   headSha: string;
   baseSha: string;
+  /** Slug of the GitHub App whose checks count as baselines. Other apps can create look-alike checks. */
+  trustedApp: string;
   warn?: (message: string) => void;
 }
 
@@ -242,6 +261,7 @@ export function createIncrementalBaselineSource(
         for (const check of data.check_runs) {
           const id = check.external_id;
           if (!id?.startsWith(EXTERNAL_ID_PREFIX) || found.has(id)) continue;
+          if (check.app?.slug !== options.trustedApp) continue;
           if (!check.name.startsWith('warden: ') || check.status !== 'completed') continue;
           if (check.conclusion !== 'success' && check.conclusion !== 'neutral') continue;
           found.set(id, sha);

@@ -53,6 +53,7 @@ import {
   baselineExternalId,
   collectCarriedRanges,
   createIncrementalBaselineSource,
+  hasOpenCarriedComment,
   isOnCarriedHunk,
   type IncrementalBaselineSource,
   type SkillCarriedRange,
@@ -636,12 +637,17 @@ function incrementalSourceFor(
   if (!inputs.incremental || context.eventType !== 'pull_request' || !context.pullRequest) {
     return undefined;
   }
+  if (!inputs.incrementalApp) {
+    warnAction('Incremental review needs incremental-app to know which checks to trust, reviewing the full PR');
+    return undefined;
+  }
   return createIncrementalBaselineSource(octokit, {
     owner: context.repository.owner,
     repo: context.repository.name,
     pullNumber: context.pullRequest.number,
     headSha: context.pullRequest.headSha,
     baseSha: context.pullRequest.baseSha,
+    trustedApp: inputs.incrementalApp,
     warn: warnAction,
   });
 }
@@ -1164,7 +1170,11 @@ async function dismissPreviousReviewIfResolved(
   results: TriggerResult[],
   canResolveStale: boolean,
   gate: ReviewFeedbackGate,
-  options: { failOnWriteError?: boolean } = {}
+  options: {
+    failOnWriteError?: boolean;
+    /** An open comment sits on a hunk incremental review skipped, so its finding was not re-checked. */
+    carriedFindingsOpen?: boolean;
+  } = {}
 ): Promise<void> {
   // Dismiss previous CHANGES_REQUESTED if all blocking issues are resolved.
   // Requires: all triggers succeeded, current run would not request changes,
@@ -1182,6 +1192,10 @@ async function dismissPreviousReviewIfResolved(
     !wouldRequestChanges &&
     hasActiveFailOn
   ) {
+    if (options.carriedFindingsOpen) {
+      logAction('Keeping previous CHANGES_REQUESTED review: comments on unchanged hunks are still open');
+      return;
+    }
     if (!await gate.canWrite()) {
       return;
     }
@@ -1227,7 +1241,8 @@ async function finalizeWorkflow(
   memoryRecall: ActionMemoryRecall | undefined,
   postChecks: boolean,
   matchedTriggers: ResolvedTrigger[],
-  resolvedTriggers: ResolvedTrigger[]
+  resolvedTriggers: ResolvedTrigger[],
+  carriedFindingsOpen = false
 ): Promise<void> {
   await dismissPreviousReviewIfResolved(
     octokit,
@@ -1235,7 +1250,8 @@ async function finalizeWorkflow(
     previousReviewInfo,
     results,
     canResolveStale,
-    gate
+    gate,
+    { carriedFindingsOpen }
   );
 
   // Set outputs
@@ -1878,6 +1894,7 @@ async function finalizeReportWorkflow(
     postChecks: boolean;
     matchedTriggers: ResolvedTrigger[];
     resolvedTriggers: ResolvedTrigger[];
+    carriedFindingsOpen?: boolean;
   }
 ): Promise<void> {
   await dismissPreviousReviewIfResolved(
@@ -1887,7 +1904,7 @@ async function finalizeReportWorkflow(
     results,
     canResolveStale,
     gate,
-    { failOnWriteError: options.failOnWriteError }
+    { failOnWriteError: options.failOnWriteError, carriedFindingsOpen: options.carriedFindingsOpen }
   );
 
   const outputs = computeWorkflowOutputs(reports);
@@ -2245,6 +2262,7 @@ async function runReportMode(
     triggerErrors = collectTriggerErrors(results);
     canResolveStale = shouldResolveStaleComments(results);
     const allFindings = reviewPhase.reports.flatMap((r) => r.findings);
+    const carriedRanges = collectCarriedRanges(reviewPhase.reports);
     span.setAttribute('warden.finding.count', allFindings.length);
 
     await Sentry.startSpan(
@@ -2255,7 +2273,7 @@ async function runReportMode(
           allFindings, reviewPhase.activeWardenCommentIds,
           canResolveStale, inputs.anthropicApiKey,
           auxiliaryOptions, gate,
-          { failOnWriteError: true, carriedRanges: collectCarriedRanges(reviewPhase.reports) },
+          { failOnWriteError: true, carriedRanges },
         );
         resolveSpan.setAttribute(
           'warden.feedback.auto_resolve.fix_eval_count',
@@ -2286,6 +2304,7 @@ async function runReportMode(
         postChecks,
         matchedTriggers,
         resolvedTriggers,
+        carriedFindingsOpen: hasOpenCarriedComment(reviewPhase.fetchedComments, carriedRanges),
       },
     );
   } catch (error) {
@@ -2505,6 +2524,7 @@ export async function runPRWorkflow(
       const triggerErrors = collectTriggerErrors(results);
       const canResolveStale = shouldResolveStaleComments(results);
       const allFindings = reviewPhase.reports.flatMap((r) => r.findings);
+      const carriedRanges = collectCarriedRanges(reviewPhase.reports);
       span.setAttribute('warden.finding.count', allFindings.length);
 
       await runOrFailCore(
@@ -2520,7 +2540,7 @@ export async function runPRWorkflow(
               allFindings, reviewPhase.activeWardenCommentIds,
               canResolveStale, inputs.anthropicApiKey,
               auxiliaryOptions, gate,
-              { carriedRanges: collectCarriedRanges(reviewPhase.reports) },
+              { carriedRanges },
             );
             resolveSpan.setAttribute(
               'warden.feedback.auto_resolve.fix_eval_count',
@@ -2550,6 +2570,7 @@ export async function runPRWorkflow(
         postChecks,
         matchedTriggers,
         resolvedTriggers,
+        hasOpenCarriedComment(reviewPhase.fetchedComments, carriedRanges),
       );
 
       handleTriggerErrors(triggerErrors, matchedTriggers.length);

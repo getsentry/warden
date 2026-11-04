@@ -45,6 +45,8 @@ export interface ActionInputs {
   parallel: number;
   /** Skip hunks an earlier clean run on this PR already reviewed */
   incremental?: boolean;
+  /** Slug of the GitHub App whose checks count as incremental baselines */
+  incrementalApp?: string;
   /** The action ref that produced this run, surfaced in the findings output harness field */
   actionRef?: string;
   serviceUrl?: string;
@@ -147,6 +149,7 @@ export function parseActionInputs(): ActionInputs {
     postChecks,
     parallel: Number.isNaN(parallelParsed) ? DEFAULT_CONCURRENCY : parallelParsed,
     incremental: parseBooleanInput(getInput('incremental')),
+    incrementalApp: getInput('incremental-app') || undefined,
     actionRef: getInput('action-ref') || undefined,
     serviceUrl: getInput('service-url') || undefined,
     serviceToken: getInput('service-token') || process.env['WARDEN_SERVICE_TOKEN'] || undefined,

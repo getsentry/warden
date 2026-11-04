@@ -220,6 +220,29 @@ describe('executeTrigger', () => {
       expect(result.report?.incremental?.externalId).toMatch(/^warden-incremental:v1:/);
     });
 
+    it('does not record a baseline when the shared run was aborted', async () => {
+      const abortController = new AbortController();
+      vi.mocked(runSkillTask).mockImplementation(async () => {
+        abortController.abort();
+        return { name: 'test-trigger', report: createReport() };
+      });
+
+      const result = await executeTrigger(mockTrigger, {
+        ...mockDeps,
+        context: incrementalContext,
+        abortController,
+        incremental: { baselineFor: async () => undefined },
+      });
+
+      expect(result.report?.incremental?.complete).toBe(false);
+      expect(updateSkillCheck).toHaveBeenCalledWith(
+        mockOctokit,
+        123,
+        expect.anything(),
+        expect.objectContaining({ externalId: undefined })
+      );
+    });
+
     it('falls back to the normal path when the skill cannot be resolved early', async () => {
       vi.mocked(resolveSkillAsync).mockRejectedValue(new Error('skill not found'));
       vi.mocked(runSkillTask).mockResolvedValue({ name: 'test-trigger', report: createReport() });

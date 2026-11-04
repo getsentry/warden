@@ -285,7 +285,10 @@ export async function executeTrigger(
         }
 
         if (incremental) {
-          report.incremental = { ...incremental.review, complete: reviewedEverything(report) };
+          // A shared abort (circuit breaker or sibling failure) drops queued hunks
+          // without recording them as failed, so an aborted run is never a baseline.
+          const aborted = deps.abortController?.signal.aborted ?? false;
+          report.incremental = { ...incremental.review, complete: !aborted && reviewedEverything(report) };
         }
 
         console.log(`Found ${report.findings.length} findings`);
