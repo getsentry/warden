@@ -41,7 +41,7 @@
 | Evidence requirements | Complete | Mechanism, trigger, scope, impact, declaration. |
 | False-positive controls | Complete | Exclusions cover declared deprecations, reversible migrations, test-only bypasses, placeholders, matching lockfile updates, and the other built-ins' scopes. |
 | Severity calibration | Complete | Tied to blast radius; raised for concealment, lowered for unconfirmed preconditions. |
-| PR-wide signals under per-hunk analysis | Partial | File-list guidance in the catalog. The gate is per hunk; reviewer-directed PR text is its only PR-level signal. |
+| PR-wide signals under per-hunk analysis | Partial | File-list guidance in the catalog. The gate is per hunk; its PR-level inputs are reviewer-directed PR text and whether any dependency manifest changed. |
 | Gate pass rate | Measured | 80 merged `getsentry/sentry` PRs (2026-11-04): 83 of 679 hunks (12%) and 28 PRs had at least one hunk pass. Recall of the gate itself is not measured beyond the eval fixtures. |
 | Declaration-based findings in evals | Gap | Harness supplies no PR title or body. In-code narrative mismatch (docstring versus behavior) is covered by `misdescribed-gate-removal`. |
 | Real-traffic precision | Measured | 500 closed PRs: 1 finding, 0 audited disagreements, 25 of the source skill's 26 flags correctly silenced. Benign eval scenarios encode the recurring patterns: declared log downgrades, option-gated limits with safe fallback, encoded assets in fixtures. |

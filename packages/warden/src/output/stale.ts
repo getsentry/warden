@@ -9,7 +9,7 @@ import { generateContentHash } from './dedup.js';
 export interface AnalyzedScope {
   /** Set of file paths that were in the diff */
   files: Set<string>;
-  /** Skills that only analyzed part of the diff (for example one push); their comments are never stale. */
+  /** Skills that only analyzed part of the diff (for example one push); their comments go stale only when the file leaves the PR. */
   partialSkills?: ReadonlySet<string>;
 }
 
@@ -106,14 +106,15 @@ export function findStaleComments(
       continue;
     }
 
-    // A skill that skipped unchanged hunks cannot tell whether its older comments still apply.
-    if (comment.skills?.some((skill) => scope.partialSkills?.has(skill))) {
+    // Comments on files NOT in scope are orphaned (file renamed, reverted, etc.).
+    // This holds for every skill, including ones that only analyzed part of the diff.
+    if (!isInAnalyzedScope(comment, scope)) {
+      staleComments.push(comment);
       continue;
     }
 
-    // Comments on files NOT in scope are orphaned (file renamed, reverted, etc.)
-    if (!isInAnalyzedScope(comment, scope)) {
-      staleComments.push(comment);
+    // A skill that skipped unchanged hunks cannot tell whether its older comments still apply.
+    if (comment.skills?.some((skill) => scope.partialSkills?.has(skill))) {
       continue;
     }
 

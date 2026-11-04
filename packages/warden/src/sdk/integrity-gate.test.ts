@@ -95,6 +95,27 @@ describe('matchIntegritySignals', () => {
     ).toEqual([]);
   });
 
+  it('flags lockfile pins that change without a manifest change, a version change, or the same source', () => {
+    const retarget = hunk('package-lock.json', [
+      '-      "resolved": "https://registry.npmjs.org/left-pad/-/left-pad-1.3.0.tgz",',
+      '-      "integrity": "sha512-old",',
+      '+      "resolved": "https://pkgs.example.net/left-pad/-/left-pad-1.3.0.tgz",',
+      '+      "integrity": "sha512-new",',
+    ]);
+    const bump = hunk('package-lock.json', [
+      '-      "version": "1.3.0",',
+      '-      "resolved": "https://registry.npmjs.org/left-pad/-/left-pad-1.3.0.tgz",',
+      '-      "integrity": "sha512-old",',
+      '+      "version": "1.3.1",',
+      '+      "resolved": "https://registry.npmjs.org/left-pad/-/left-pad-1.3.1.tgz",',
+      '+      "integrity": "sha512-new",',
+    ]);
+
+    expect(matchIntegritySignals(retarget, true)).toContain('lockfile-drift');
+    expect(matchIntegritySignals(bump, false)).toContain('lockfile-drift');
+    expect(matchIntegritySignals(bump, true)).toEqual([]);
+  });
+
   it('uses surrounding context for destructive operations next to an added date check', () => {
     const input = hunk('cleanup.py', ['+    if now > POLICY_SWITCH and datetime(2027, 1, 4):']);
     expect(matchIntegritySignals(input)).not.toContain('conditional-destructive');
@@ -154,6 +175,33 @@ describe('applyIntegrityGate', () => {
       skippedHunks: 1,
       pushScoped: true,
     });
+  });
+
+  it('keeps a hunk when the push deletes the line right after it', () => {
+    const edit = hunk('package.json', Array.from({ length: 5 }, () => '+    "prepare": "husky",'), 10);
+    const deletion = '@@ -16,2 +15,0 @@\n-a\n-b';
+    const sync = context(
+      { action: 'synchronize' },
+      { push: { beforeSha: 'before', files: [{ filename: 'package.json', status: 'modified', additions: 0, deletions: 2, patch: deletion }] } }
+    );
+
+    expect(applyIntegrityGate(builtinSkill, sync, [{ filename: 'package.json', hunks: [edit] }])?.files).toEqual([
+      { filename: 'package.json', hunks: [edit] },
+    ]);
+  });
+
+  it('skips lockfile bumps that ship with a manifest change', () => {
+    const lock = hunk('pnpm-lock.yaml', [
+      '-  left-pad@1.3.0:',
+      '-    resolution: {integrity: sha512-old}',
+      '+  left-pad@1.3.1:',
+      '+    resolution: {integrity: sha512-new}',
+    ]);
+    const lockFiles: PreparedFile[] = [{ filename: 'pnpm-lock.yaml', hunks: [lock] }];
+    const manifest = { filename: 'packages/app/package.json', status: 'modified' as const, additions: 1, deletions: 1 };
+
+    expect(applyIntegrityGate(builtinSkill, context(), lockFiles)?.skippedHunks).toBe(0);
+    expect(applyIntegrityGate(builtinSkill, context({}, { files: [manifest] }), lockFiles)?.skippedHunks).toBe(1);
   });
 
   it('reviews the whole file when the push patch is missing', () => {

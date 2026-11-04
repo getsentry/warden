@@ -215,6 +215,25 @@ describe('findStaleComments', () => {
     expect(stale.map((c) => c.id)).toEqual([2]);
   });
 
+  it('marks orphaned comments stale even for skills that only analyzed part of the diff', () => {
+    const comments: ExistingComment[] = [
+      {
+        id: 1,
+        path: 'scripts/removed.js',
+        line: 3,
+        title: 'Install hook posts env',
+        description: 'Description',
+        contentHash: 'abc12345',
+        threadId: 'thread-1',
+        skills: ['integrity-review'],
+      },
+    ];
+
+    const partialScope = buildAnalyzedScope([{ filename: 'src/db.ts', status: 'modified', additions: 1, deletions: 0 }], new Set(['integrity-review']));
+    const stale = findStaleComments(comments, [], partialScope);
+    expect(stale.map((c) => c.id)).toEqual([1]);
+  });
+
   it('matches findings within 5 lines of comment', () => {
     const comments: ExistingComment[] = [
       {
