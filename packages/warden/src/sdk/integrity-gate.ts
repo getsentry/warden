@@ -19,7 +19,7 @@ interface HunkLines {
   added: string[];
   removed: string[];
   context: string[];
-  /** True when the PR changes a dependency manifest anywhere, so lockfile churn has a declared cause. */
+  /** True when the reviewed changes touch a dependency manifest, so lockfile churn has a declared cause. */
   manifestChanged: boolean;
 }
 
@@ -37,7 +37,8 @@ const DEPENDENCY_MANIFEST = /(?:^|\/)(?:package\.json|requirements[^/]*\.txt|pyp
 const LOCKFILE_PATH = /(?:^|\/)(?:package-lock\.json|npm-shrinkwrap\.json|pnpm-lock\.yaml|yarn\.lock|bun\.lock|poetry\.lock|Pipfile\.lock|uv\.lock|Cargo\.lock|go\.sum|Gemfile\.lock|composer\.lock)$/;
 const LOCK_PIN = /\b(?:resolved|integrity|tarball|checksum|resolution|source|remote)\b|\bsha(?:1|256|384|512)[-:]|\sh1:/;
 const LOCK_VERSION = /\bversion\b|@[\^~]?v?\d+\.\d|\sv\d+\.\d|\(\d+\.\d/;
-const SOURCE_HOST = /git\+|github:|file:|https?:\/\/([^/\s"'#@]+)/g;
+// Package sources: scheme URLs (userinfo skipped), scp-style git remotes, and npm shorthands.
+const SOURCE_REF = /\b([a-z][a-z0-9+.-]*):\/\/(?:[^@/\s"']*@)?([^/\s"'#:?]+)|\b[\w.-]+@([a-z0-9-]+(?:\.[a-z0-9-]+)*\.[a-z]{2,}):(?!\/)|\b(github|gitlab|bitbucket|file):(?!\/)/gi;
 const DECODE_CALL = /\batob\(|b64decode|base64\s+-d|Buffer\.from\([^)]*['"](?:base64|hex)['"]|zlib\.|fromCharCode\(|codecs\.decode|\\x[0-9a-fA-F]{2}(?:\\x[0-9a-fA-F]{2}){7,}/;
 const HIDDEN_UNICODE = /[\u200B-\u200D\u202A-\u202E\u2066-\u2069\uFEFF]/;
 const LONG_TOKEN = /[A-Za-z0-9+/]{40,}={0,2}/g;
@@ -83,10 +84,15 @@ function hasEncodedLiteral(line: string): boolean {
 
 const anyLine = (lines: string[], pattern: RegExp) => lines.some((line) => pattern.test(line));
 
+/** Collect `scheme://host` keys for every package source on the lines, so a move to a new host or transport shows up. */
 function sourceHosts(lines: string[]): Set<string> {
   const hosts = new Set<string>();
   for (const line of lines) {
-    for (const match of line.matchAll(SOURCE_HOST)) hosts.add(match[1] ?? match[0]);
+    for (const [, scheme, host, scpHost, shorthand] of line.matchAll(SOURCE_REF)) {
+      if (scheme && host) hosts.add(`${scheme.toLowerCase()}://${host.toLowerCase()}`);
+      else if (scpHost) hosts.add(`ssh://${scpHost.toLowerCase()}`);
+      else if (shorthand) hosts.add(`${shorthand.toLowerCase()}:`);
+    }
   }
   return hosts;
 }
@@ -186,7 +192,7 @@ function splitHunkLines(filename: string, hunk: DiffHunk, manifestChanged: boole
 
 /**
  * Return the ids of every gate signal that matches a hunk. Pass `manifestChanged`
- * when the PR changes a dependency manifest, so routine lockfile bumps skip the model.
+ * when the reviewed changes touch a dependency manifest, so routine lockfile bumps skip the model.
  */
 export function matchIntegritySignals(hunk: HunkWithContext, manifestChanged = false): string[] {
   const lines = splitHunkLines(hunk.filename, hunk.hunk, manifestChanged);
@@ -255,7 +261,8 @@ export function applyIntegrityGate(
   const push = context.action === 'synchronize' ? pr?.push : undefined;
   const pushRanges = push ? buildPushRanges(push.files) : undefined;
   const prTextDirected = REVIEWER_DIRECTED.test(`${pr?.title ?? ''}\n${pr?.body ?? ''}`);
-  const manifestChanged = pr?.files.some((file) => DEPENDENCY_MANIFEST.test(file.filename)) ?? false;
+  // Push-scoped runs only see the push, so an earlier manifest change in the PR does not explain its lockfile edits.
+  const manifestChanged = (push?.files ?? pr?.files ?? []).some((file) => DEPENDENCY_MANIFEST.test(file.filename));
 
   let skippedHunks = 0;
   const gated: PreparedFile[] = [];

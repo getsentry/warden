@@ -111,7 +111,15 @@ describe('matchIntegritySignals', () => {
       '+      "integrity": "sha512-new",',
     ]);
 
+    const gitRetarget = hunk('package-lock.json', [
+      '-      "version": "1.3.0",',
+      '-      "resolved": "git+ssh://git@github.com/left-pad/left-pad.git#1111111",',
+      '+      "version": "1.3.1",',
+      '+      "resolved": "git+ssh://git@git.example.net/left-pad/left-pad.git#2222222",',
+    ]);
+
     expect(matchIntegritySignals(retarget, true)).toContain('lockfile-drift');
+    expect(matchIntegritySignals(gitRetarget, true)).toContain('lockfile-drift');
     expect(matchIntegritySignals(bump, false)).toContain('lockfile-drift');
     expect(matchIntegritySignals(bump, true)).toEqual([]);
   });
@@ -202,6 +210,20 @@ describe('applyIntegrityGate', () => {
 
     expect(applyIntegrityGate(builtinSkill, context(), lockFiles)?.skippedHunks).toBe(0);
     expect(applyIntegrityGate(builtinSkill, context({}, { files: [manifest] }), lockFiles)?.skippedHunks).toBe(1);
+  });
+
+  it('ignores earlier manifest changes when a push only edits the lockfile', () => {
+    const lock = hunk('pnpm-lock.yaml', [
+      '-  left-pad@1.3.0:',
+      '-    resolution: {integrity: sha512-old}',
+      '+  left-pad@1.3.1:',
+      '+    resolution: {integrity: sha512-new}',
+    ]);
+    const manifest = { filename: 'package.json', status: 'modified' as const, additions: 1, deletions: 1 };
+    const lockfile = { filename: 'pnpm-lock.yaml', status: 'modified' as const, additions: 2, deletions: 2 };
+    const sync = context({ action: 'synchronize' }, { files: [manifest, lockfile], push: { beforeSha: 'before', files: [lockfile] } });
+
+    expect(applyIntegrityGate(builtinSkill, sync, [{ filename: 'pnpm-lock.yaml', hunks: [lock] }])?.skippedHunks).toBe(0);
   });
 
   it('reviews the whole file when the push patch is missing', () => {
