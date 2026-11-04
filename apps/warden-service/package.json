@@ -21,16 +21,16 @@
     "@vercel/oidc": "^3.4.1",
     "ai": "^6.0.255",
     "effect": "^3.22.2",
-    "hono": "^4.13.5",
+    "hono": "^4.13.11",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
     "react-router": "^7.18.4",
-    "zod": "^4.4.3"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@testing-library/react": "^16.3.3",
     "@types/node": "^25.9.1",
-    "happy-dom": "^20.14.5",
+    "happy-dom": "^21.0.4",
     "typescript": "^6.0.3",
     "vercel": "^59.7.0",
     "vitest": "^4.1.11"
