@@ -114,16 +114,25 @@ describe('incrementalExternalId', () => {
   const policy = { failOn: 'high', reportOn: 'medium' };
 
   it('is stable for the same skill and config', () => {
-    expect(incrementalExternalId(trigger(), skill, policy)).toBe(incrementalExternalId(trigger(), skill, policy));
-    expect(incrementalExternalId(trigger(), skill, policy)).toMatch(/^warden-incremental:v1:[0-9a-f]{32}$/);
+    expect(incrementalExternalId(trigger(), skill, policy, 'main')).toBe(
+      incrementalExternalId(trigger(), skill, policy, 'main')
+    );
+    expect(incrementalExternalId(trigger(), skill, policy, 'main')).toMatch(/^warden-incremental:v1:[0-9a-f]{32}$/);
   });
 
   it('changes when the prompt, model, paths, or policy change', () => {
-    const base = incrementalExternalId(trigger(), skill, policy);
-    expect(incrementalExternalId(trigger(), { ...skill, prompt: 'Find SSRF.' }, policy)).not.toBe(base);
-    expect(incrementalExternalId(trigger({ model: 'openai/gpt-5.6' }), skill, policy)).not.toBe(base);
-    expect(incrementalExternalId(trigger({ filters: { paths: ['src/**'] } }), skill, policy)).not.toBe(base);
-    expect(incrementalExternalId(trigger(), skill, { ...policy, reportOn: 'low' })).not.toBe(base);
+    const base = incrementalExternalId(trigger(), skill, policy, 'main');
+    expect(incrementalExternalId(trigger(), { ...skill, prompt: 'Find SSRF.' }, policy, 'main')).not.toBe(base);
+    expect(incrementalExternalId(trigger({ model: 'openai/gpt-5.6' }), skill, policy, 'main')).not.toBe(base);
+    expect(incrementalExternalId(trigger({ filters: { paths: ['src/**'] } }), skill, policy, 'main')).not.toBe(base);
+    expect(incrementalExternalId(trigger(), skill, { ...policy, reportOn: 'low' }, 'main')).not.toBe(base);
+  });
+
+  it('changes when the PR is retargeted to another base branch', () => {
+    // Baselines are rebuilt against the current base, so an old check must not match.
+    expect(incrementalExternalId(trigger(), skill, policy, 'release/1.x')).not.toBe(
+      incrementalExternalId(trigger(), skill, policy, 'main')
+    );
   });
 });
 
@@ -147,6 +156,16 @@ describe('reviewedEverything', () => {
     expect(
       reviewedEverything(report({ skippedFiles: [{ filename: 'pnpm-lock.yaml', reason: 'ignored:builtin' }] }))
     ).toBe(true);
+    expect(
+      reviewedEverything(report({ skippedFiles: [{ filename: 'docs/a.md', reason: 'ignored:user', pattern: 'docs/**' }] }))
+    ).toBe(true);
+  });
+
+  it('rejects a run where a file was skipped as generated', () => {
+    // Generated detection reads file content, so the file can be reviewable on a later push.
+    expect(
+      reviewedEverything(report({ skippedFiles: [{ filename: 'src/schema.ts', reason: 'ignored:generated' }] }))
+    ).toBe(false);
   });
 });
 

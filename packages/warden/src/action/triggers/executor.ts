@@ -406,7 +406,7 @@ async function prepareIncrementalReview(
     return undefined;
   }
 
-  const externalId = incrementalExternalId(trigger, skill, policy);
+  const externalId = incrementalExternalId(trigger, skill, policy, context.pullRequest.baseBranch);
   const baseline = await source.baselineFor(externalId, trigger.incrementalApp);
   if (!baseline) {
     console.log('Incremental review: no earlier baseline for this skill config, reviewing the full PR');

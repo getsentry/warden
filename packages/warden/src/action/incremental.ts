@@ -128,14 +128,19 @@ export function planIncrementalReview(
  * Build the check run external_id for a skill run.
  * Any change to the skill prompt, Warden version, or settings that affect
  * what gets analyzed or reported yields a new id, which forces a full review.
+ * The base branch is included because baselines are rebuilt against the
+ * current base: after a retarget, an old baseline would describe a diff that
+ * was never reviewed.
  */
 export function incrementalExternalId(
   trigger: ResolvedTrigger,
   skill: Pick<SkillDefinition, 'name' | 'prompt'>,
-  policy: IncrementalPolicy
+  policy: IncrementalPolicy,
+  baseBranch: string
 ): string {
   const payload = JSON.stringify({
     warden: getVersion(),
+    base: baseBranch,
     skill: skill.name,
     prompt: sha256(skill.prompt),
     remote: trigger.remote ?? null,
@@ -157,13 +162,22 @@ export function incrementalExternalId(
 }
 
 /**
+ * Skip reasons decided by path alone. Paths are part of the hunk fingerprint
+ * and ignore config is part of the external_id, so these files stay skipped
+ * for as long as a baseline matches.
+ */
+const PATH_ONLY_SKIPS: ReadonlySet<string> = new Set(['ignored:builtin', 'ignored:user']);
+
+/**
  * Whether a run reviewed every hunk it was given. Failed hunks and files
  * dropped by scan limits were never reviewed, so the run cannot be a baseline.
+ * Content-based skips such as generated files also disqualify it: the baseline
+ * diff includes those hunks, and the file can stop looking generated later.
  */
 export function reviewedEverything(report: SkillReport): boolean {
   if (report.error) return false;
   if ((report.failedHunks ?? 0) > 0 || (report.failedExtractions ?? 0) > 0) return false;
-  return !report.skippedFiles?.some((file) => file.reason.startsWith('limit:'));
+  return !report.skippedFiles?.some((file) => !PATH_ONLY_SKIPS.has(file.reason));
 }
 
 /**

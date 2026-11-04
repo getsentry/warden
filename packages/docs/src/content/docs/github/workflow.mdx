@@ -212,9 +212,11 @@ re-review code the pull request did not change.
 Warden falls back to a full review when:
 
 - no earlier commit has a matching check, for example on the first push, after
-  a force push drops the old commits, or after a config or skill change
+  a force push drops the old commits, after a config or skill change, or after
+  the pull request is retargeted to another base branch
 - the earlier run failed its check, had hunk failures, skipped files because
-  of scan limits, or was cut short by a provider failure
+  of scan limits or because they looked generated, or was cut short by a
+  provider failure
 - the checks or the earlier diff cannot be read
 
 Comments on skipped hunks stay open. Warden does not run fix evaluation or the
