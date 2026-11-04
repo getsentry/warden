@@ -59,6 +59,7 @@ export function prepareFiles(
     scan: options.scan,
     diffContextSource: context.diffContextSource,
     enforceChangedLineBudget: context.explicitFileTargets !== true,
+    skipHunks: options.skipHunks,
   });
   skippedFiles.push(...scanPolicy.skippedFiles);
 

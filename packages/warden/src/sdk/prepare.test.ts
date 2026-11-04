@@ -313,6 +313,31 @@ describe('prepareFiles', () => {
     });
   });
 
+  it('does not charge scan budgets for hunks an earlier run reviewed', () => {
+    const context = makeContext([
+      // Fully reviewed, and large enough to exhaust both budgets on its own.
+      { filename: 'src/carried.ts', patch: '@@ -0,0 +1,3 @@\n+one\n+two\n+three', additions: 3 },
+      // One reviewed hunk (3 lines) and one new hunk (1 line).
+      {
+        filename: 'src/partial.ts',
+        patch: '@@ -0,0 +1,3 @@\n+one\n+two\n+three\n@@ -10,1 +13,2 @@\n ten\n+eleven',
+        additions: 4,
+      },
+    ]);
+
+    const result = prepareFiles(context, {
+      scan: { maxFiles: 1, maxChangedLines: 1 },
+      skipHunks: new Map([
+        ['src/carried.ts', new Set([0])],
+        ['src/partial.ts', new Set([0])],
+      ]),
+    });
+
+    expect(result.skippedFiles).toEqual([]);
+    expect(result.files.map((file) => file.filename)).toEqual(['src/partial.ts']);
+    expect(result.files[0]?.hunks.map((hunk) => hunk.hunk.newStart)).toEqual([13]);
+  });
+
   it('does not apply changed-line budget to explicit file targets', async () => {
     const repoPath = mkdtempSync(join(tmpdir(), 'warden-file-targets-'));
     tempDirs.push(repoPath);

@@ -207,7 +207,8 @@ analysis and reporting. On the next push, Warden looks for the newest earlier
 commit on the pull request with a matching check, rebuilds the pull request
 diff at that commit, and skips any current hunk with the same file and content.
 Line numbers are ignored, so merging the base branch or rebasing does not
-re-review code the pull request did not change.
+re-review code the pull request did not change. Skipped hunks do not count
+against scan limits.
 
 Warden falls back to a full review when:
 

@@ -3,9 +3,11 @@ import { closeSync, existsSync, openSync, readSync, statSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import ignore from 'ignore';
 import { DEFAULT_SCAN_LIMITS, type IgnoreConfig, type ScanConfig } from '../config/schema.js';
+import { parsePatch } from '../diff/index.js';
 import type { DiffContextSource, FileChange, SkippedFile } from '../types/index.js';
 import { GIT_NON_INTERACTIVE_ENV } from '../utils/exec.js';
 import { isRepoRelativePath, normalizePath } from '../utils/path.js';
+import type { SkipHunks } from './types.js';
 
 const GENERATED_PREFIX_BYTES = 64 * 1024;
 const GENERATED_PREFIX_LINES = 200;
@@ -85,6 +87,8 @@ export interface ScanPolicyOptions {
   diffContextSource?: DiffContextSource;
   /** Whether to enforce PR/diff changed-line scan budgets. Defaults to true. */
   enforceChangedLineBudget?: boolean;
+  /** Raw hunk indexes per file an earlier run already reviewed. They are not analyzed, so they cost no scan budget. */
+  skipHunks?: SkipHunks;
 }
 
 export type ScannableFileChange = FileChange & { patch: string };
@@ -96,6 +100,20 @@ export interface ApplyScanPolicyResult {
 
 function changedLines(file: FileChange): number {
   return file.additions + file.deletions;
+}
+
+/**
+ * Changed lines still to analyze once already-reviewed hunks are dropped, or
+ * undefined when every hunk was reviewed and the file needs no analysis.
+ */
+function unreviewedChangedLines(file: ScannableFileChange, reviewed?: ReadonlySet<number>): number | undefined {
+  if (!reviewed?.size) return changedLines(file);
+  const remaining = parsePatch(file.patch).filter((_, index) => !reviewed.has(index));
+  if (remaining.length === 0) return undefined;
+  return remaining.reduce(
+    (sum, hunk) => sum + hunk.lines.filter((line) => line.startsWith('+') || line.startsWith('-')).length,
+    0
+  );
 }
 
 function effectiveScanConfig(config?: ScanConfig): Required<ScanConfig> {
@@ -413,20 +431,28 @@ export function applyScanPolicy(
   }
 
   const selected: ScannableFileChange[] = [];
+  let budgetedFiles = 0;
   let consumedChangedLines = 0;
   for (const file of eligible) {
-    if (selected.length >= scan.maxFiles) {
+    const fileChangedLines = unreviewedChangedLines(file, options.skipHunks?.get(file.filename));
+    if (fileChangedLines === undefined) {
+      // Fully reviewed earlier: kept so its hunks are carried, not limit-skipped.
+      selected.push(file);
+      continue;
+    }
+
+    if (budgetedFiles >= scan.maxFiles) {
       skippedFiles.push({ filename: file.filename, reason: 'limit:file_count' });
       continue;
     }
 
-    const fileChangedLines = changedLines(file);
     if (enforceChangedLineBudget && consumedChangedLines + fileChangedLines > scan.maxChangedLines) {
       skippedFiles.push({ filename: file.filename, reason: 'limit:changed_lines' });
       continue;
     }
 
     selected.push(file);
+    budgetedFiles += 1;
     consumedChangedLines += fileChangedLines;
   }
 
