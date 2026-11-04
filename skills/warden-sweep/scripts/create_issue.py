@@ -80,14 +80,16 @@ def build_issue_body(
         lines.append("")
         lines.append("| Severity | Skill | File | Title |")
         lines.append("|----------|-------|------|-------|")
-        # Verify agents return verdict fields (references/verify-prompt.md), so take severity, skill, file and title from all-findings.jsonl
+        # Verify agents return verdict fields (references/verify-prompt.md), so take severity, skill, file, line and title from all-findings.jsonl
         by_id = {f["findingId"]: f for f in all_findings if "findingId" in f}
         for v in verified:
             f = {**by_id.get(v.get("findingId"), {}), **v}
             sev = severity_badge(f.get("severity", "info"))
             skill = f.get("skill", "")
             file_path = f.get("file", "")
-            start_line = f.get("startLine")
+            # extract_findings.py nests the line under "location" (extract_findings.py:93-96);
+            # a top-level startLine (older records, or a verified entry) takes precedence
+            start_line = f.get("startLine") or (f.get("location") or {}).get("startLine")
             location = f"{file_path}:{start_line}" if start_line else file_path
             title = f.get("title", "")
             lines.append(f"| {sev} | {skill} | `{location}` | {title} |")
