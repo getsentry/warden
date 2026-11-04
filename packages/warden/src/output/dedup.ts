@@ -31,6 +31,8 @@ export interface ExistingComment {
   line: number;
   /** GitHub's line for the comment on the current diff, when the comment is not outdated */
   currentLine?: number;
+  /** Whether GitHub marks the comment outdated, so its position on the current diff is unknown */
+  isOutdated?: boolean;
   title: string;
   description: string;
   /** Stable Warden finding ID from the attribution footer or legacy title prefix */
@@ -439,6 +441,7 @@ export async function fetchExistingComments(
         path: marker?.path ?? firstComment.path,
         line: marker?.line ?? firstComment.line ?? firstComment.originalLine ?? 0,
         currentLine: firstComment.line ?? undefined,
+        isOutdated: firstComment.line == null,
         title,
         description,
         findingId: isWarden ? parseWardenFindingId(firstComment.body) : undefined,

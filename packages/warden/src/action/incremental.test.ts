@@ -227,6 +227,20 @@ describe('isOnCarriedHunk', () => {
     // Marker keeps the line from the original post; GitHub tracks the moved hunk.
     expect(isOnCarriedHunk({ path: 'a.ts', line: 1, currentLine: 6, skills: ['security-review'] }, ranges)).toBe(true);
   });
+
+  it('matches an outdated comment anywhere in a file its skill carried', () => {
+    // GitHub drops the current line on outdated comments, and the marker line predates the shift.
+    expect(isOnCarriedHunk({ path: 'a.ts', line: 40, isOutdated: true, skills: ['security-review'] }, ranges)).toBe(
+      true
+    );
+  });
+
+  it('does not match an outdated comment in another file or from another skill', () => {
+    expect(isOnCarriedHunk({ path: 'b.ts', line: 7, isOutdated: true, skills: ['security-review'] }, ranges)).toBe(
+      false
+    );
+    expect(isOnCarriedHunk({ path: 'a.ts', line: 7, isOutdated: true, skills: ['code-review'] }, ranges)).toBe(false);
+  });
 });
 
 describe('hasOpenCarriedComment', () => {

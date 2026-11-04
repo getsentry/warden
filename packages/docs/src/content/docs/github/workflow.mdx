@@ -221,7 +221,9 @@ Warden falls back to a full review when:
 
 Comments on skipped hunks stay open. Warden does not run fix evaluation or the
 stale-comment pass on them until their hunk changes, and it does not dismiss an
-earlier blocking review while any of them are unresolved. A skipped hunk is not
+earlier blocking review while any of them are unresolved. GitHub cannot place an
+outdated comment on the current diff, so Warden treats it as being on a skipped
+hunk whenever its skill skipped any hunk in that file. A skipped hunk is not
 re-checked against changes elsewhere in the pull request.
 
 Baselines come from per-skill check runs, so incremental review has no effect

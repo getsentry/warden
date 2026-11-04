@@ -320,6 +320,41 @@ Use \`Number.isFinite\` before saving [the value](https://example.com).`,
       description: 'Needs guard Use Number.isFinite before saving the value.',
     });
   });
+
+  it('marks comments GitHub reports as outdated', async () => {
+    const thread = (databaseId: number, line: number | null) => ({
+      id: `thread-${databaseId}`,
+      isResolved: false,
+      comments: {
+        nodes: [
+          {
+            id: `comment-node-${databaseId}`,
+            databaseId,
+            body: `**SQL injection**\n\nUser input reaches a query.\n\n<!-- warden:v1:src/db.ts:42:abc12345 -->`,
+            path: 'src/db.ts',
+            line,
+            originalLine: 42,
+          },
+        ],
+      },
+    });
+    const graphql = vi.fn().mockResolvedValue({
+      repository: {
+        pullRequest: {
+          reviewThreads: {
+            pageInfo: { hasNextPage: false, endCursor: null },
+            nodes: [thread(1, null), thread(2, 57)],
+          },
+        },
+      },
+    });
+
+    const comments = await fetchExistingComments({ graphql } as unknown as Octokit, 'getsentry', 'warden', 123);
+
+    expect(comments[0]).toMatchObject({ line: 42, isOutdated: true });
+    expect(comments[0]?.currentLine).toBeUndefined();
+    expect(comments[1]).toMatchObject({ line: 42, currentLine: 57, isOutdated: false });
+  });
 });
 
 describe('deduplicateFindings', () => {
