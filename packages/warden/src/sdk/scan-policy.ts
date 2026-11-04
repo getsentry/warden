@@ -423,6 +423,7 @@ export function applyScanPolicy(
   }
 
   const selected: ScannableFileChange[] = [];
+  let budgetedFiles = 0;
   let consumedChangedLines = 0;
   for (const file of eligible) {
     if (options.alwaysScan?.(file.filename)) {
@@ -430,7 +431,7 @@ export function applyScanPolicy(
       continue;
     }
 
-    if (selected.length >= scan.maxFiles) {
+    if (budgetedFiles >= scan.maxFiles) {
       skippedFiles.push({ filename: file.filename, reason: 'limit:file_count' });
       continue;
     }
@@ -442,6 +443,7 @@ export function applyScanPolicy(
     }
 
     selected.push(file);
+    budgetedFiles++;
     consumedChangedLines += fileChangedLines;
   }
 

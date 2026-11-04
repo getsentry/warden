@@ -37,8 +37,8 @@ const DEPENDENCY_MANIFEST = /(?:^|\/)(?:package\.json|requirements[^/]*\.txt|pyp
 const LOCKFILE_PATH = /(?:^|\/)(?:package-lock\.json|npm-shrinkwrap\.json|pnpm-lock\.yaml|yarn\.lock|bun\.lock|poetry\.lock|Pipfile\.lock|uv\.lock|Cargo\.lock|go\.sum|Gemfile\.lock|composer\.lock)$/;
 const LOCK_PIN = /\b(?:resolved|integrity|tarball|checksum|resolution|source|remote)\b|\bsha(?:1|256|384|512)[-:]|\sh1:/;
 const LOCK_VERSION = /\bversion\b|@[\^~]?v?\d+\.\d|\sv\d+\.\d|\(\d+\.\d/;
-// Package sources: scheme URLs (userinfo skipped), scp-style git remotes, and npm shorthands.
-const SOURCE_REF = /\b([a-z][a-z0-9+.-]*):\/\/(?:[^@/\s"']*@)?([^/\s"'#:?]+)|\b[\w.-]+@([a-z0-9-]+(?:\.[a-z0-9-]+)*\.[a-z]{2,}):(?!\/)|\b(github|gitlab|bitbucket|file):(?!\/)/gi;
+// Package sources: scheme URLs (userinfo skipped), scp-style git remotes, npm shorthands, and any `file:` path (`file:///abs` has no host).
+const SOURCE_REF = /\b([a-z][a-z0-9+.-]*):\/\/(?:[^@/\s"']*@)?([^/\s"'#:?]+)|\b[\w.-]+@([a-z0-9-]+(?:\.[a-z0-9-]+)*\.[a-z]{2,}):(?!\/)|\b((?:github|gitlab|bitbucket):(?!\/)|file:)/gi;
 const DECODE_CALL = /\batob\(|b64decode|base64\s+-d|Buffer\.from\([^)]*['"](?:base64|hex)['"]|zlib\.|fromCharCode\(|codecs\.decode|\\x[0-9a-fA-F]{2}(?:\\x[0-9a-fA-F]{2}){7,}/;
 const HIDDEN_UNICODE = /[\u200B-\u200D\u202A-\u202E\u2066-\u2069\uFEFF]/;
 const LONG_TOKEN = /[A-Za-z0-9+/]{40,}={0,2}/g;
@@ -91,7 +91,7 @@ function sourceHosts(lines: string[]): Set<string> {
     for (const [, scheme, host, scpHost, shorthand] of line.matchAll(SOURCE_REF)) {
       if (scheme && host) hosts.add(`${scheme.toLowerCase()}://${host.toLowerCase()}`);
       else if (scpHost) hosts.add(`ssh://${scpHost.toLowerCase()}`);
-      else if (shorthand) hosts.add(`${shorthand.toLowerCase()}:`);
+      else if (shorthand) hosts.add(shorthand.toLowerCase());
     }
   }
   return hosts;

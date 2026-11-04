@@ -465,6 +465,18 @@ describe('prepareSkillFiles', () => {
     expect(prepareSkillFiles({ ...skill, name: 'code-review', rootDir: '/pkg/src/builtin-skills/code-review' }, context).files).toEqual([]);
   });
 
+  it('keeps lockfiles out of the file-count budget', () => {
+    const lockfile = {
+      filename: 'package-lock.json',
+      patch: '@@ -10,1 +10,1 @@\n-      "resolved": "https://registry.npmjs.org/left-pad/-/left-pad-1.3.0.tgz",\n+      "resolved": "https://pkgs.example.net/left-pad/-/left-pad-1.3.0.tgz",',
+      additions: 1,
+      deletions: 1,
+    };
+    const result = prepareSkillFiles(skill, makeContext([lockfile, ...files]), { scan: { maxFiles: 1 } });
+
+    expect(result.files.map((f) => f.filename)).toEqual(['package-lock.json', 'package.json']);
+  });
+
   it('leaves other skills untouched', () => {
     const result = prepareSkillFiles({ ...skill, name: 'code-review', rootDir: '/pkg/src/builtin-skills/code-review' }, makeContext(files));
 

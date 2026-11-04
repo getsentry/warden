@@ -118,6 +118,15 @@ describe('matchIntegritySignals', () => {
       '+      "resolved": "git+ssh://git@git.example.net/left-pad/left-pad.git#2222222",',
     ]);
 
+    const fileRetarget = (resolved: string) => hunk('package-lock.json', [
+      '-      "version": "1.3.0",',
+      '-      "resolved": "https://registry.npmjs.org/left-pad/-/left-pad-1.3.0.tgz",',
+      '+      "version": "1.3.1",',
+      `+      "resolved": "${resolved}",`,
+    ]);
+
+    expect(matchIntegritySignals(fileRetarget('file:///tmp/left-pad-1.3.1.tgz'), true)).toContain('lockfile-drift');
+    expect(matchIntegritySignals(fileRetarget('file:/tmp/left-pad-1.3.1.tgz'), true)).toContain('lockfile-drift');
     expect(matchIntegritySignals(retarget, true)).toContain('lockfile-drift');
     expect(matchIntegritySignals(gitRetarget, true)).toContain('lockfile-drift');
     expect(matchIntegritySignals(bump, false)).toContain('lockfile-drift');
