@@ -204,6 +204,7 @@ export async function executeTrigger(
       const minConfidence = trigger.minConfidence ?? 'medium';
       const requestChanges = trigger.requestChanges ?? deps.globalRequestChanges;
       const failCheck = trigger.failCheck ?? deps.globalFailCheck;
+      const maxFindings = trigger.maxFindings ?? deps.globalMaxFindings;
       const skillRoot = trigger.useBuiltinSkill ? undefined : (trigger.skillRoot ?? context.repoPath);
       const resolveSkill = () => resolveSkillAsync(trigger.skill, skillRoot, {
         remote: trigger.remote,
@@ -220,6 +221,8 @@ export async function executeTrigger(
               reportOn,
               minConfidence,
               failCheck,
+              requestChanges,
+              maxFindings,
             })
           : undefined;
 
@@ -308,7 +311,6 @@ export async function executeTrigger(
           }
         }
 
-        const maxFindings = trigger.maxFindings ?? deps.globalMaxFindings;
         const renderResult =
           reportOn !== 'off'
             ? renderSkillReport(report, {

@@ -126,6 +126,14 @@ describe('incrementalExternalId', () => {
     expect(incrementalExternalId(trigger({ model: 'openai/gpt-5.6' }), skill, policy, 'main')).not.toBe(base);
     expect(incrementalExternalId(trigger({ filters: { paths: ['src/**'] } }), skill, policy, 'main')).not.toBe(base);
     expect(incrementalExternalId(trigger(), skill, { ...policy, reportOn: 'low' }, 'main')).not.toBe(base);
+    expect(incrementalExternalId(trigger({ auxiliaryModel: 'openai/gpt-5.6' }), skill, policy, 'main')).not.toBe(base);
+  });
+
+  it('changes when review posting policy changes', () => {
+    // Skipped hunks add no findings, so a baseline from a looser policy would never apply the stricter one.
+    const base = incrementalExternalId(trigger(), skill, policy, 'main');
+    expect(incrementalExternalId(trigger(), skill, { ...policy, requestChanges: true }, 'main')).not.toBe(base);
+    expect(incrementalExternalId(trigger(), skill, { ...policy, maxFindings: 5 }, 'main')).not.toBe(base);
   });
 
   it('changes when the PR is retargeted to another base branch', () => {

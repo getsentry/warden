@@ -38,6 +38,8 @@ export interface IncrementalPolicy {
   reportOn?: string;
   minConfidence?: string;
   failCheck?: boolean;
+  requestChanges?: boolean;
+  maxFindings?: number;
 }
 
 /** Result of matching the current PR diff against a baseline. */
@@ -149,6 +151,10 @@ export function incrementalExternalId(
     scan: trigger.scan ?? null,
     chunking: trigger.chunking ?? null,
     model: trigger.model ?? null,
+    auxiliaryModel: trigger.auxiliaryModel ?? null,
+    auxiliaryEffort: trigger.auxiliaryEffort ?? null,
+    synthesisModel: trigger.synthesisModel ?? null,
+    maxContextFiles: trigger.maxContextFiles ?? null,
     runtime: trigger.runtime ?? null,
     effort: trigger.effort ?? null,
     maxTurns: trigger.maxTurns ?? null,
@@ -157,6 +163,8 @@ export function incrementalExternalId(
     reportOn: policy.reportOn ?? null,
     minConfidence: policy.minConfidence ?? null,
     failCheck: policy.failCheck ?? null,
+    requestChanges: policy.requestChanges ?? null,
+    maxFindings: policy.maxFindings ?? null,
   });
   return `${EXTERNAL_ID_PREFIX}${sha256(payload).slice(0, 32)}`;
 }
