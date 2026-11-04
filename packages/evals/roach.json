@@ -1,0 +1,21 @@
+{
+  "tenant": "getsentry/warden",
+  "allow": ["https://api.anthropic.com", "https://pi.dev"],
+  "secretEnv": ["ANTHROPIC_API_KEY", "WARDEN_ANTHROPIC_API_KEY"],
+  "rules": [
+    {
+      "name": "model",
+      "match": { "method": "POST", "url": "https://api.anthropic.com/v1/" },
+      "values": {
+        "eval-repo": "(?:/[A-Za-z0-9_.-]+)*/warden-eval-[A-Za-z0-9_.-]+",
+        "git-commit": { "builtin": "gitCommit" },
+        "uuid": { "builtin": "uuid" },
+        "time": { "builtin": "isoTime" }
+      }
+    },
+    {
+      "name": "model-catalog",
+      "match": { "method": "GET", "url": "https://pi.dev/api/models/" }
+    }
+  ]
+}

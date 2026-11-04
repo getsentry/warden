@@ -13,8 +13,10 @@ export default defineConfig({
     // Only run eval suites.
     include: ['src/**/*.eval.ts'],
     exclude: ['**/node_modules/**', '**/dist/**'],
+    // Roach records model calls and replays them on later runs. See roach.json.
+    globalSetup: ['@sentry/roach/vitest'],
     // Load .env, .env.local, .env.test for API keys
-    setupFiles: ['./src/setup.ts'],
+    setupFiles: ['./src/setup.ts', '@sentry/roach/vitest/setup'],
     includeTaskLocation: true,
     reporters: [
       ['vitest-evals/reporter', { toolDetails: false }],
