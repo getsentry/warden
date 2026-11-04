@@ -140,6 +140,8 @@ interface GitHubSetupResult {
 interface ReviewPhaseResult {
   reports: SkillReport[];
   fetchedComments: ExistingComment[];
+  /** False when the comment fetch failed or was skipped, so `fetchedComments` is not the PR's real state. */
+  commentsFetched: boolean;
   existingComments: ExistingComment[];
   activeWardenCommentIds: Set<number>;
   findingObservations: FindingObservation[];
@@ -735,6 +737,7 @@ async function postReviewsAndTrackFailures(
   // to resolve comments once the API recovers.
   // Keep original list separate for stale detection (modified list includes newly posted comments)
   let fetchedComments: ExistingComment[] = [];
+  let commentsFetched = false;
   let existingComments: ExistingComment[] = [];
   let writability = await gate.check();
   if (writability !== 'blocked' && context.pullRequest) {
@@ -745,6 +748,7 @@ async function postReviewsAndTrackFailures(
         context.repository.name,
         context.pullRequest.number
       );
+      commentsFetched = true;
       existingComments = [...fetchedComments];
       if (fetchedComments.length > 0) {
         const wardenCount = fetchedComments.filter((c) => c.isWarden).length;
@@ -840,6 +844,7 @@ async function postReviewsAndTrackFailures(
   return {
     reports,
     fetchedComments,
+    commentsFetched,
     existingComments,
     activeWardenCommentIds,
     findingObservations,
@@ -2298,7 +2303,10 @@ async function runReportMode(
         postChecks,
         matchedTriggers,
         resolvedTriggers,
-        carriedFindingsOpen: hasOpenCarriedComment(reviewPhase.fetchedComments, carriedRanges),
+        carriedFindingsOpen: hasOpenCarriedComment(
+          reviewPhase.commentsFetched ? reviewPhase.fetchedComments : undefined,
+          carriedRanges
+        ),
       },
     );
   } catch (error) {
@@ -2564,7 +2572,10 @@ export async function runPRWorkflow(
         postChecks,
         matchedTriggers,
         resolvedTriggers,
-        hasOpenCarriedComment(reviewPhase.fetchedComments, carriedRanges),
+        hasOpenCarriedComment(
+          reviewPhase.commentsFetched ? reviewPhase.fetchedComments : undefined,
+          carriedRanges
+        ),
       );
 
       handleTriggerErrors(triggerErrors, matchedTriggers.length);

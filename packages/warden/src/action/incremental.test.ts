@@ -263,6 +263,11 @@ describe('hasOpenCarriedComment', () => {
     expect(hasOpenCarriedComment([{ ...comment, isWarden: false }], ranges)).toBe(false);
     expect(hasOpenCarriedComment([{ ...comment, line: 20 }], ranges)).toBe(false);
   });
+
+  it('treats unknown comments as open only when something was carried', () => {
+    expect(hasOpenCarriedComment(undefined, ranges)).toBe(true);
+    expect(hasOpenCarriedComment(undefined, [])).toBe(false);
+  });
 });
 
 describe('createIncrementalBaselineSource', () => {

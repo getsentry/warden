@@ -2588,6 +2588,27 @@ describe('runPRWorkflow', () => {
       expect(mockOctokit.pulls.dismissReview).not.toHaveBeenCalled();
     });
 
+    it('does not dismiss when comments could not be fetched and hunks were carried', async () => {
+      vi.mocked(mockOctokit.pulls.listReviews).mockResolvedValue({
+        data: [{ id: 42, state: 'CHANGES_REQUESTED', user: { login: 'warden[bot]' } }],
+      } as ListReviewsResponse);
+      mockFetchExistingComments.mockRejectedValue(new Error('GraphQL unavailable'));
+      const report = createSkillReport({
+        findings: [],
+        incremental: {
+          externalId: 'warden-incremental:v1:abc',
+          baselineSha: PREVIOUS_HEAD_SHA,
+          carriedRanges: [{ path: 'src/test.ts', startLine: 8, endLine: 12 }],
+          complete: true,
+        },
+      });
+      mockRunSkillTask.mockResolvedValue({ name: 'test-trigger', report });
+
+      await runPRWorkflow(mockOctokit, createDefaultInputs({ failOn: 'high' }), 'pull_request', EVENT_PAYLOAD_PATH, FIXTURES_DIR);
+
+      expect(mockOctokit.pulls.dismissReview).not.toHaveBeenCalled();
+    });
+
     it('dismisses previous CHANGES_REQUESTED when all comments resolved', async () => {
       // Previous review was CHANGES_REQUESTED
       vi.mocked(mockOctokit.pulls.listReviews).mockResolvedValue({

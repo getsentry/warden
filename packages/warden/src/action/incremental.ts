@@ -234,11 +234,15 @@ export function isOnCarriedHunk(
 /**
  * Whether an unresolved Warden comment sits on a carried hunk. Its finding
  * was not re-checked, so the run cannot prove a blocking review is clear.
+ * `undefined` comments means the fetch failed or was skipped; with any
+ * carried range that counts as open, since an unknown state is not proof.
  */
 export function hasOpenCarriedComment(
-  comments: readonly ExistingComment[],
+  comments: readonly ExistingComment[] | undefined,
   ranges: readonly SkillCarriedRange[]
 ): boolean {
+  if (ranges.length === 0) return false;
+  if (comments === undefined) return true;
   return comments.some((c) => c.isWarden && !c.isResolved && isOnCarriedHunk(c, ranges));
 }
 
