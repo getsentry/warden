@@ -228,6 +228,13 @@ describe('isOnCarriedHunk', () => {
     expect(isOnCarriedHunk({ path: 'a.ts', line: 1, currentLine: 6, skills: ['security-review'] }, ranges)).toBe(true);
   });
 
+  it('ignores a stale marker line when the current GitHub line is outside carried ranges', () => {
+    // Marker line 7 now falls in an unrelated carried hunk; GitHub tracks the comment to a re-reviewed hunk.
+    expect(isOnCarriedHunk({ path: 'a.ts', line: 7, currentLine: 20, skills: ['security-review'] }, ranges)).toBe(
+      false
+    );
+  });
+
   it('matches an outdated comment anywhere in a file its skill carried', () => {
     // GitHub drops the current line on outdated comments, and the marker line predates the shift.
     expect(isOnCarriedHunk({ path: 'a.ts', line: 40, isOutdated: true, skills: ['security-review'] }, ranges)).toBe(

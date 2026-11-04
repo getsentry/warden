@@ -209,9 +209,11 @@ export function collectCarriedRanges(reports: readonly SkillReport[]): SkillCarr
 
 /**
  * Whether a comment sits on a hunk its skill carried forward without re-review.
- * Checks both the line from the Warden marker, which keeps the line the
- * finding was first posted on, and GitHub's current line, which follows the
- * hunk when a rebase or base merge shifts it. An outdated comment has no
+ * Carried ranges are in current-diff lines, so GitHub's current line is used
+ * when present: it follows the hunk when a rebase or base merge shifts it,
+ * while the Warden marker keeps the line the finding was first posted on and
+ * could land inside an unrelated carried hunk. The marker line is only a
+ * fallback when GitHub gives no current line. An outdated comment has no
  * current line and its marker line may predate a shift, so it counts as
  * carried whenever its skill carried any hunk in the same file. Keeping such
  * a comment open is safe; resolving it could hide a finding nobody re-checked.
@@ -220,11 +222,11 @@ export function isOnCarriedHunk(
   comment: Pick<ExistingComment, 'path' | 'line' | 'currentLine' | 'isOutdated' | 'skills'>,
   ranges: readonly SkillCarriedRange[]
 ): boolean {
-  const lines = comment.currentLine === undefined ? [comment.line] : [comment.line, comment.currentLine];
+  const line = comment.currentLine ?? comment.line;
   return ranges.some(
     (range) =>
       range.path === comment.path &&
-      (comment.isOutdated || lines.some((line) => line >= range.startLine && line <= range.endLine)) &&
+      (comment.isOutdated || (line >= range.startLine && line <= range.endLine)) &&
       (!comment.skills?.length || comment.skills.includes(range.skill))
   );
 }
