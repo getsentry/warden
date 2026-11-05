@@ -259,6 +259,7 @@ export const ErrorCodeSchema = z.enum([
   'extraction_llm_timeout',
   'extraction_no_api_key',
   'unknown',
+  'context_overflow',
 ]);
 export type ErrorCode = z.infer<typeof ErrorCodeSchema>;
 

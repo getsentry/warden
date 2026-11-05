@@ -461,7 +461,8 @@
         "extraction_llm_failed",
         "extraction_llm_timeout",
         "extraction_no_api_key",
-        "unknown"
+        "unknown",
+        "context_overflow"
       ]
     },
     "SkippedFile": {
