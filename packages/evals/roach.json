@@ -1,11 +1,41 @@
 {
   "tenant": "getsentry/warden",
-  "allow": ["https://api.anthropic.com", "https://pi.dev"],
-  "secretEnv": ["ANTHROPIC_API_KEY", "WARDEN_ANTHROPIC_API_KEY"],
+  "allow": [
+    "https://api.anthropic.com",
+    "https://openrouter.ai",
+    "https://api.openai.com",
+    "https://pi.dev"
+  ],
+  "secretEnv": [
+    "ANTHROPIC_API_KEY",
+    "WARDEN_ANTHROPIC_API_KEY",
+    "WARDEN_OPENROUTER_API_KEY",
+    "WARDEN_OPENAI_API_KEY"
+  ],
   "rules": [
     {
       "name": "model",
       "match": { "method": "POST", "url": "https://api.anthropic.com/v1/" },
+      "values": {
+        "eval-repo": "(?:/[A-Za-z0-9_.-]+)*/warden-eval-[A-Za-z0-9_.-]+",
+        "git-commit": { "builtin": "gitCommit" },
+        "uuid": { "builtin": "uuid" },
+        "time": { "builtin": "isoTime" }
+      }
+    },
+    {
+      "name": "model-openrouter",
+      "match": { "method": "POST", "url": "https://openrouter.ai/api/v1/" },
+      "values": {
+        "eval-repo": "(?:/[A-Za-z0-9_.-]+)*/warden-eval-[A-Za-z0-9_.-]+",
+        "git-commit": { "builtin": "gitCommit" },
+        "uuid": { "builtin": "uuid" },
+        "time": { "builtin": "isoTime" }
+      }
+    },
+    {
+      "name": "model-openai",
+      "match": { "method": "POST", "url": "https://api.openai.com/v1/" },
       "values": {
         "eval-repo": "(?:/[A-Za-z0-9_.-]+)*/warden-eval-[A-Za-z0-9_.-]+",
         "git-commit": { "builtin": "gitCommit" },
