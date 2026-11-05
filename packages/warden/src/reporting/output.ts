@@ -6,6 +6,7 @@ import {
   FindingSchema,
   GitHubEventTypeSchema,
   HunkGateSchema,
+  IncrementalReviewSchema,
   LocationSchema,
   SeverityThresholdSchema,
   SkillErrorSchema,
@@ -127,6 +128,7 @@ const ReplaySkillReportSchema = z.object({
   runtime: z.string().optional(),
   /** Replayed so report mode keeps push-scoped skills out of stale-comment resolution. */
   hunkGate: HunkGateSchema.optional(),
+  incremental: IncrementalReviewSchema.optional(),
 });
 
 export const TriggerRunResultSchema = z.discriminatedUnion('status', [
@@ -361,6 +363,7 @@ function serializeReplayReport(report: SkillReport): z.infer<typeof ReplaySkillR
     model: report.model,
     runtime: report.runtime,
     hunkGate: report.hunkGate,
+    incremental: report.incremental,
   };
 }
 

@@ -1063,6 +1063,7 @@ async function runSkillAnalysis(
     ignore: options.ignore,
     scan: options.scan,
     chunking: options.chunking,
+    skipHunks: options.skipHunks,
   });
 
   if (fileHunks.length === 0) {

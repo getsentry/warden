@@ -49,6 +49,16 @@ import {
 import type { ActionMemoryRecall } from '../service.js';
 import type { ResolvedServiceOptions } from '../../service/index.js';
 import { executeTrigger } from '../triggers/executor.js';
+import {
+  baselineExternalId,
+  collectCarriedRanges,
+  createIncrementalBaselineSource,
+  feedbackDelivered,
+  hasOpenCarriedComment,
+  isOnCarriedHunk,
+  type IncrementalBaselineSource,
+  type SkillCarriedRange,
+} from '../incremental.js';
 import type { TriggerCheckReporter, TriggerResult } from '../triggers/executor.js';
 import { postTriggerReview } from '../review/poster.js';
 import { shouldResolveStaleComments } from '../review/coordination.js';
@@ -64,6 +74,8 @@ import {
   createCompletedCoreCheck,
   createCompletedSkillCheck,
   createSkillCheck,
+  isBaselineConclusion,
+  markSkillCheckBaseline,
   createFailedSkillCheck,
   failSkillCheck,
   updateCoreCheck,
@@ -131,6 +143,8 @@ interface GitHubSetupResult {
 interface ReviewPhaseResult {
   reports: SkillReport[];
   fetchedComments: ExistingComment[];
+  /** False when the comment fetch failed or was skipped, so `fetchedComments` is not the PR's real state. */
+  commentsFetched: boolean;
   existingComments: ExistingComment[];
   activeWardenCommentIds: Set<number>;
   findingObservations: FindingObservation[];
@@ -619,6 +633,24 @@ function createTriggerCheckReporter(
   };
 }
 
+/** Build the incremental baseline source when any matched trigger has `incremental` on. */
+function incrementalSourceFor(
+  octokit: Octokit,
+  context: EventContext,
+  matchedTriggers: readonly ResolvedTrigger[]
+): IncrementalBaselineSource | undefined {
+  if (context.eventType !== 'pull_request' || !context.pullRequest) return undefined;
+  if (!matchedTriggers.some((trigger) => trigger.incremental)) return undefined;
+  return createIncrementalBaselineSource(octokit, {
+    owner: context.repository.owner,
+    repo: context.repository.name,
+    pullNumber: context.pullRequest.number,
+    headSha: context.pullRequest.headSha,
+    baseSha: context.pullRequest.baseSha,
+    warn: warnAction,
+  });
+}
+
 async function executeAllTriggers(
   matchedTriggers: ResolvedTrigger[],
   context: EventContext,
@@ -627,6 +659,7 @@ async function executeAllTriggers(
   options: {
     checks?: TriggerCheckReporter;
     memoryRecall?: ActionMemoryRecall;
+    incremental?: IncrementalBaselineSource;
     /** Fired after each trigger settles, with every result settled so far (completion order, not input order). */
     onTriggerComplete?: (completedSoFar: TriggerResult[]) => void;
   } = {}
@@ -658,6 +691,7 @@ async function executeAllTriggers(
         circuitBreaker,
         checks: options.checks,
         historicalEvidence: options.memoryRecall?.historicalEvidence,
+        incremental: options.incremental,
       });
       completedSoFar.push(result);
       options.onTriggerComplete?.([...completedSoFar]);
@@ -690,6 +724,34 @@ async function executeAllTriggers(
 }
 
 /**
+ * Mark a trigger's skill check as an incremental baseline once its findings
+ * reached the PR. A write failure leaves no baseline, so the next run is full.
+ */
+async function recordIncrementalBaseline(
+  octokit: Octokit,
+  context: EventContext,
+  result: TriggerResult,
+  observations: readonly FindingObservation[]
+): Promise<void> {
+  const externalId = result.report ? baselineExternalId(result.report) : undefined;
+  if (!externalId || !result.report || result.checkRunId === undefined) return;
+  if (!isBaselineConclusion(result.report, result)) return;
+  if (!feedbackDelivered(observations)) {
+    logAction(`${result.triggerName}: not recording an incremental baseline; some findings did not reach the PR`);
+    return;
+  }
+  try {
+    await markSkillCheckBaseline(octokit, result.checkRunId, externalId, {
+      owner: context.repository.owner,
+      repo: context.repository.name,
+    });
+  } catch (error) {
+    Sentry.captureException(error, { tags: { operation: 'mark_incremental_baseline' } });
+    warnAction(`Failed to record incremental baseline for ${result.triggerName}: ${error}`);
+  }
+}
+
+/**
  * Fetch existing comments, post reviews with cross-trigger dedup, accumulate failure state.
  */
 async function postReviewsAndTrackFailures(
@@ -706,6 +768,7 @@ async function postReviewsAndTrackFailures(
   // to resolve comments once the API recovers.
   // Keep original list separate for stale detection (modified list includes newly posted comments)
   let fetchedComments: ExistingComment[] = [];
+  let commentsFetched = false;
   let existingComments: ExistingComment[] = [];
   let writability = await gate.check();
   if (writability !== 'blocked' && context.pullRequest) {
@@ -716,6 +779,7 @@ async function postReviewsAndTrackFailures(
         context.repository.name,
         context.pullRequest.number
       );
+      commentsFetched = true;
       existingComments = [...fetchedComments];
       if (fetchedComments.length > 0) {
         const wardenCount = fetchedComments.filter((c) => c.isWarden).length;
@@ -740,6 +804,7 @@ async function postReviewsAndTrackFailures(
   for (const result of results) {
     if (result.report) {
       reports.push(result.report);
+      const observationStart = findingObservations.length;
 
       // Post review. The gate memoizes briefly, so this stays cheap between
       // writes but re-verifies after slow phases (LLM dedup, consolidation).
@@ -785,6 +850,8 @@ async function postReviewsAndTrackFailures(
           skippedReason,
         })));
       }
+      await recordIncrementalBaseline(octokit, context, result, findingObservations.slice(observationStart));
+
       // A stale head skips silently (the newer run owns feedback), but an
       // unverifiable head must not silently swallow a blocking review.
       // Evaluated after the post attempt so a head that becomes unverifiable
@@ -811,6 +878,7 @@ async function postReviewsAndTrackFailures(
   return {
     reports,
     fetchedComments,
+    commentsFetched,
     existingComments,
     activeWardenCommentIds,
     findingObservations,
@@ -857,7 +925,12 @@ async function evaluateFixesAndResolveStale(
   anthropicApiKey: string,
   auxiliaryOptions: AuxiliaryWorkflowOptions,
   gate: ReviewFeedbackGate,
-  options: { failOnWriteError?: boolean; partialScopeSkills?: ReadonlySet<string> } = {}
+  options: {
+    failOnWriteError?: boolean;
+    partialScopeSkills?: ReadonlySet<string>;
+    /** Hunks incremental review skipped; their comments stay open as-is. */
+    carriedRanges?: SkillCarriedRange[];
+  } = {}
 ): Promise<{
   allResolved: boolean;
   autoResolvedByFixEvaluation: number;
@@ -875,8 +948,18 @@ async function evaluateFixesAndResolveStale(
     autoResolvedByStaleCheck: commentsResolvedByStale.size,
     findingObservations,
   });
+  // Comments on hunks that incremental review skipped were not re-checked,
+  // so treat them like re-detected comments: no fix evaluation, no stale pass.
+  const carriedCommentIds = new Set(
+    wardenComments
+      .filter((c) => isOnCarriedHunk(c, options.carriedRanges ?? []))
+      .map((c) => c.id)
+  );
+  if (carriedCommentIds.size > 0) {
+    logAction(`Incremental review: keeping ${carriedCommentIds.size} comment(s) on unchanged hunks open`);
+  }
   const commentsForFixEvaluation = wardenComments.filter(
-    (c) => !activeWardenCommentIds.has(c.id)
+    (c) => !activeWardenCommentIds.has(c.id) && !carriedCommentIds.has(c.id)
   );
   const fixEvaluationRuntime = auxiliaryOptions.runtime ?? 'pi';
   const canUseFixEvaluationRuntime = canUseRuntimeAuth({
@@ -1044,6 +1127,7 @@ async function evaluateFixesAndResolveStale(
       const commentsForStaleCheck = wardenComments.filter(
         (c) =>
           !activeWardenCommentIds.has(c.id) &&
+          !carriedCommentIds.has(c.id) &&
           !commentsResolvedByFixEval.has(c.id) &&
           !commentsEvaluatedByFixEval.has(c.id)
       );
@@ -1125,7 +1209,11 @@ async function dismissPreviousReviewIfResolved(
   results: TriggerResult[],
   canResolveStale: boolean,
   gate: ReviewFeedbackGate,
-  options: { failOnWriteError?: boolean } = {}
+  options: {
+    failOnWriteError?: boolean;
+    /** An open comment sits on a hunk incremental review skipped, so its finding was not re-checked. */
+    carriedFindingsOpen?: boolean;
+  } = {}
 ): Promise<void> {
   // Dismiss previous CHANGES_REQUESTED if all blocking issues are resolved.
   // Requires: all triggers succeeded, current run would not request changes,
@@ -1143,6 +1231,10 @@ async function dismissPreviousReviewIfResolved(
     !wouldRequestChanges &&
     hasActiveFailOn
   ) {
+    if (options.carriedFindingsOpen) {
+      logAction('Keeping previous CHANGES_REQUESTED review: comments on unchanged hunks are still open');
+      return;
+    }
     if (!await gate.canWrite()) {
       return;
     }
@@ -1188,7 +1280,8 @@ async function finalizeWorkflow(
   memoryRecall: ActionMemoryRecall | undefined,
   postChecks: boolean,
   matchedTriggers: ResolvedTrigger[],
-  resolvedTriggers: ResolvedTrigger[]
+  resolvedTriggers: ResolvedTrigger[],
+  carriedFindingsOpen = false
 ): Promise<void> {
   await dismissPreviousReviewIfResolved(
     octokit,
@@ -1196,7 +1289,8 @@ async function finalizeWorkflow(
     previousReviewInfo,
     results,
     canResolveStale,
-    gate
+    gate,
+    { carriedFindingsOpen }
   );
 
   // Set outputs
@@ -1838,6 +1932,7 @@ async function finalizeReportWorkflow(
     postChecks: boolean;
     matchedTriggers: ResolvedTrigger[];
     resolvedTriggers: ResolvedTrigger[];
+    carriedFindingsOpen?: boolean;
   }
 ): Promise<void> {
   await dismissPreviousReviewIfResolved(
@@ -1847,7 +1942,7 @@ async function finalizeReportWorkflow(
     results,
     canResolveStale,
     gate,
-    { failOnWriteError: options.failOnWriteError }
+    { failOnWriteError: options.failOnWriteError, carriedFindingsOpen: options.carriedFindingsOpen }
   );
 
   const outputs = computeWorkflowOutputs(reports);
@@ -1989,6 +2084,7 @@ async function cleanupOrphanedComments(
  * It executes matched triggers and writes the replay artifact for report mode.
  */
 async function runAnalyzeMode(
+  octokit: Octokit,
   inputs: ActionInputs,
   initResult: InitResult,
   span: { setAttribute: (name: string, value: number) => void }
@@ -2029,6 +2125,7 @@ async function runAnalyzeMode(
     },
     () => executeAllTriggers(matchedTriggers, context, runnerConcurrency, inputs, {
       memoryRecall,
+      incremental: incrementalSourceFor(octokit, context, matchedTriggers),
       onTriggerComplete: (completedSoFar) => {
         const reportsSoFar = completedSoFar.flatMap((r) => (r.report ? [r.report] : []));
         writeFindingsOutputLive(reportsSoFar, context, [], {
@@ -2203,6 +2300,7 @@ async function runReportMode(
     triggerErrors = collectTriggerErrors(results);
     canResolveStale = shouldResolveStaleComments(results);
     const allFindings = reviewPhase.reports.flatMap((r) => r.findings);
+    const carriedRanges = collectCarriedRanges(reviewPhase.reports);
     span.setAttribute('warden.finding.count', allFindings.length);
 
     await Sentry.startSpan(
@@ -2213,7 +2311,11 @@ async function runReportMode(
           allFindings, reviewPhase.activeWardenCommentIds,
           canResolveStale, inputs.anthropicApiKey,
           auxiliaryOptions, gate,
-          { failOnWriteError: true, partialScopeSkills: pushScopedSkills(reviewPhase.reports) },
+          {
+            failOnWriteError: true,
+            partialScopeSkills: pushScopedSkills(reviewPhase.reports),
+            carriedRanges,
+          },
         );
         resolveSpan.setAttribute(
           'warden.feedback.auto_resolve.fix_eval_count',
@@ -2244,6 +2346,10 @@ async function runReportMode(
         postChecks,
         matchedTriggers,
         resolvedTriggers,
+        carriedFindingsOpen: hasOpenCarriedComment(
+          reviewPhase.commentsFetched ? reviewPhase.fetchedComments : undefined,
+          carriedRanges
+        ),
       },
     );
   } catch (error) {
@@ -2325,7 +2431,7 @@ export async function runPRWorkflow(
       });
 
       if (inputs.mode === 'analyze') {
-        return runAnalyzeMode(inputs, initResult, span);
+        return runAnalyzeMode(octokit, inputs, initResult, span);
       }
 
       if (inputs.mode === 'report') {
@@ -2400,6 +2506,7 @@ export async function runPRWorkflow(
           () => executeAllTriggers(matchedTriggers, context, runnerConcurrency, inputs, {
             checks: createTriggerCheckReporter(octokit, context, postChecks),
             memoryRecall,
+            incremental: incrementalSourceFor(octokit, context, matchedTriggers),
             onTriggerComplete: (completedSoFar) => {
               const reportsSoFar = completedSoFar.flatMap((r) => (r.report ? [r.report] : []));
               writeFindingsOutputLive(reportsSoFar, context, [], {
@@ -2462,6 +2569,7 @@ export async function runPRWorkflow(
       const triggerErrors = collectTriggerErrors(results);
       const canResolveStale = shouldResolveStaleComments(results);
       const allFindings = reviewPhase.reports.flatMap((r) => r.findings);
+      const carriedRanges = collectCarriedRanges(reviewPhase.reports);
       span.setAttribute('warden.finding.count', allFindings.length);
 
       await runOrFailCore(
@@ -2477,7 +2585,7 @@ export async function runPRWorkflow(
               allFindings, reviewPhase.activeWardenCommentIds,
               canResolveStale, inputs.anthropicApiKey,
               auxiliaryOptions, gate,
-              { partialScopeSkills: pushScopedSkills(reviewPhase.reports) },
+              { partialScopeSkills: pushScopedSkills(reviewPhase.reports), carriedRanges },
             );
             resolveSpan.setAttribute(
               'warden.feedback.auto_resolve.fix_eval_count',
@@ -2507,6 +2615,10 @@ export async function runPRWorkflow(
         postChecks,
         matchedTriggers,
         resolvedTriggers,
+        hasOpenCarriedComment(
+          reviewPhase.commentsFetched ? reviewPhase.fetchedComments : undefined,
+          carriedRanges
+        ),
       );
 
       handleTriggerErrors(triggerErrors, matchedTriggers.length);

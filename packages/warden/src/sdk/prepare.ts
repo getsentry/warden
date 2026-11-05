@@ -62,6 +62,7 @@ export function prepareFiles(
     diffContextSource: context.diffContextSource,
     enforceChangedLineBudget: context.explicitFileTargets !== true,
     alwaysScan: options.alwaysScan,
+    skipHunks: options.skipHunks,
   });
   skippedFiles.push(...scanPolicy.skippedFiles);
 
@@ -95,8 +96,19 @@ export function prepareFiles(
       continue;
     }
 
+    // Drop hunks an earlier run already reviewed. This runs before split and
+    // coalesce so indexes match parsePatch order. A fully reviewed file is not
+    // a skipped file, so it is left out of skippedFiles.
+    const reviewedIndexes = options.skipHunks?.get(file.filename);
+    const rawHunks = reviewedIndexes
+      ? diff.hunks.filter((_, index) => !reviewedIndexes.has(index))
+      : diff.hunks;
+    if (rawHunks.length === 0) {
+      continue;
+    }
+
     // Split large hunks first (handles large files becoming single hunks)
-    const splitHunks = splitLargeHunks(diff.hunks, {
+    const splitHunks = splitLargeHunks(rawHunks, {
       maxChunkSize: chunking?.coalesce?.maxChunkSize,
     });
 

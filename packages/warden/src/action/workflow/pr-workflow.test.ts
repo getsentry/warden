@@ -27,6 +27,8 @@ const EMPTY_AUXILIARY_MODEL_FIXTURES_DIR = join(FIXTURES_DIR, 'empty-auxiliary-m
 const LAYERED_AUXILIARY_MODEL_FIXTURES_DIR = join(FIXTURES_DIR, 'layered-auxiliary-model');
 const NO_MATCH_EMPTY_AUXILIARY_MODEL_FIXTURES_DIR = join(FIXTURES_DIR, 'no-match-empty-auxiliary-model');
 const SCHEDULE_ONLY_FIXTURES_DIR = join(FIXTURES_DIR, 'schedule');
+const INCREMENTAL_FIXTURES_DIR = join(FIXTURES_DIR, 'incremental');
+const INCREMENTAL_NO_APP_FIXTURES_DIR = join(FIXTURES_DIR, 'incremental-no-app');
 const EVENT_PAYLOAD_PATH = join(FIXTURES_DIR, 'event-payloads/pull_request_opened.json');
 const PR_HEAD_SHA = 'abc123def456';
 const PREVIOUS_HEAD_SHA = 'previous123sha456';
@@ -397,6 +399,109 @@ describe('runPRWorkflow', () => {
           configuredSkills: [{ name: 'test-skill', triggered: true }],
         })
       );
+    });
+
+    it('analyze mode with incremental review skips hunks an earlier clean run reviewed', async () => {
+      const prFiles = [
+        {
+          filename: 'src/test.ts',
+          status: 'modified',
+          additions: 1,
+          deletions: 0,
+          patch: '@@ -1,5 +1,10 @@\n+console.log("test")',
+        },
+      ];
+      let baselineChecks: unknown[] = [];
+      const octokit = mockOctokit as unknown as {
+        paginate: ReturnType<typeof vi.fn>;
+        pulls: { listCommits: ReturnType<typeof vi.fn> };
+        checks: { listForRef: ReturnType<typeof vi.fn> };
+        repos: { compareCommitsWithBasehead: ReturnType<typeof vi.fn> };
+      };
+      octokit.pulls.listCommits = vi.fn();
+      octokit.paginate.mockImplementation((method: unknown) =>
+        Promise.resolve(
+          method === octokit.pulls.listCommits
+            ? [{ sha: PREVIOUS_HEAD_SHA }, { sha: PR_HEAD_SHA }]
+            : prFiles
+        )
+      );
+      octokit.checks.listForRef = vi.fn(() => Promise.resolve({ data: { check_runs: baselineChecks } }));
+      octokit.repos = {
+        compareCommitsWithBasehead: vi.fn(() => Promise.resolve({ data: { files: prFiles } })),
+      };
+
+      const firstReport = createSkillReport();
+      mockRunSkillTask.mockResolvedValueOnce({ name: 'test-trigger', report: firstReport });
+      await runPRWorkflow(
+        mockOctokit,
+        createDefaultInputs({ mode: 'analyze' }),
+        'pull_request',
+        EVENT_PAYLOAD_PATH,
+        INCREMENTAL_FIXTURES_DIR
+      );
+
+      expect(mockRunSkillTask.mock.calls[0]?.[0].runnerOptions?.skipHunks?.size).toBe(0);
+      const externalId = firstReport.incremental?.externalId;
+      expect(externalId).toMatch(/^warden-incremental:v1:/);
+      expect(firstReport.incremental?.complete).toBe(true);
+
+      baselineChecks = [
+        {
+          name: 'warden: test-skill',
+          status: 'completed',
+          conclusion: 'success',
+          external_id: externalId,
+          app: { slug: 'sentry-warden' },
+        },
+      ];
+      mockRunSkillTask.mockResolvedValueOnce({ name: 'test-trigger', report: createSkillReport() });
+      await runPRWorkflow(
+        mockOctokit,
+        createDefaultInputs({ mode: 'analyze' }),
+        'pull_request',
+        EVENT_PAYLOAD_PATH,
+        INCREMENTAL_FIXTURES_DIR
+      );
+
+      const skipHunks = mockRunSkillTask.mock.calls[1]?.[0].runnerOptions?.skipHunks;
+      expect([...(skipHunks?.get('src/test.ts') ?? [])]).toEqual([0]);
+      expect(octokit.checks.listForRef).toHaveBeenCalledWith(
+        expect.objectContaining({ ref: PREVIOUS_HEAD_SHA })
+      );
+      expect(octokit.checks.listForRef).not.toHaveBeenCalledWith(
+        expect.objectContaining({ ref: PR_HEAD_SHA })
+      );
+    });
+
+    it('analyze mode reviews the full PR when incrementalApp is not set', async () => {
+      mockRunSkillTask.mockResolvedValueOnce({ name: 'test-trigger', report: createSkillReport() });
+      await runPRWorkflow(
+        mockOctokit,
+        createDefaultInputs({ mode: 'analyze' }),
+        'pull_request',
+        EVENT_PAYLOAD_PATH,
+        INCREMENTAL_NO_APP_FIXTURES_DIR
+      );
+
+      expect(mockRunSkillTask.mock.calls[0]?.[0].runnerOptions?.skipHunks).toBeUndefined();
+      expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('defaults.incrementalApp'));
+    });
+
+    it('analyze mode does not look up baselines when no skill has incremental on', async () => {
+      const octokit = mockOctokit as unknown as { checks: { listForRef: ReturnType<typeof vi.fn> } };
+      octokit.checks.listForRef = vi.fn();
+      mockRunSkillTask.mockResolvedValueOnce({ name: 'test-trigger', report: createSkillReport() });
+      await runPRWorkflow(
+        mockOctokit,
+        createDefaultInputs({ mode: 'analyze' }),
+        'pull_request',
+        EVENT_PAYLOAD_PATH,
+        FIXTURES_DIR
+      );
+
+      expect(mockRunSkillTask.mock.calls[0]?.[0].runnerOptions?.skipHunks).toBeUndefined();
+      expect(octokit.checks.listForRef).not.toHaveBeenCalled();
     });
 
     it('analyze mode lists a schedule-only skill as configured but not triggered on a PR run', async () => {
@@ -1258,6 +1363,81 @@ describe('runPRWorkflow', () => {
           }),
         })
       );
+    });
+
+    it('report mode keeps comments on carried-forward hunks open and records the baseline', async () => {
+      const report = createSkillReport({
+        incremental: {
+          externalId: 'warden-incremental:v1:abc',
+          baselineSha: PREVIOUS_HEAD_SHA,
+          carriedRanges: [{ path: 'src/test.ts', startLine: 8, endLine: 12 }],
+          complete: true,
+        },
+      });
+      const findingsFile = writeFindingsArtifact([report], [
+        {
+          triggerName: 'test-skill',
+          skillName: 'test-skill',
+          report,
+        },
+      ]);
+      mockFetchExistingComments.mockResolvedValue([
+        createExistingWardenComment({ skills: ['test-skill'], contentHash: 'carried-hash' }),
+      ]);
+
+      try {
+        await runPRWorkflow(
+          mockOctokit,
+          createDefaultInputs({ mode: 'report', findingsFile }),
+          'pull_request',
+          EVENT_PAYLOAD_PATH,
+          FIXTURES_DIR
+        );
+      } finally {
+        rmSync(dirname(findingsFile), { recursive: true, force: true });
+      }
+
+      expect(mockOctokit.graphql).not.toHaveBeenCalledWith(
+        expect.stringContaining('resolveReviewThread'),
+        expect.anything()
+      );
+      expect(evaluateFixAttempts).not.toHaveBeenCalled();
+      const skillCheck = vi.mocked(mockOctokit.checks.create).mock.calls
+        .map(([args]) => args)
+        .find((args) => args?.name === 'warden: test-skill');
+      expect(skillCheck?.external_id).toBeUndefined();
+      expect(mockOctokit.checks.update).toHaveBeenCalledWith(
+        expect.objectContaining({ external_id: 'warden-incremental:v1:abc' })
+      );
+    });
+
+    it('report mode records no baseline when review posting fails', async () => {
+      const report = createSkillReport({
+        findings: [createFinding()],
+        incremental: { externalId: 'warden-incremental:v1:abc', carriedRanges: [], complete: true },
+      });
+      const findingsFile = writeFindingsArtifact([report], [
+        { triggerName: 'test-skill', skillName: 'test-skill', report },
+      ]);
+      vi.mocked(mockOctokit.pulls.createReview).mockRejectedValueOnce(new Error('Bad review credentials'));
+
+      try {
+        await expect(
+          runPRWorkflow(
+            mockOctokit,
+            createDefaultInputs({ mode: 'report', findingsFile }),
+            'pull_request',
+            EVENT_PAYLOAD_PATH,
+            FIXTURES_DIR
+          )
+        ).rejects.toThrow('Bad review credentials');
+      } finally {
+        rmSync(dirname(findingsFile), { recursive: true, force: true });
+      }
+
+      for (const write of [mockOctokit.checks.create, mockOctokit.checks.update]) {
+        expect(write).not.toHaveBeenCalledWith(expect.objectContaining({ external_id: expect.anything() }));
+      }
     });
 
     it('report mode fails no-trigger cleanup write errors', async () => {
@@ -2415,6 +2595,80 @@ describe('runPRWorkflow', () => {
   });
 
   describe('review dismissal', () => {
+    it('does not dismiss while a comment on a carried-forward hunk is open', async () => {
+      vi.mocked(mockOctokit.pulls.listReviews).mockResolvedValue({
+        data: [{ id: 42, state: 'CHANGES_REQUESTED', user: { login: 'warden[bot]' } }],
+      } as ListReviewsResponse);
+      mockFetchExistingComments.mockResolvedValue([
+        createExistingWardenComment({ skills: ['test-skill'], line: 10 }),
+      ]);
+      const report = createSkillReport({
+        findings: [],
+        incremental: {
+          externalId: 'warden-incremental:v1:abc',
+          baselineSha: PREVIOUS_HEAD_SHA,
+          carriedRanges: [{ path: 'src/test.ts', startLine: 8, endLine: 12 }],
+          complete: true,
+        },
+      });
+      mockRunSkillTask.mockResolvedValue({ name: 'test-trigger', report });
+
+      await runPRWorkflow(mockOctokit, createDefaultInputs({ failOn: 'high' }), 'pull_request', EVENT_PAYLOAD_PATH, FIXTURES_DIR);
+
+      expect(mockOctokit.pulls.dismissReview).not.toHaveBeenCalled();
+    });
+
+    it('records a baseline only after the review with its findings is posted', async () => {
+      const report = createSkillReport({
+        findings: [createFinding()],
+        incremental: { externalId: 'warden-incremental:v1:abc', carriedRanges: [], complete: true },
+      });
+      mockRunSkillTask.mockResolvedValue({ name: 'test-trigger', report });
+
+      await runPRWorkflow(mockOctokit, createDefaultInputs(), 'pull_request', EVENT_PAYLOAD_PATH, FIXTURES_DIR);
+
+      expect(mockOctokit.pulls.createReview).toHaveBeenCalled();
+      expect(mockOctokit.checks.update).toHaveBeenCalledWith(
+        expect.objectContaining({ external_id: 'warden-incremental:v1:abc' })
+      );
+    });
+
+    it('records no baseline when the review with its findings fails to post', async () => {
+      const report = createSkillReport({
+        findings: [createFinding()],
+        incremental: { externalId: 'warden-incremental:v1:abc', carriedRanges: [], complete: true },
+      });
+      mockRunSkillTask.mockResolvedValue({ name: 'test-trigger', report });
+      vi.mocked(mockOctokit.pulls.createReview).mockRejectedValue(new Error('Bad review credentials'));
+
+      await runPRWorkflow(mockOctokit, createDefaultInputs(), 'pull_request', EVENT_PAYLOAD_PATH, FIXTURES_DIR);
+
+      expect(mockOctokit.checks.update).not.toHaveBeenCalledWith(
+        expect.objectContaining({ external_id: expect.anything() })
+      );
+    });
+
+    it('does not dismiss when comments could not be fetched and hunks were carried', async () => {
+      vi.mocked(mockOctokit.pulls.listReviews).mockResolvedValue({
+        data: [{ id: 42, state: 'CHANGES_REQUESTED', user: { login: 'warden[bot]' } }],
+      } as ListReviewsResponse);
+      mockFetchExistingComments.mockRejectedValue(new Error('GraphQL unavailable'));
+      const report = createSkillReport({
+        findings: [],
+        incremental: {
+          externalId: 'warden-incremental:v1:abc',
+          baselineSha: PREVIOUS_HEAD_SHA,
+          carriedRanges: [{ path: 'src/test.ts', startLine: 8, endLine: 12 }],
+          complete: true,
+        },
+      });
+      mockRunSkillTask.mockResolvedValue({ name: 'test-trigger', report });
+
+      await runPRWorkflow(mockOctokit, createDefaultInputs({ failOn: 'high' }), 'pull_request', EVENT_PAYLOAD_PATH, FIXTURES_DIR);
+
+      expect(mockOctokit.pulls.dismissReview).not.toHaveBeenCalled();
+    });
+
     it('dismisses previous CHANGES_REQUESTED when all comments resolved', async () => {
       // Previous review was CHANGES_REQUESTED
       vi.mocked(mockOctokit.pulls.listReviews).mockResolvedValue({

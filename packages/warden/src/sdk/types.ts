@@ -142,6 +142,8 @@ export interface SkillRunnerOptions {
   scan?: ScanConfig;
   /** Chunking configuration for file patterns and coalescing. */
   chunking?: AnalysisChunkingConfig;
+  /** Raw hunk indexes per file to leave out because an earlier run already reviewed them. */
+  skipHunks?: SkipHunks;
   /** Max retries for auxiliary structured model calls (extraction repair, merging, dedup, fix evaluation). Default: 5 */
   auxiliaryMaxRetries?: number;
   /** Verify candidate findings in a second read-only pass. Defaults to true. */
@@ -155,6 +157,9 @@ export interface SkillRunnerOptions {
   /** Quoted, lower-authority repository history admitted by the optional memory service. */
   historicalEvidence?: string;
 }
+
+/** Raw hunk indexes (in patch order) to leave out of analysis, keyed by filename. */
+export type SkipHunks = ReadonlyMap<string, ReadonlySet<number>>;
 
 export type AnalysisChunkingConfig = Pick<ChunkingConfig, 'filePatterns' | 'coalesce'>;
 
@@ -180,6 +185,8 @@ export interface PrepareFilesOptions {
   chunking?: AnalysisChunkingConfig;
   /** Files read even when built-in ignores or scan budgets would drop them; user ignores still apply. */
   alwaysScan?: (filename: string) => boolean;
+  /** Raw hunk indexes per file to leave out because an earlier run already reviewed them */
+  skipHunks?: SkipHunks;
 }
 
 /**
