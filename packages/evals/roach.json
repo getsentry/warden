@@ -6,14 +6,6 @@
     "https://api.openai.com",
     "https://pi.dev"
   ],
-  "secretEnv": [
-    "ANTHROPIC_API_KEY",
-    "WARDEN_ANTHROPIC_API_KEY",
-    "WARDEN_OPENROUTER_API_KEY",
-    "OPENROUTER_API_KEY",
-    "WARDEN_OPENAI_API_KEY",
-    "OPENAI_API_KEY"
-  ],
   "rules": [
     {
       "name": "model",
