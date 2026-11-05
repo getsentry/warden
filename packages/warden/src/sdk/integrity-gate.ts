@@ -98,6 +98,12 @@ function sourceHosts(lines: string[]): Set<string> {
   return hosts;
 }
 
+/** True when the hunk adds a version line it did not remove, so a re-emitted unchanged version does not count. */
+function changesVersion(h: HunkLines): boolean {
+  const removed = new Set(h.removed.filter((line) => LOCK_VERSION.test(line)).map((line) => line.trim()));
+  return h.added.some((line) => LOCK_VERSION.test(line) && !removed.has(line.trim()));
+}
+
 /** True when a hunk swaps a package source for a host or scheme its removed lines did not use. */
 function changesSourceHost(h: HunkLines): boolean {
   const before = sourceHosts(h.removed);
@@ -146,7 +152,7 @@ const SIGNALS: GateSignal[] = [
     matches: (h) =>
       LOCKFILE_PATH.test(h.filename) &&
       anyLine(h.added, LOCK_PIN) &&
-      (!h.manifestChanged || !anyLine(h.added, LOCK_VERSION) || changesSourceHost(h)),
+      (!h.manifestChanged || !changesVersion(h) || changesSourceHost(h)),
   },
   {
     id: 'conditional-destructive',

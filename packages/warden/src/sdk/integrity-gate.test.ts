@@ -145,6 +145,21 @@ describe('matchIntegritySignals', () => {
     expect(matchIntegritySignals(gitRetarget, true)).toContain('lockfile-drift');
     expect(matchIntegritySignals(bump, false)).toContain('lockfile-drift');
     expect(matchIntegritySignals(bump, true)).toEqual([]);
+
+    const sameVersionRepin = hunk('package-lock.json', [
+      '-      "version": "1.3.0",',
+      '-      "integrity": "sha512-old",',
+      '+      "version": "1.3.0",',
+      '+      "integrity": "sha512-new",',
+    ]);
+    const yarnRepin = hunk('yarn.lock', [
+      '-left-pad@1.3.0:',
+      '-  integrity sha512-old',
+      '+left-pad@1.3.0:',
+      '+  integrity sha512-new',
+    ]);
+    expect(matchIntegritySignals(sameVersionRepin, true)).toContain('lockfile-drift');
+    expect(matchIntegritySignals(yarnRepin, true)).toContain('lockfile-drift');
   });
 
   it('does not treat wildcard peer ranges in lockfiles as privilege grants', () => {
