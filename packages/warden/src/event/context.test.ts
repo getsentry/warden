@@ -253,7 +253,10 @@ describe('buildEventContext', () => {
     it('records the files changed by the push', async () => {
       mockPaginate.mockResolvedValue([]);
       mockCompare.mockResolvedValue({
-        data: { files: [{ filename: 'a.ts', status: 'modified', additions: 1, deletions: 0, patch: '@@ -1 +1 @@\n-a\n+b' }] },
+        data: {
+          status: 'ahead',
+          files: [{ filename: 'a.ts', status: 'modified', additions: 1, deletions: 0, patch: '@@ -1 +1 @@\n-a\n+b' }],
+        },
       });
 
       const context = await buildEventContext('pull_request', syncPayload, '/test/repo', mockOctokit);
@@ -278,10 +281,24 @@ describe('buildEventContext', () => {
       expect(context.pullRequest?.push).toBeUndefined();
     });
 
+    it('omits push changes when a force-push diverged from the previous head', async () => {
+      mockPaginate.mockResolvedValue([]);
+      mockCompare.mockResolvedValue({
+        data: {
+          status: 'diverged',
+          files: [{ filename: 'a.ts', status: 'modified', additions: 1, deletions: 0, patch: '@@ -1 +1 @@\n-a\n+b' }],
+        },
+      });
+
+      const context = await buildEventContext('pull_request', syncPayload, '/test/repo', mockOctokit);
+
+      expect(context.pullRequest?.push).toBeUndefined();
+    });
+
     it('omits push changes when the compare file list is truncated', async () => {
       mockPaginate.mockResolvedValue([]);
       mockCompare.mockResolvedValue({
-        data: { files: Array.from({ length: 300 }, (_, i) => ({ filename: `f${i}.ts`, status: 'modified', additions: 1, deletions: 0 })) },
+        data: { status: 'ahead', files: Array.from({ length: 300 }, (_, i) => ({ filename: `f${i}.ts`, status: 'modified', additions: 1, deletions: 0 })) },
       });
 
       const context = await buildEventContext('pull_request', syncPayload, '/test/repo', mockOctokit);
@@ -291,7 +308,7 @@ describe('buildEventContext', () => {
 
     it('omits push changes when the compare response has no file list', async () => {
       mockPaginate.mockResolvedValue([]);
-      mockCompare.mockResolvedValue({ data: {} });
+      mockCompare.mockResolvedValue({ data: { status: 'ahead' } });
 
       const context = await buildEventContext('pull_request', syncPayload, '/test/repo', mockOctokit);
 

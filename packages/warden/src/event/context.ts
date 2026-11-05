@@ -133,9 +133,10 @@ export async function buildEventContext(
 const COMPARE_FILE_LIMIT = 300;
 
 /**
- * Fetch the files changed by one push. Returns undefined when GitHub cannot
- * compare the two SHAs (for example after a force-push dropped `before`) or
- * the file list is truncated or missing, so callers fall back to the full PR diff.
+ * Fetch the files changed by one push. Returns undefined when the push did
+ * not fast-forward `before` (a force-push or rebase, which GitHub reports as
+ * `diverged` or fails to compare), or the file list is truncated or missing,
+ * so callers fall back to the full PR diff.
  */
 async function fetchPushChanges(
   octokit: Octokit,
@@ -150,6 +151,10 @@ async function fetchPushChanges(
       repo,
       basehead: `${beforeSha}...${headSha}`,
     });
+    // A rewritten branch compares from the merge base, so its file list is not the push.
+    if (data.status !== 'ahead') {
+      return undefined;
+    }
     const files = data.files;
     // GitHub drops `files` entirely on some oversized compares; treat that like truncation.
     if (!files || files.length >= COMPARE_FILE_LIMIT) {
