@@ -32,7 +32,8 @@ const INSTALL_HOOK_KEY = /"(?:pre|post)?install"\s*:|"prepare"\s*:|"prepublish(?
 const GIT_HOOK_PATH = /(?:^|\/)(?:\.husky|\.githooks|\.git\/hooks)\/|(?:^|\/)(?:lefthook\.ya?ml|\.pre-commit-config\.ya?ml|setup\.py)$/;
 const GOVERNANCE_PATH = /(?:^|\/)CODEOWNERS$|^\.github\/(?:workflows|actions|rulesets)\/|^\.github\/settings\.ya?ml$|^\.gitlab-ci\.ya?ml$|^\.circleci\/|^\.buildkite\//;
 const REGISTRY_CONFIG_PATH = /(?:^|\/)(?:\.npmrc|\.yarnrc(?:\.yml)?|pip\.conf|\.pypirc|settings\.xml)$/;
-const DEPENDENCY_SOURCE = /["'](?:git\+|github:|file:|https?:\/\/)[^"']*["']|--(?:extra-)?index-url|\bregistry\s*[=:]/;
+// Quoted sources (npm, Gemfile, Cargo), unquoted VCS URLs and PEP 508 direct references (`pkg @ git+https://...`), and pip index flags.
+const DEPENDENCY_SOURCE = /["'](?:git\+|github:|file:|https?:\/\/)[^"']*["']|\b(?:git|hg|svn|bzr)\+[a-z]+:\/\/|@\s*(?:https?|file):\/\/|--(?:extra-)?index-url|--find-links|--trusted-host|\bregistry\s*[=:]/;
 const DEPENDENCY_MANIFEST = /(?:^|\/)(?:package\.json|requirements[^/]*\.txt|pyproject\.toml|Pipfile|Gemfile|go\.mod|Cargo\.toml|composer\.json)$/;
 const LOCKFILE_PATH = /(?:^|\/)(?:package-lock\.json|npm-shrinkwrap\.json|pnpm-lock\.yaml|yarn\.lock|bun\.lock|poetry\.lock|Pipfile\.lock|uv\.lock|Cargo\.lock|go\.sum|Gemfile\.lock|composer\.lock)$/;
 const LOCK_PIN = /\b(?:resolved|integrity|tarball|checksum|resolution|source|remote)\b|\bsha(?:1|256|384|512)[-:]|\sh1:/;

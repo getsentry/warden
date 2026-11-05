@@ -85,6 +85,20 @@ describe('matchIntegritySignals', () => {
     }
   });
 
+  it.each([
+    ['requirements.txt', 'SomeProject @ git+https://example.com/pkg.git'],
+    ['requirements.txt', '-e git+ssh://git@example.com/org/pkg.git#egg=pkg'],
+    ['requirements.txt', 'pkg @ https://example.com/pkg-1.0.tar.gz'],
+    ['requirements.txt', '--find-links https://example.com/wheels'],
+    ['pyproject.toml', 'dependencies = ["pkg @ git+https://example.com/pkg.git"]'],
+  ])('flags the unquoted or direct-reference dependency source in %s: %s', (file, line) => {
+    expect(matchIntegritySignals(hunk(file, [`+${line}`]))).toContain('dependency-source');
+  });
+
+  it('ignores pinned registry requirements', () => {
+    expect(matchIntegritySignals(hunk('requirements.txt', ['+requests==2.32.3', '+urllib3>=2.2']))).toEqual([]);
+  });
+
   it('ignores ordinary code, hex digests, and integrity hashes', () => {
     expect(matchIntegritySignals(benign)).toEqual([]);
     expect(
