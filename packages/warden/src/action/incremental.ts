@@ -182,10 +182,13 @@ const PATH_ONLY_SKIPS: ReadonlySet<string> = new Set(['ignored:builtin', 'ignore
  * dropped by scan limits were never reviewed, so the run cannot be a baseline.
  * Content-based skips such as generated files also disqualify it: the baseline
  * diff includes those hunks, and the file can stop looking generated later.
+ * Hunks a skill gate skipped were never read either, and the gate can pass
+ * them later when PR-wide context (title, body, manifests) changes.
  */
 export function reviewedEverything(report: SkillReport): boolean {
   if (report.error) return false;
   if ((report.failedHunks ?? 0) > 0 || (report.failedExtractions ?? 0) > 0) return false;
+  if ((report.hunkGate?.skippedHunks ?? 0) > 0) return false;
   return !report.skippedFiles?.some((file) => !PATH_ONLY_SKIPS.has(file.reason));
 }
 

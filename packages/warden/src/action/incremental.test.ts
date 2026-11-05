@@ -170,6 +170,12 @@ describe('reviewedEverything', () => {
     ).toBe(true);
   });
 
+  it('rejects a run where a skill gate skipped hunks', () => {
+    // A gated-out hunk was never read, and changed PR text or manifests can make the gate pass it later.
+    expect(reviewedEverything(report({ hunkGate: { skippedHunks: 3, pushScoped: false } }))).toBe(false);
+    expect(reviewedEverything(report({ hunkGate: { skippedHunks: 0, pushScoped: false } }))).toBe(true);
+  });
+
   it('rejects a run where a file was skipped as generated', () => {
     // Generated detection reads file content, so the file can be reviewable on a later push.
     expect(
