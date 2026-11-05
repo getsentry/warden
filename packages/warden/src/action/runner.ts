@@ -44,6 +44,9 @@ export async function runAction(): Promise<void> {
         const octokit = new Octokit({ auth: inputs.githubToken });
 
         stage = 'dispatch';
+        // Split analyze/report workflows are separate processes. Tag the root so
+        // operators can tell which GHA step owns a given cicd.workflow trace.
+        span.setAttribute('warden.action.mode', inputs.mode);
         if (eventName === 'schedule' || eventName === 'workflow_dispatch') {
           if (inputs.mode !== 'run') {
             setFailed(`${inputs.mode} mode is only supported for pull request workflows`);
