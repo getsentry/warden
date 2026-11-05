@@ -331,6 +331,39 @@ export async function updateSkillCheck(
   });
 }
 
+/**
+ * Whether a skill check with this report concludes success or neutral. A
+ * failing check must never become an incremental baseline: carrying its
+ * findings forward would let a later push pass without re-reviewing them.
+ */
+export function isBaselineConclusion(
+  report: SkillReport,
+  options: Pick<UpdateSkillCheckOptions, 'failOn' | 'failCheck' | 'minConfidence'>
+): boolean {
+  const findings = filterFindings(report.findings, undefined, options.minConfidence);
+  const conclusion = determineConclusion(findings, options.failOn, options.failCheck);
+  return conclusion === 'success' || conclusion === 'neutral';
+}
+
+/**
+ * Mark a completed skill check as an incremental review baseline by setting
+ * its `external_id`. Call only after the run's feedback reached the PR, so a
+ * failed write leaves no baseline rather than one for unposted findings.
+ */
+export async function markSkillCheckBaseline(
+  octokit: Octokit,
+  checkRunId: number,
+  externalId: string,
+  options: Pick<CheckOptions, 'owner' | 'repo'>
+): Promise<void> {
+  await octokit.checks.update({
+    owner: options.owner,
+    repo: options.repo,
+    check_run_id: checkRunId,
+    external_id: externalId,
+  });
+}
+
 const MAX_CHECK_SUMMARY_BYTES = 65000;
 const TRUNCATION_NOTICE = '\n\n[diagnostics truncated]';
 

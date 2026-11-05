@@ -344,6 +344,27 @@ export const HunkTraceSchema = z.object({
 export type HunkTrace = z.infer<typeof HunkTraceSchema>;
 
 // Skill report output
+/** New-side line range of a hunk that incremental review carried forward unchanged. */
+export const CarriedHunkRangeSchema = z.object({
+  path: z.string(),
+  startLine: z.number().int(),
+  endLine: z.number().int(),
+});
+export type CarriedHunkRange = z.infer<typeof CarriedHunkRangeSchema>;
+
+/** Incremental review state for one skill run on a pull request. */
+export const IncrementalReviewSchema = z.object({
+  /** Check run external_id that marks this run as a reusable baseline. */
+  externalId: z.string(),
+  /** Head SHA of the earlier run whose reviewed hunks were reused, if any. */
+  baselineSha: z.string().optional(),
+  /** Hunks skipped because the baseline already reviewed identical content. */
+  carriedRanges: z.array(CarriedHunkRangeSchema),
+  /** Whether every hunk given to the skill was reviewed, so this run can serve as a baseline. */
+  complete: z.boolean(),
+});
+export type IncrementalReview = z.infer<typeof IncrementalReviewSchema>;
+
 export const SkillReportSchema = z.object({
   skill: z.string(),
   summary: z.string(),
@@ -375,6 +396,8 @@ export const SkillReportSchema = z.object({
   model: z.string().optional(),
   /** Runtime backend used for this skill's analysis. */
   runtime: z.string().optional(),
+  /** Present when the action ran with incremental review enabled. */
+  incremental: IncrementalReviewSchema.optional(),
 });
 export type SkillReport = Omit<z.infer<typeof SkillReportSchema>, 'findings'> & { findings: Finding[] };
 

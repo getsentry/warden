@@ -75,6 +75,36 @@ describe('prepareFiles', () => {
     writeFileSync(join(repoPath, 'src/file.ts'), `${lines.join('\n')}\n`);
   }
 
+  it('leaves out hunks listed in skipHunks without reporting the file as skipped', () => {
+    const repoPath = mkdtempSync(join(tmpdir(), 'warden-prepare-skip-'));
+    tempDirs.push(repoPath);
+    mkdirSync(join(repoPath, 'src'), { recursive: true });
+    writeFileSync(
+      join(repoPath, 'src/file.ts'),
+      `${Array.from({ length: 120 }, (_, i) => `line ${i + 1}`).join('\n')}\n`
+    );
+    writeFileSync(join(repoPath, 'src/done.ts'), 'done\n');
+    const context = makeContext([
+      {
+        filename: 'src/file.ts',
+        status: 'modified',
+        patch: '@@ -1,1 +1,2 @@\n line 1\n+line 2\n@@ -100,1 +101,2 @@\n line 101\n+line 102',
+      },
+      { filename: 'src/done.ts', status: 'modified', patch: '@@ -0,0 +1,1 @@\n+done' },
+    ], repoPath);
+
+    const result = prepareFiles(context, {
+      skipHunks: new Map([
+        ['src/file.ts', new Set([0])],
+        ['src/done.ts', new Set([0])],
+      ]),
+    });
+
+    expect(result.skippedFiles).toEqual([]);
+    expect(result.files.map((file) => file.filename)).toEqual(['src/file.ts']);
+    expect(result.files[0]?.hunks.map((hunk) => hunk.hunk.newStart)).toEqual([101]);
+  });
+
   it('skips files with empty patch content (zero-line hunks)', () => {
     const context = makeContext([
       { filename: 'empty.ts', patch: '@@ -0,0 +0,0 @@\n' },
@@ -281,6 +311,31 @@ describe('prepareFiles', () => {
       filename: 'src/two.ts',
       reason: 'limit:changed_lines',
     });
+  });
+
+  it('does not charge scan budgets for hunks an earlier run reviewed', () => {
+    const context = makeContext([
+      // Fully reviewed, and large enough to exhaust both budgets on its own.
+      { filename: 'src/carried.ts', patch: '@@ -0,0 +1,3 @@\n+one\n+two\n+three', additions: 3 },
+      // One reviewed hunk (3 lines) and one new hunk (1 line).
+      {
+        filename: 'src/partial.ts',
+        patch: '@@ -0,0 +1,3 @@\n+one\n+two\n+three\n@@ -10,1 +13,2 @@\n ten\n+eleven',
+        additions: 4,
+      },
+    ]);
+
+    const result = prepareFiles(context, {
+      scan: { maxFiles: 1, maxChangedLines: 1 },
+      skipHunks: new Map([
+        ['src/carried.ts', new Set([0])],
+        ['src/partial.ts', new Set([0])],
+      ]),
+    });
+
+    expect(result.skippedFiles).toEqual([]);
+    expect(result.files.map((file) => file.filename)).toEqual(['src/partial.ts']);
+    expect(result.files[0]?.hunks.map((hunk) => hunk.hunk.newStart)).toEqual([13]);
   });
 
   it('does not apply changed-line budget to explicit file targets', async () => {

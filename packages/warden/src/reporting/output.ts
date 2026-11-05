@@ -5,6 +5,7 @@ import {
   AuxiliaryUsageMapSchema,
   FindingSchema,
   GitHubEventTypeSchema,
+  IncrementalReviewSchema,
   LocationSchema,
   SeverityThresholdSchema,
   SkillErrorSchema,
@@ -124,6 +125,7 @@ const ReplaySkillReportSchema = z.object({
   auxiliaryUsageAttribution: AuxiliaryUsageAttributionMapSchema.optional(),
   model: z.string().optional(),
   runtime: z.string().optional(),
+  incremental: IncrementalReviewSchema.optional(),
 });
 
 export const TriggerRunResultSchema = z.discriminatedUnion('status', [
@@ -357,6 +359,7 @@ function serializeReplayReport(report: SkillReport): z.infer<typeof ReplaySkillR
     auxiliaryUsageAttribution: report.auxiliaryUsageAttribution,
     model: report.model,
     runtime: report.runtime,
+    incremental: report.incremental,
   };
 }
 

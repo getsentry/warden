@@ -52,6 +52,13 @@ and runtime defaults live under [Models and Runtimes](/config/models/).
     </dt>
     <dd>Fail the check run when findings exceed <code>failOn</code>. Default: <code>false</code>.</dd>
   </div>
+  <div>
+    <dt>
+      <code>incremental</code>
+      <span class="sentry-property-meta">boolean</span>
+    </dt>
+    <dd>Skip hunks that an earlier clean run on the same pull request already reviewed. GitHub Action pull request runs only. Needs <code>defaults.incrementalApp</code>. See <a href="/github/workflow/#incremental-review">Incremental Review</a>. Default: <code>false</code>.</dd>
+  </div>
 </dl>
 
 ```toml title="warden.toml"
