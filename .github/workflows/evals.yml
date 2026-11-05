@@ -129,6 +129,8 @@ jobs:
       - name: Run evals
         env:
           VITEST_EVALS_JSON: ../../eval-results.json
+          # Lets Roach record model calls it has no recording for. See roach.json.
+          ROACH_TOKEN: ${{ secrets.ROACH_TOKEN }}
         run: |
           set +e
           pnpm evals

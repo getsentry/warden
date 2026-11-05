@@ -18,6 +18,22 @@ metadata, or the lockfile. Add the `run-evals` label to a same-repository PR to
 force a run when runtime or prompt changes need benchmark coverage. Fork PRs do
 not get eval secrets.
 
+## Recordings
+
+Evals send model traffic through [Roach](https://github.com/getsentry/roach).
+`roach.json` names the model hosts (Anthropic, OpenRouter, OpenAI) and the
+request values that change between runs, such as temp repo paths. Roach
+replays a request when it has a recording for it, and sends it live and
+records it when it does not.
+
+- `ROACH_TOKEN` lets a run write recordings. CI sets it. Without it, a run only
+  replays, and a request with no recording fails its test.
+- Replay does not send the API key upstream, so any `WARDEN_<PROVIDER>_API_KEY`
+  value works for a full replay.
+- `ROACH_MODE=off` sends everything live and records nothing. Use it when you
+  change prompts or fixtures locally and have no token.
+- `ROACH_MODE=record` sends everything live and replaces the recordings.
+
 The raw Vitest eval command can exit non-zero when individual evals miss. CI
 still records the JSON report, publishes a vitest-evals job summary and workflow
 annotations for per-case reporting, and gates the workflow on the aggregate
