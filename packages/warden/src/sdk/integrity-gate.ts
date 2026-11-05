@@ -177,7 +177,8 @@ const SIGNALS: GateSignal[] = [
   },
   {
     id: 'privilege-grant',
-    matches: (h) => INFRA_PATH.test(h.filename) && anyLine(h.added, PRIVILEGE),
+    // Lockfiles are YAML/JSON but hold package metadata (`'*'` peer ranges), not grants; lockfile-drift covers them.
+    matches: (h) => INFRA_PATH.test(h.filename) && !LOCKFILE_PATH.test(h.filename) && anyLine(h.added, PRIVILEGE),
   },
 ];
 

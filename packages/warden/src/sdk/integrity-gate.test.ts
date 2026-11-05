@@ -147,6 +147,16 @@ describe('matchIntegritySignals', () => {
     expect(matchIntegritySignals(bump, true)).toEqual([]);
   });
 
+  it('does not treat wildcard peer ranges in lockfiles as privilege grants', () => {
+    const peer = hunk('pnpm-lock.yaml', [
+      '+  left-pad@1.3.1:',
+      "+    peerDependencies:",
+      "+      react: '*'",
+    ]);
+    expect(matchIntegritySignals(peer, true)).not.toContain('privilege-grant');
+    expect(matchIntegritySignals(hunk('iam.json', ['+  "Action": "*",']))).toContain('privilege-grant');
+  });
+
   it('uses surrounding context for destructive operations next to an added date check', () => {
     const input = hunk('cleanup.py', ['+    if now > POLICY_SWITCH and datetime(2027, 1, 4):']);
     expect(matchIntegritySignals(input)).not.toContain('conditional-destructive');
