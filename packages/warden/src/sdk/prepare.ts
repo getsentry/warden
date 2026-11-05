@@ -1,4 +1,5 @@
-import type { EventContext, SkippedFile } from '../types/index.js';
+import type { SkillDefinition } from '../config/schema.js';
+import type { EventContext, SkillReport, SkippedFile } from '../types/index.js';
 import {
   parseFileDiff,
   expandDiffContext,
@@ -9,6 +10,7 @@ import {
 } from '../diff/index.js';
 import type { PreparedFile, PrepareFilesOptions, PrepareFilesResult } from './types.js';
 import { applyScanPolicy } from './scan-policy.js';
+import { applyIntegrityGate, integrityGateAlwaysScans } from './integrity-gate.js';
 
 function matchingChunkingSkipPattern(
   filename: string,
@@ -59,6 +61,7 @@ export function prepareFiles(
     scan: options.scan,
     diffContextSource: context.diffContextSource,
     enforceChangedLineBudget: context.explicitFileTargets !== true,
+    alwaysScan: options.alwaysScan,
     skipHunks: options.skipHunks,
   });
   skippedFiles.push(...scanPolicy.skippedFiles);
@@ -129,4 +132,35 @@ export function prepareFiles(
     files: groupHunksByFile(allHunks),
     skippedFiles,
   };
+}
+
+export interface PrepareSkillFilesResult extends PrepareFilesResult {
+  /** Set when the skill has a deterministic gate that ran on the prepared hunks. */
+  hunkGate?: NonNullable<SkillReport['hunkGate']>;
+}
+
+/**
+ * Prepare files for one skill: parse the diff, then apply the skill's
+ * deterministic hunk gate when it has one.
+ */
+export function prepareSkillFiles(
+  skill: SkillDefinition,
+  context: EventContext,
+  options: PrepareFilesOptions = {}
+): PrepareSkillFilesResult {
+  const prepared = prepareFiles(context, { ...options, alwaysScan: integrityGateAlwaysScans(skill) });
+  const gate = applyIntegrityGate(skill, context, prepared.files);
+  if (!gate) return prepared;
+  return {
+    files: gate.files,
+    skippedFiles: prepared.skippedFiles,
+    hunkGate: { skippedHunks: gate.skippedHunks, pushScoped: gate.pushScoped },
+  };
+}
+
+/** Summary for a skill run with nothing left to analyze. */
+export function emptyRunSummary(hunkGate: PrepareSkillFilesResult['hunkGate']): string {
+  return hunkGate && hunkGate.skippedHunks > 0
+    ? 'No changes matched the skill gate'
+    : 'No code changes to analyze';
 }

@@ -1,0 +1,22 @@
+{
+  "given": "a component test and its JSON fixture, where the fixture holds a recorded API response and a long base64 PNG data URL used as an avatar image",
+  "files": [
+    "fixtures/benign-encoded-fixture-asset/src/__fixtures__/organizationDetails.json",
+    "fixtures/benign-encoded-fixture-asset/src/organizationAvatar.spec.tsx"
+  ],
+  "should_find": [
+    {
+      "finding": "no findings: the base64 literal is an image asset consumed as an img src, never decoded and executed, and the fixture is inert data",
+      "required": false
+    }
+  ],
+  "should_not_find": [
+    "the base64 data URL reported as an encoded or obfuscated payload",
+    "the long base64 line reported as concealment",
+    "the recorded response headers or ids reported as exposed secrets or credentials",
+    "the fixture file reported as a hiding place because it is under __fixtures__"
+  ],
+  "notes": {
+    "source": "Regression check for the fixtures-exclusion narrowing: fixture files are in scope, but encoded assets remain the catalog's benign version of Concealment. Modeled on a 9.5k-line Storybook recording fixture from a 500-PR backtest that produced no findings."
+  }
+}

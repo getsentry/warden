@@ -682,6 +682,24 @@
             "$ref": "#/$defs/SkippedFile"
           }
         },
+        "hunkGate": {
+          "type": "object",
+          "properties": {
+            "skippedHunks": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "pushScoped": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "skippedHunks",
+            "pushScoped"
+          ],
+          "additionalProperties": false
+        },
         "failedHunks": {
           "type": "integer",
           "minimum": 0,

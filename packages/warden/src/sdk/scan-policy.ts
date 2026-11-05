@@ -87,6 +87,12 @@ export interface ScanPolicyOptions {
   diffContextSource?: DiffContextSource;
   /** Whether to enforce PR/diff changed-line scan budgets. Defaults to true. */
   enforceChangedLineBudget?: boolean;
+  /**
+   * Files the caller must read even when built-in ignores, generated-file
+   * detection, or scan budgets would drop them. User ignore paths still apply,
+   * and these files do not consume the budget.
+   */
+  alwaysScan?: (filename: string) => boolean;
   /** Raw hunk indexes per file an earlier run already reviewed. They are not analyzed, so they cost no scan budget. */
   skipHunks?: SkipHunks;
 }
@@ -135,12 +141,12 @@ function userIncludesFile(filename: string, paths?: string[]): boolean {
   return (paths ?? []).some((pattern) => pattern.startsWith('!') && matchesIgnorePattern(filename, pattern));
 }
 
-function ignoredByBuiltinOrUser(filename: string, config?: IgnoreConfig): SkippedFile | undefined {
+function ignoredByBuiltinOrUser(filename: string, config?: IgnoreConfig, includeBuiltins = true): SkippedFile | undefined {
   let skip: SkippedFile | undefined;
 
   // Built-ins establish the baseline; user paths replay afterward in order so
   // later `!` patterns can re-include files.
-  for (const pattern of BUILTIN_IGNORE_PATTERNS) {
+  for (const pattern of includeBuiltins ? BUILTIN_IGNORE_PATTERNS : []) {
     if (matchesIgnorePattern(filename, pattern)) {
       skip = { filename, reason: 'ignored:builtin' };
     }
@@ -382,6 +388,10 @@ export function getPrePatchFileSkip(
     deletions: 0,
   };
 
+  if (options.alwaysScan?.(filename)) {
+    return ignoredByBuiltinOrUser(filename, options.ignore, false);
+  }
+
   const ignored = ignoredByBuiltinOrUser(filename, options.ignore);
   if (ignored) {
     return ignored;
@@ -434,6 +444,11 @@ export function applyScanPolicy(
   let budgetedFiles = 0;
   let consumedChangedLines = 0;
   for (const file of eligible) {
+    if (options.alwaysScan?.(file.filename)) {
+      selected.push(file);
+      continue;
+    }
+
     const fileChangedLines = unreviewedChangedLines(file, options.skipHunks?.get(file.filename));
     if (fileChangedLines === undefined) {
       // Fully reviewed earlier: kept so its hunks are carried, not limit-skipped.

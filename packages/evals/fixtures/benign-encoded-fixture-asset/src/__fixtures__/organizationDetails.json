@@ -1,0 +1,33 @@
+{
+  "organization": {
+    "slug": "acme",
+    "id": "4508112003"
+  },
+  "project": {
+    "slug": "checkout-web",
+    "id": "4508112941",
+    "platform": "javascript-react"
+  },
+  "avatar": {
+    "avatarType": "upload",
+    "avatarUuid": "1f2e3d4c5b6a7980",
+    "dataUrl": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAACgUlEQVR42hXNEdu2PAAA0JsfHsfjeDwex3Ecflccj+N4PI7juL/xfic4fH6/33///ggMREYSmcLEzMLKxk7l4KTRubh5ePn9/gQEBiIjiUxhYmZhZWOncnDS6FzcPLx/XxAEBAYiI4lMYWJmYWVjp3Jw0uhc3Dy84QsGAYGByEgiU5iYWVjZ2KkcnDQ6FzcP7/AFUUBgIDKSyBQmZhZWNnYqByeNzsXNwxu/YBQQGIiMJDKFiZmFlY2dysFJo3Nx8/COX5AEBAYiI4lMYWJmYWVjp3Jw0uhc3Dy86QuygMBAZCSRKUzMLKxs7FQOThqdi5uHN39BERAYiIwkMoWJmYWVjZ3KwUmjc3Hz8JYvmAQEBiIjiUxhYmZhZWOncnDS6FzcPLzTF8wCAgORkUSmMDGzsLKxUzk4aXQubh7e+QsWAYGByEgiU5iYWVjZ2KkcnDQ6FzcP7/IFq4DAQGQkkSlMzCysbOxUDk4anYubh3f9gk1AYCAyksgUJmYWVjZ2Kgcnjc7FzcO7fcEuIDAQGUlkChMzCysbO5WDk0bn4ubh3b+gCggMREYSmcLEzMLKxk7l4KTRubh5eOsXHAICA5GRRKYwMbOwsrFTOThpdC5uHt7jC04BgYHISCJTmJhZWNnYqRycNDoXNw/v+QVNQGAgMpLIFCZmFlY2dioHJ43Oxc3D276gCwgMREYSmcLEzMLKxk7l4KTRubh5ePsXXAICA5GRRKYwMbOwsrFTOThpdC5uHt7rC24BgYHISCJTmJhZWNnYqRycNDoXNw/v/QWPgMBAZCSRKUzMLKxs7FQOThqdi5uH9/mCV0BgIDKSyBQmZhZWNnYqByeNzsXNw8v/ZNNjjDyicHwAAAAASUVORK5CYII="
+  },
+  "recordedResponse": {
+    "status": 200,
+    "headers": {
+      "content-type": "application/json",
+      "x-request-id": "b9c1f0a7d2e34f56"
+    },
+    "body": {
+      "features": [
+        "dashboards-edit",
+        "spans-first-ui"
+      ],
+      "access": [
+        "org:read",
+        "project:read"
+      ]
+    }
+  }
+}

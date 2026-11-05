@@ -665,7 +665,7 @@ describe('runSkillTasks', () => {
     let active = 0;
     let maxActive = 0;
 
-    const prepareFiles = vi.spyOn(sdkRunner, 'prepareFiles').mockReturnValue({
+    const prepareFiles = vi.spyOn(sdkRunner, 'prepareSkillFiles').mockReturnValue({
       files: [{ filename: 'src/example.ts', hunks: [fakeHunk] }],
       skippedFiles: [],
     });
@@ -735,7 +735,7 @@ describe('runSkillTasks', () => {
       hunk: { newStart: 1, newCount: 10 },
     } as unknown as HunkWithContext;
 
-    const prepareFiles = vi.spyOn(sdkRunner, 'prepareFiles').mockReturnValue({
+    const prepareFiles = vi.spyOn(sdkRunner, 'prepareSkillFiles').mockReturnValue({
       files: [{ filename: 'a.ts', hunks: [fakeHunk] }],
       skippedFiles: [],
     });
@@ -788,7 +788,7 @@ describe('runSkillTasks', () => {
       hunk: { newStart: 1, newCount: 10 },
     } as unknown as HunkWithContext;
 
-    const prepareFiles = vi.spyOn(sdkRunner, 'prepareFiles').mockReturnValue({
+    const prepareFiles = vi.spyOn(sdkRunner, 'prepareSkillFiles').mockReturnValue({
       files: [{ filename: 'a.ts', hunks: [fakeHunk] }],
       skippedFiles: [],
     });
@@ -836,7 +836,7 @@ describe('runSkillTasks', () => {
       hunk: { newStart: 1, newCount: 10 },
     } as unknown as HunkWithContext;
 
-    const prepareFiles = vi.spyOn(sdkRunner, 'prepareFiles').mockReturnValue({
+    const prepareFiles = vi.spyOn(sdkRunner, 'prepareSkillFiles').mockReturnValue({
       files: [{ filename: 'a.ts', hunks: [fakeHunk] }],
       skippedFiles: [],
     });
@@ -946,7 +946,7 @@ describe('runSkillTask all-hunks-fail synthesis', () => {
       { type: 'analysis', filename: 'a.ts', lineRange: '1-10', code: 'auth_failed', message: 'bad key' },
     ];
 
-    vi.spyOn(sdkRunner, 'prepareFiles').mockReturnValue({
+    vi.spyOn(sdkRunner, 'prepareSkillFiles').mockReturnValue({
       files: [{ filename: 'a.ts', hunks: [fakeHunk] }],
       skippedFiles: [],
     });
@@ -1010,7 +1010,7 @@ describe('runSkillTask all-hunks-fail synthesis', () => {
       },
     ];
 
-    vi.spyOn(sdkRunner, 'prepareFiles').mockReturnValue({
+    vi.spyOn(sdkRunner, 'prepareSkillFiles').mockReturnValue({
       files: [{ filename: 'a.ts', hunks: fakeHunks }],
       skippedFiles: [],
     });
@@ -1057,7 +1057,7 @@ describe('runSkillTask all-hunks-fail synthesis', () => {
       },
     ];
 
-    vi.spyOn(sdkRunner, 'prepareFiles').mockReturnValue({
+    vi.spyOn(sdkRunner, 'prepareSkillFiles').mockReturnValue({
       files: [{ filename: 'a.ts', hunks: [fakeHunk] }],
       skippedFiles: [],
     });
@@ -1121,7 +1121,7 @@ describe('runSkillTask all-hunks-fail synthesis', () => {
       },
     ];
 
-    vi.spyOn(sdkRunner, 'prepareFiles').mockReturnValue({
+    vi.spyOn(sdkRunner, 'prepareSkillFiles').mockReturnValue({
       files: [{ filename: 'a.ts', hunks: [fakeHunk] }],
       skippedFiles: [],
     });
@@ -1179,7 +1179,7 @@ describe('runSkillTask all-hunks-fail synthesis', () => {
       },
     ];
 
-    vi.spyOn(sdkRunner, 'prepareFiles').mockReturnValue({
+    vi.spyOn(sdkRunner, 'prepareSkillFiles').mockReturnValue({
       files: [{ filename: 'a.ts', hunks: [fakeHunk] }],
       skippedFiles: [],
     });
@@ -1220,7 +1220,7 @@ describe('runSkillTask all-hunks-fail synthesis', () => {
     });
     circuitBreaker.recordFailure('provider_unavailable', 'temporary outage');
 
-    vi.spyOn(sdkRunner, 'prepareFiles').mockReturnValue({
+    vi.spyOn(sdkRunner, 'prepareSkillFiles').mockReturnValue({
       files: [{ filename: 'a.ts', hunks: [fakeHunk] }],
       skippedFiles: [],
     });
@@ -1285,7 +1285,7 @@ describe('runSkillTask all-hunks-fail synthesis', () => {
       },
     ];
 
-    vi.spyOn(sdkRunner, 'prepareFiles').mockReturnValue({
+    vi.spyOn(sdkRunner, 'prepareSkillFiles').mockReturnValue({
       files: [{ filename: 'a.ts', hunks: fakeHunks }],
       skippedFiles: [],
     });
@@ -1331,7 +1331,7 @@ describe('runSkillTask all-hunks-fail synthesis', () => {
     ];
     const controller = new AbortController();
 
-    vi.spyOn(sdkRunner, 'prepareFiles').mockReturnValue({
+    vi.spyOn(sdkRunner, 'prepareSkillFiles').mockReturnValue({
       files: [{ filename: 'a.ts', hunks: [fakeHunk] }],
       skippedFiles: [],
     });
@@ -1390,7 +1390,7 @@ describe('runSkillTask skipped path', () => {
   });
 
   it('emits onSkillComplete alongside onSkillSkipped so incremental JSONL captures skipped skills', async () => {
-    vi.spyOn(sdkRunner, 'prepareFiles').mockReturnValue({ files: [], skippedFiles: [] });
+    vi.spyOn(sdkRunner, 'prepareSkillFiles').mockReturnValue({ files: [], skippedFiles: [] });
 
     const options: SkillTaskOptions = {
       name: 'no-files-skill',
@@ -1446,7 +1446,7 @@ describe('runSkillTask model lanes', () => {
     } as unknown as HunkWithContext;
     const finding = makeFinding();
 
-    vi.spyOn(sdkRunner, 'prepareFiles').mockReturnValue({
+    vi.spyOn(sdkRunner, 'prepareSkillFiles').mockReturnValue({
       files: [{ filename: 'a.ts', hunks: [fakeHunk] }],
       skippedFiles: [],
     });
@@ -1500,7 +1500,7 @@ describe('runSkillTask model lanes', () => {
     } as unknown as HunkWithContext;
     const finding = makeFinding();
 
-    vi.spyOn(sdkRunner, 'prepareFiles').mockReturnValue({
+    vi.spyOn(sdkRunner, 'prepareSkillFiles').mockReturnValue({
       files: [{ filename: 'a.ts', hunks: [fakeHunk] }],
       skippedFiles: [],
     });
@@ -1542,7 +1542,7 @@ describe('runSkillTask model lanes', () => {
     } as unknown as HunkWithContext;
     const finding = makeFinding();
 
-    vi.spyOn(sdkRunner, 'prepareFiles').mockReturnValue({
+    vi.spyOn(sdkRunner, 'prepareSkillFiles').mockReturnValue({
       files: [{ filename: 'a.ts', hunks: [fakeHunk] }],
       skippedFiles: [],
     });

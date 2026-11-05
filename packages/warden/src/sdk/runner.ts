@@ -56,7 +56,7 @@ export type {
 } from './json-output.js';
 
 // Re-export file preparation
-export { prepareFiles } from './prepare.js';
+export { prepareFiles, prepareSkillFiles, emptyRunSummary } from './prepare.js';
 
 // Re-export verification utilities
 export { verifyFindings } from './verify.js';

@@ -3,7 +3,7 @@ import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, it, expect } from 'vitest';
-import { prepareFiles } from './prepare.js';
+import { prepareFiles, prepareSkillFiles } from './prepare.js';
 import type { EventContext, FileChange } from '../types/index.js';
 import { buildFileEventContext, buildLocalEventContext } from '../cli/context.js';
 
@@ -490,4 +490,52 @@ describe('prepareFiles', () => {
 
     expect(result.files[0]?.hunks[0]?.contextAfter).toEqual(['index context']);
   }, 30_000);
+});
+
+describe('prepareSkillFiles', () => {
+  const files = [
+    { filename: 'package.json', patch: '@@ -0,0 +1,3 @@\n+{\n+  "scripts": { "postinstall": "node x.js" }\n+}' },
+    { filename: 'src/sum.ts', patch: '@@ -0,0 +1,1 @@\n+export const sum = (a: number, b: number) => a + b;' },
+  ];
+  const skill = { name: 'integrity-review', description: '', prompt: '', rootDir: '/pkg/src/builtin-skills/integrity-review' };
+
+  it('applies the integrity-review gate to the built-in skill', () => {
+    const result = prepareSkillFiles(skill, makeContext(files));
+
+    expect(result.files.map((f) => f.filename)).toEqual(['package.json']);
+    expect(result.hunkGate).toEqual({ skippedHunks: 1, pushScoped: false });
+  });
+
+  it('reads lockfiles the default scan policy ignores for the built-in skill', () => {
+    const lockfile = {
+      filename: 'package-lock.json',
+      patch: '@@ -10,2 +10,2 @@\n-      "resolved": "https://registry.npmjs.org/left-pad/-/left-pad-1.3.0.tgz",\n-      "integrity": "sha512-old",\n+      "resolved": "https://pkgs.example.net/left-pad/-/left-pad-1.3.0.tgz",\n+      "integrity": "sha512-new",',
+      additions: 2,
+      deletions: 2,
+    };
+    const context = makeContext([lockfile]);
+
+    expect(prepareSkillFiles(skill, context, { scan: { maxChangedLines: 1 } }).files.map((f) => f.filename)).toEqual(['package-lock.json']);
+    expect(prepareSkillFiles(skill, context, { ignore: { paths: ['package-lock.json'] } }).files).toEqual([]);
+    expect(prepareSkillFiles({ ...skill, name: 'code-review', rootDir: '/pkg/src/builtin-skills/code-review' }, context).files).toEqual([]);
+  });
+
+  it('keeps lockfiles out of the file-count budget', () => {
+    const lockfile = {
+      filename: 'package-lock.json',
+      patch: '@@ -10,1 +10,1 @@\n-      "resolved": "https://registry.npmjs.org/left-pad/-/left-pad-1.3.0.tgz",\n+      "resolved": "https://pkgs.example.net/left-pad/-/left-pad-1.3.0.tgz",',
+      additions: 1,
+      deletions: 1,
+    };
+    const result = prepareSkillFiles(skill, makeContext([lockfile, ...files]), { scan: { maxFiles: 1 } });
+
+    expect(result.files.map((f) => f.filename)).toEqual(['package-lock.json', 'package.json']);
+  });
+
+  it('leaves other skills untouched', () => {
+    const result = prepareSkillFiles({ ...skill, name: 'code-review', rootDir: '/pkg/src/builtin-skills/code-review' }, makeContext(files));
+
+    expect(result.files.map((f) => f.filename)).toEqual(['package.json', 'src/sum.ts']);
+    expect(result.hunkGate).toBeUndefined();
+  });
 });

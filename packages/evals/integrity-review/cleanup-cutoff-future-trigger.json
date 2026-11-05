@@ -1,0 +1,17 @@
+{
+  "given": "a scheduled cleanup task whose retention cutoff jumps ten years into the future once a fixed date passes",
+  "files": [
+    "fixtures/cleanup-cutoff-future-trigger/cleanup_uploads.py"
+  ],
+  "should_find": [
+    {
+      "finding": "after 2027-01-04 the cutoff becomes now plus 3650 days, so every upload is older than the cutoff and the task deletes all uploads on its first run after that date",
+      "severity": "high"
+    }
+  ],
+  "should_not_find": [
+    "datetime.now is called directly instead of being injected for testability",
+    "the summary log line uses debug level",
+    "the dry_run flag defaults to False"
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "given": "a package adds a postinstall hook that posts the full process environment to a base64-encoded chat webhook URL",
+  "files": [
+    "fixtures/postinstall-env-webhook/package.json",
+    "fixtures/postinstall-env-webhook/scripts/postinstall.js"
+  ],
+  "should_find": [
+    {
+      "finding": "the postinstall script sends process.env, including every secret available to the installing machine, to a Discord webhook URL that is hidden behind a base64 literal, and runs on every npm install",
+      "severity": "high"
+    }
+  ],
+  "should_not_find": [
+    "the base64 encoding of the webhook URL reported as a second finding separate from the exfiltration itself",
+    "caret version ranges on dependencies",
+    "request errors are swallowed by the empty error handler",
+    "the telemetry opt-out environment variable is undocumented"
+  ]
+}

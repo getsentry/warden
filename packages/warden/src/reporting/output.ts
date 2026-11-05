@@ -5,6 +5,7 @@ import {
   AuxiliaryUsageMapSchema,
   FindingSchema,
   GitHubEventTypeSchema,
+  HunkGateSchema,
   IncrementalReviewSchema,
   LocationSchema,
   SeverityThresholdSchema,
@@ -125,6 +126,8 @@ const ReplaySkillReportSchema = z.object({
   auxiliaryUsageAttribution: AuxiliaryUsageAttributionMapSchema.optional(),
   model: z.string().optional(),
   runtime: z.string().optional(),
+  /** Replayed so report mode keeps push-scoped skills out of stale-comment resolution. */
+  hunkGate: HunkGateSchema.optional(),
   incremental: IncrementalReviewSchema.optional(),
 });
 
@@ -359,6 +362,7 @@ function serializeReplayReport(report: SkillReport): z.infer<typeof ReplaySkillR
     auxiliaryUsageAttribution: report.auxiliaryUsageAttribution,
     model: report.model,
     runtime: report.runtime,
+    hunkGate: report.hunkGate,
     incremental: report.incremental,
   };
 }

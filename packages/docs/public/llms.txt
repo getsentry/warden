@@ -4,7 +4,7 @@
 
 Warden watches over your code by running **skills** against your changes. Skills are prompts that define what to look for: security vulnerabilities, API design issues, performance problems, or anything else you want consistent coverage on.
 
-Skills follow the [agentskills.io](https://agentskills.io) specification. They're markdown files with a prompt that tells the AI what to look for. Warden includes `security-review` for baseline AppSec coverage and `code-review` for correctness bugs. Treat them as first passes, and add more skills when you need deeper coverage.
+Skills follow the [agentskills.io](https://agentskills.io) specification. They're markdown files with a prompt that tells the AI what to look for. Warden includes `security-review` for baseline AppSec coverage, `code-review` for correctness bugs, and `integrity-review` for destructive, concealed, or trigger-gated changes. Treat them as first passes, and add more skills when you need deeper coverage.
 
 - Docs: https://warden.sentry.dev
 - GitHub: https://github.com/getsentry/warden
@@ -80,6 +80,7 @@ Creates `warden.toml` (configuration) and `.github/workflows/warden.yml` (GitHub
 ```bash
 warden add security-review
 warden add code-review
+warden add integrity-review
 ```
 
 ### Run Locally
@@ -149,6 +150,7 @@ Add a skill trigger to your configuration.
 warden add                     # Interactive mode
 warden add security-review     # Add baseline security review
 warden add code-review         # Add correctness bug review
+warden add integrity-review    # Add change integrity review
 warden add --list              # List available skills
 warden add --remote your-org/warden-skills --skill api-review
 warden add --remote your-org/warden-skills@abc123 --skill api-review  # Pinned to commit

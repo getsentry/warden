@@ -23,6 +23,7 @@ npx @sentry/warden init
 # Add the built-in baseline reviews
 npx @sentry/warden add security-review
 npx @sentry/warden add code-review
+npx @sentry/warden add integrity-review
 
 # Run a pre-review on current branch changes
 # Uses Pi. Set WARDEN_OPENAI_API_KEY, or WARDEN_ANTHROPIC_API_KEY for Anthropic models.

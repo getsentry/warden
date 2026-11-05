@@ -27,6 +27,61 @@ warden add code-review
 warden --skill code-review
 ```
 
+## integrity-review
+
+`integrity-review` looks for changes that would harm the organization through
+their own behavior, or that hide what they do: destructive operations, date or
+condition triggers, install and build hooks, dependency and registry tampering,
+disabled tests or security tooling, audit logging removal, infrastructure
+privilege grants, obfuscated code, misleading comments, text aimed at automated
+reviewers, and changes outside the pull request's stated scope.
+
+```bash
+warden add integrity-review
+warden --skill integrity-review
+```
+
+It complements the other two: `security-review` finds weaknesses an outside
+party can exploit, `code-review` finds unintended bugs, and `integrity-review`
+finds changes where the code itself is the problem. Shared cases such as a
+concealed auth bypass are reported once by each skill from its own angle.
+
+Do not narrow `integrity-review` with `paths`. Lockfiles, vendored code,
+generated files, fixtures, CI config, and infrastructure are where harmful
+changes hide because reviewers skip them.
+
+Most hunks never reach a model. Warden first checks each hunk in code for
+install or prepare hooks, encoded or high-entropy strings, deletion-heavy
+hunks, workflow and `CODEOWNERS` changes, date or random checks next to
+deletes, destructive commands, removed or suppressed controls, privilege
+grants in infrastructure files, and text addressed to automated reviewers.
+Hunks that match none are skipped. Text addressed to reviewers in the PR title
+or body sends every hunk through.
+
+Run it when a PR opens, when it leaves draft, and on each push. On a push it
+reviews only the hunks that push touched; when GitHub cannot compare the push,
+such as after a force-push, it reviews the whole PR diff.
+
+```toml title="warden.toml"
+[[skills]]
+name = "integrity-review"
+
+[[skills.triggers]]
+type = "pull_request"
+actions = ["opened", "ready_for_review", "synchronize"]
+draft = false
+```
+
+Add `ready_for_review` to the workflow's `pull_request` types as well.
+
+## How They Fit Together
+
+| Skill | Finds | Does not find |
+| --- | --- | --- |
+| `security-review` | Exploitable weaknesses: auth bypass, injection, XSS, SSRF, secrets exposure | Changes whose own behavior is the harm |
+| `code-review` | Unintended correctness bugs and regressions | Security or integrity issues |
+| `integrity-review` | Destructive, concealed, or trigger-gated changes; reviewer-directed text | Exploitable weaknesses, ordinary bugs |
+
 Built-ins are first passes. Add project-specific skills for domain rules,
 framework conventions, API contracts, and product-specific invariants.
 

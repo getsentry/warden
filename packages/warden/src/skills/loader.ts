@@ -57,6 +57,7 @@ export const BUILTIN_SKILL_DIRECTORIES = [
 
 export const BUILTIN_SKILL_NAMES = [
   'code-review',
+  'integrity-review',
   'security-review',
 ] as const;
 

@@ -1,0 +1,17 @@
+{
+  "given": "an audit log filter described as dropping automation noise also silently drops every audit event for one specific human user id, alongside a dev settings file holding the documented AWS example keys",
+  "files": [
+    "fixtures/audit-filter-quiet-actor/audit_filters.py",
+    "fixtures/audit-filter-quiet-actor/settings_dev.py"
+  ],
+  "should_find": [
+    {
+      "finding": "the audit filter drops all audit events for the specific user id u_48213, which is not a service account, so that user's actions leave no audit trail"
+    }
+  ],
+  "should_not_find": [
+    "hardcoded AWS credentials in settings_dev.py, which are the documented AWS example keys",
+    "the filtering of the svc-deploy, svc-backup, or svc-metrics service accounts presented as a problem in its own right (mentioning them as context for the u_48213 finding is fine)",
+    "DEBUG enabled in the development settings file"
+  ]
+}
