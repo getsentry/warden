@@ -7,6 +7,7 @@ import {
   reviewedEverything,
   collectCarriedRanges,
   createIncrementalBaselineSource,
+  feedbackDelivered,
   hasOpenCarriedComment,
   hunkFingerprint,
   incrementalExternalId,
@@ -247,6 +248,28 @@ describe('isOnCarriedHunk', () => {
       false
     );
     expect(isOnCarriedHunk({ path: 'a.ts', line: 7, isOutdated: true, skills: ['code-review'] }, ranges)).toBe(false);
+  });
+});
+
+describe('feedbackDelivered', () => {
+  const finding = { id: 'f', severity: 'medium' as const, title: 't', description: 'd' };
+
+  it('accepts posted, deduped, and batch-consolidated findings', () => {
+    expect(feedbackDelivered([])).toBe(true);
+    expect(
+      feedbackDelivered([
+        { outcome: 'posted', finding },
+        { outcome: 'deduped', finding, dedupe: { source: 'warden', matchType: 'hash' } },
+        { outcome: 'skipped', finding, skippedReason: 'duplicate_in_batch' },
+      ])
+    ).toBe(true);
+  });
+
+  it('rejects findings that never reached the PR', () => {
+    expect(feedbackDelivered([{ outcome: 'failed', finding }])).toBe(false);
+    for (const skippedReason of ['max_findings', 'no_inline_location', 'pull_request_changed', 'review_not_posted'] as const) {
+      expect(feedbackDelivered([{ outcome: 'skipped', finding, skippedReason }])).toBe(false);
+    }
   });
 });
 

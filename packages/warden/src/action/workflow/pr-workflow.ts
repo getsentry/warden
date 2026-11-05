@@ -53,6 +53,7 @@ import {
   baselineExternalId,
   collectCarriedRanges,
   createIncrementalBaselineSource,
+  feedbackDelivered,
   hasOpenCarriedComment,
   isOnCarriedHunk,
   type IncrementalBaselineSource,
@@ -73,6 +74,8 @@ import {
   createCompletedCoreCheck,
   createCompletedSkillCheck,
   createSkillCheck,
+  isBaselineConclusion,
+  markSkillCheckBaseline,
   createFailedSkillCheck,
   failSkillCheck,
   updateCoreCheck,
@@ -721,6 +724,34 @@ async function executeAllTriggers(
 }
 
 /**
+ * Mark a trigger's skill check as an incremental baseline once its findings
+ * reached the PR. A write failure leaves no baseline, so the next run is full.
+ */
+async function recordIncrementalBaseline(
+  octokit: Octokit,
+  context: EventContext,
+  result: TriggerResult,
+  observations: readonly FindingObservation[]
+): Promise<void> {
+  const externalId = result.report ? baselineExternalId(result.report) : undefined;
+  if (!externalId || !result.report || result.checkRunId === undefined) return;
+  if (!isBaselineConclusion(result.report, result)) return;
+  if (!feedbackDelivered(observations)) {
+    logAction(`${result.triggerName}: not recording an incremental baseline; some findings did not reach the PR`);
+    return;
+  }
+  try {
+    await markSkillCheckBaseline(octokit, result.checkRunId, externalId, {
+      owner: context.repository.owner,
+      repo: context.repository.name,
+    });
+  } catch (error) {
+    Sentry.captureException(error, { tags: { operation: 'mark_incremental_baseline' } });
+    warnAction(`Failed to record incremental baseline for ${result.triggerName}: ${error}`);
+  }
+}
+
+/**
  * Fetch existing comments, post reviews with cross-trigger dedup, accumulate failure state.
  */
 async function postReviewsAndTrackFailures(
@@ -773,6 +804,7 @@ async function postReviewsAndTrackFailures(
   for (const result of results) {
     if (result.report) {
       reports.push(result.report);
+      const observationStart = findingObservations.length;
 
       // Post review. The gate memoizes briefly, so this stays cheap between
       // writes but re-verifies after slow phases (LLM dedup, consolidation).
@@ -818,6 +850,8 @@ async function postReviewsAndTrackFailures(
           skippedReason,
         })));
       }
+      await recordIncrementalBaseline(octokit, context, result, findingObservations.slice(observationStart));
+
       // A stale head skips silently (the newer run owns feedback), but an
       // unverifiable head must not silently swallow a blocking review.
       // Evaluated after the post attempt so a head that becomes unverifiable
@@ -1750,7 +1784,6 @@ async function createCompletedSkillChecksForReport(
         reportOn: result.reportOn,
         minConfidence: result.minConfidence,
         failCheck: result.failCheck,
-        externalId: baselineExternalId(result.report),
       });
       updatedResults.push(
         withRenderedReviewResult({ ...result, checkRunUrl: check.url, checkRunId: check.checkRunId })

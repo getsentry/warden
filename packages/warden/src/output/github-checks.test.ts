@@ -9,6 +9,8 @@ import {
   failSkillCheck,
   createFailedSkillCheck,
   createCompletedSkillCheck,
+  isBaselineConclusion,
+  markSkillCheckBaseline,
 } from './github-checks.js';
 import type { Finding, SkillReport } from '../types/index.js';
 
@@ -56,7 +58,7 @@ describe('check details URL', () => {
 });
 
 describe('incremental baseline marker', () => {
-  const options = { owner: 'getsentry', repo: 'warden', headSha: 'abc123', externalId: 'warden-incremental:v1:abc' };
+  const options = { owner: 'getsentry', repo: 'warden', headSha: 'abc123' };
   const highFinding: Finding = {
     id: 'f1',
     severity: 'high',
@@ -66,26 +68,29 @@ describe('incremental baseline marker', () => {
     location: { path: 'a.ts', startLine: 1 },
   };
 
-  function mockChecks() {
+  it('never writes external_id when completing a skill check', async () => {
     const create = vi.fn().mockResolvedValue({ data: { id: 1, html_url: '' } });
-    return { octokit: { checks: { create, update: vi.fn().mockResolvedValue({ data: {} }) } } as never, create };
-  }
-
-  it('records external_id on a passing skill check', async () => {
-    const { octokit, create } = mockChecks();
+    const octokit = { checks: { create, update: vi.fn().mockResolvedValue({ data: {} }) } } as never;
     await createCompletedSkillCheck(octokit, { skill: 's', summary: '', findings: [] }, options);
-    expect(create).toHaveBeenCalledWith(expect.objectContaining({ external_id: 'warden-incremental:v1:abc' }));
+    expect(create.mock.calls[0]?.[0].external_id).toBeUndefined();
   });
 
-  it('never records external_id on a failing skill check', async () => {
-    const { octokit, create } = mockChecks();
-    await createCompletedSkillCheck(
-      octokit,
-      { skill: 's', summary: '', findings: [highFinding] },
-      { ...options, failOn: 'high', failCheck: true }
-    );
-    expect(create.mock.calls[0]?.[0]).toMatchObject({ conclusion: 'failure' });
-    expect(create.mock.calls[0]?.[0].external_id).toBeUndefined();
+  it('allows passing and neutral checks as baselines, never failing ones', () => {
+    const report = { skill: 's', summary: '', findings: [highFinding] };
+    expect(isBaselineConclusion({ ...report, findings: [] }, {})).toBe(true);
+    expect(isBaselineConclusion(report, { failOn: 'high' })).toBe(true);
+    expect(isBaselineConclusion(report, { failOn: 'high', failCheck: true })).toBe(false);
+  });
+
+  it('writes the baseline id onto an existing check run', async () => {
+    const update = vi.fn().mockResolvedValue({ data: {} });
+    await markSkillCheckBaseline({ checks: { update } } as never, 7, 'warden-incremental:v1:abc', options);
+    expect(update).toHaveBeenCalledWith({
+      owner: 'getsentry',
+      repo: 'warden',
+      check_run_id: 7,
+      external_id: 'warden-incremental:v1:abc',
+    });
   });
 });
 

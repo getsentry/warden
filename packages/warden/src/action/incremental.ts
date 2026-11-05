@@ -20,6 +20,7 @@ import type { ResolvedTrigger } from '../config/loader.js';
 import type { SkillDefinition } from '../config/schema.js';
 import { parsePatch } from '../diff/index.js';
 import type { ExistingComment } from '../output/dedup.js';
+import type { FindingObservation, SkippedReason } from '../reporting/outcomes.js';
 import type { CarriedHunkRange, FileChange, SkillReport } from '../types/index.js';
 import type { SkipHunks } from '../sdk/types.js';
 import { getVersion } from '../utils/version.js';
@@ -195,6 +196,25 @@ export function reviewedEverything(report: SkillReport): boolean {
  */
 export function baselineExternalId(report: SkillReport): string | undefined {
   return report.incremental?.complete ? report.incremental.externalId : undefined;
+}
+
+/** Skip reasons that leave a finding on the check only, never on the PR. */
+const UNDELIVERED_SKIPS: ReadonlySet<SkippedReason> = new Set([
+  'max_findings',
+  'no_inline_location',
+  'pull_request_changed',
+  'review_not_posted',
+]);
+
+/**
+ * Whether every reportable finding from one trigger reached the PR, either as
+ * a new comment or as a match on an existing one. Skipped hunks are never
+ * re-reported, so a run whose findings did not reach the PR is not a baseline.
+ */
+export function feedbackDelivered(observations: readonly FindingObservation[]): boolean {
+  return observations.every(
+    (o) => o.outcome !== 'failed' && !(o.outcome === 'skipped' && UNDELIVERED_SKIPS.has(o.skippedReason))
+  );
 }
 
 /** A carried hunk range tagged with the skill that skipped it. */

@@ -1402,12 +1402,42 @@ describe('runPRWorkflow', () => {
         expect.anything()
       );
       expect(evaluateFixAttempts).not.toHaveBeenCalled();
-      expect(mockOctokit.checks.create).toHaveBeenCalledWith(
-        expect.objectContaining({
-          name: 'warden: test-skill',
-          external_id: 'warden-incremental:v1:abc',
-        })
+      const skillCheck = vi.mocked(mockOctokit.checks.create).mock.calls
+        .map(([args]) => args)
+        .find((args) => args?.name === 'warden: test-skill');
+      expect(skillCheck?.external_id).toBeUndefined();
+      expect(mockOctokit.checks.update).toHaveBeenCalledWith(
+        expect.objectContaining({ external_id: 'warden-incremental:v1:abc' })
       );
+    });
+
+    it('report mode records no baseline when review posting fails', async () => {
+      const report = createSkillReport({
+        findings: [createFinding()],
+        incremental: { externalId: 'warden-incremental:v1:abc', carriedRanges: [], complete: true },
+      });
+      const findingsFile = writeFindingsArtifact([report], [
+        { triggerName: 'test-skill', skillName: 'test-skill', report },
+      ]);
+      vi.mocked(mockOctokit.pulls.createReview).mockRejectedValueOnce(new Error('Bad review credentials'));
+
+      try {
+        await expect(
+          runPRWorkflow(
+            mockOctokit,
+            createDefaultInputs({ mode: 'report', findingsFile }),
+            'pull_request',
+            EVENT_PAYLOAD_PATH,
+            FIXTURES_DIR
+          )
+        ).rejects.toThrow('Bad review credentials');
+      } finally {
+        rmSync(dirname(findingsFile), { recursive: true, force: true });
+      }
+
+      for (const write of [mockOctokit.checks.create, mockOctokit.checks.update]) {
+        expect(write).not.toHaveBeenCalledWith(expect.objectContaining({ external_id: expect.anything() }));
+      }
     });
 
     it('report mode fails no-trigger cleanup write errors', async () => {
@@ -2586,6 +2616,36 @@ describe('runPRWorkflow', () => {
       await runPRWorkflow(mockOctokit, createDefaultInputs({ failOn: 'high' }), 'pull_request', EVENT_PAYLOAD_PATH, FIXTURES_DIR);
 
       expect(mockOctokit.pulls.dismissReview).not.toHaveBeenCalled();
+    });
+
+    it('records a baseline only after the review with its findings is posted', async () => {
+      const report = createSkillReport({
+        findings: [createFinding()],
+        incremental: { externalId: 'warden-incremental:v1:abc', carriedRanges: [], complete: true },
+      });
+      mockRunSkillTask.mockResolvedValue({ name: 'test-trigger', report });
+
+      await runPRWorkflow(mockOctokit, createDefaultInputs(), 'pull_request', EVENT_PAYLOAD_PATH, FIXTURES_DIR);
+
+      expect(mockOctokit.pulls.createReview).toHaveBeenCalled();
+      expect(mockOctokit.checks.update).toHaveBeenCalledWith(
+        expect.objectContaining({ external_id: 'warden-incremental:v1:abc' })
+      );
+    });
+
+    it('records no baseline when the review with its findings fails to post', async () => {
+      const report = createSkillReport({
+        findings: [createFinding()],
+        incremental: { externalId: 'warden-incremental:v1:abc', carriedRanges: [], complete: true },
+      });
+      mockRunSkillTask.mockResolvedValue({ name: 'test-trigger', report });
+      vi.mocked(mockOctokit.pulls.createReview).mockRejectedValue(new Error('Bad review credentials'));
+
+      await runPRWorkflow(mockOctokit, createDefaultInputs(), 'pull_request', EVENT_PAYLOAD_PATH, FIXTURES_DIR);
+
+      expect(mockOctokit.checks.update).not.toHaveBeenCalledWith(
+        expect.objectContaining({ external_id: expect.anything() })
+      );
     });
 
     it('does not dismiss when comments could not be fetched and hunks were carried', async () => {

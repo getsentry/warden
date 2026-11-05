@@ -23,6 +23,8 @@ export {
   updateSkillCheck,
   failSkillCheck,
   createFailedSkillCheck,
+  isBaselineConclusion,
+  markSkillCheckBaseline,
   aggregateSeverityCounts,
   determineConclusion,
 } from '../../output/github-checks.js';

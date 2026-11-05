@@ -172,7 +172,7 @@ describe('executeTrigger', () => {
       vi.mocked(updateSkillCheck).mockResolvedValue(undefined);
     });
 
-    it('skips hunks the baseline reviewed and marks the check as the next baseline', async () => {
+    it('skips hunks the baseline reviewed and leaves baseline marking until after posting', async () => {
       vi.mocked(runSkillTask).mockImplementation(async (taskOptions) => {
         await taskOptions.resolveSkill();
         return { name: 'test-trigger', report: createReport() };
@@ -199,12 +199,8 @@ describe('executeTrigger', () => {
         carriedRanges: [{ path: 'src/a.ts', startLine: 1, endLine: 2 }],
         complete: true,
       });
-      expect(updateSkillCheck).toHaveBeenCalledWith(
-        mockOctokit,
-        123,
-        expect.anything(),
-        expect.objectContaining({ externalId: baselineFor.mock.calls[0]?.[0] })
-      );
+      expect(updateSkillCheck).toHaveBeenCalled();
+      expect(vi.mocked(updateSkillCheck).mock.calls[0]?.[3]).not.toHaveProperty('externalId');
     });
 
     it('reviews the full PR and still records a baseline when none exists', async () => {
@@ -237,12 +233,6 @@ describe('executeTrigger', () => {
       });
 
       expect(result.report?.incremental?.complete).toBe(false);
-      expect(updateSkillCheck).toHaveBeenCalledWith(
-        mockOctokit,
-        123,
-        expect.anything(),
-        expect.objectContaining({ externalId: undefined })
-      );
     });
 
     it('falls back to the normal path when the skill cannot be resolved early', async () => {

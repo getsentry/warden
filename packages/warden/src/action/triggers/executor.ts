@@ -30,7 +30,6 @@ import { captureActionTriggerError } from '../error-reporting.js';
 import type { SkillDefinition } from '../../config/schema.js';
 import type { SkipHunks } from '../../sdk/types.js';
 import {
-  baselineExternalId,
   incrementalExternalId,
   planIncrementalReview,
   reviewedEverything,
@@ -83,8 +82,6 @@ export interface TriggerCheckCompleteOptions {
   reportOn?: SeverityThreshold;
   minConfidence?: ConfidenceThreshold;
   failCheck?: boolean;
-  /** Marks the check as an incremental review baseline when set. */
-  externalId?: string;
 }
 
 /**
@@ -304,7 +301,6 @@ export async function executeTrigger(
               reportOn,
               minConfidence,
               failCheck,
-              externalId: baselineExternalId(report),
             });
           } catch (error) {
             console.error(`::warning::Failed to update skill check for ${trigger.skill}: ${error}`);
