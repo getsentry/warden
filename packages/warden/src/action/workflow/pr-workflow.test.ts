@@ -2648,6 +2648,29 @@ describe('runPRWorkflow', () => {
       );
     });
 
+    it('records no baseline when the run requested changes', async () => {
+      const report = createSkillReport({
+        findings: [createFinding({ severity: 'high' })],
+        incremental: { externalId: 'warden-incremental:v1:abc', carriedRanges: [], complete: true },
+      });
+      mockRunSkillTask.mockResolvedValue({ name: 'test-trigger', report });
+
+      await runPRWorkflow(
+        mockOctokit,
+        createDefaultInputs({ failOn: 'high', requestChanges: true }),
+        'pull_request',
+        EVENT_PAYLOAD_PATH,
+        FIXTURES_DIR
+      );
+
+      expect(mockOctokit.pulls.createReview).toHaveBeenCalledWith(
+        expect.objectContaining({ event: 'REQUEST_CHANGES' })
+      );
+      expect(mockOctokit.checks.update).not.toHaveBeenCalledWith(
+        expect.objectContaining({ external_id: expect.anything() })
+      );
+    });
+
     it('does not dismiss when comments could not be fetched and hunks were carried', async () => {
       vi.mocked(mockOctokit.pulls.listReviews).mockResolvedValue({
         data: [{ id: 42, state: 'CHANGES_REQUESTED', user: { login: 'warden[bot]' } }],

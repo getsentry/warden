@@ -724,8 +724,21 @@ async function executeAllTriggers(
 }
 
 /**
+ * Whether a trigger's findings meet its `failOn` with `requestChanges` on,
+ * so the run asks for changes on the PR.
+ */
+function requestsChanges(result: TriggerResult): boolean {
+  if (!result.failOn || result.failOn === 'off' || !(result.requestChanges ?? false) || !result.report) return false;
+  const filtered = { ...result.report, findings: filterFindings(result.report.findings, undefined, result.minConfidence) };
+  return shouldFail(filtered, result.failOn);
+}
+
+/**
  * Mark a trigger's skill check as an incremental baseline once its findings
- * reached the PR. A write failure leaves no baseline, so the next run is full.
+ * reached the PR. A run that requested changes is never a baseline: skipping
+ * its hunks later would let the blocking review be dismissed without the
+ * finding being checked again. A write failure leaves no baseline, so the
+ * next run is full.
  */
 async function recordIncrementalBaseline(
   octokit: Octokit,
@@ -736,6 +749,10 @@ async function recordIncrementalBaseline(
   const externalId = result.report ? baselineExternalId(result.report) : undefined;
   if (!externalId || !result.report || result.checkRunId === undefined) return;
   if (!isBaselineConclusion(result.report, result)) return;
+  if (requestsChanges(result)) {
+    logAction(`${result.triggerName}: not recording an incremental baseline; findings requested changes`);
+    return;
+  }
   if (!feedbackDelivered(observations)) {
     logAction(`${result.triggerName}: not recording an incremental baseline; some findings did not reach the PR`);
     return;
@@ -1212,11 +1229,7 @@ async function dismissPreviousReviewIfResolved(
   // Dismiss previous CHANGES_REQUESTED if all blocking issues are resolved.
   // Requires: all triggers succeeded, current run would not request changes,
   // and at least one trigger has an active failOn (prevents accidental dismiss when config changes).
-  const wouldRequestChanges = results.some((r) => {
-    if (!r.failOn || r.failOn === 'off' || !(r.requestChanges ?? false) || !r.report) return false;
-    const filtered = { ...r.report, findings: filterFindings(r.report.findings, undefined, r.minConfidence) };
-    return shouldFail(filtered, r.failOn);
-  });
+  const wouldRequestChanges = results.some(requestsChanges);
   const hasActiveFailOn = results.some((r) => r.failOn && r.failOn !== 'off');
   if (
     context.pullRequest &&
