@@ -46,7 +46,9 @@ const LONG_TOKEN = /[A-Za-z0-9+/]{40,}={0,2}/g;
 const HASH_PREFIX = /sha(?:1|256|384|512)(?:-|[:=]\s*)$/;
 const DATE_OR_CHANCE = /datetime\(|timedelta\(|Date\.now\(|new Date\(|time\.time\(|time\.Now\(|\.now\(|utcnow\(|getTime\(\)|\b1[6-9]\d{8}\b|\b20\d{2}-\d{2}-\d{2}\b|\b20\d{2}\s*,\s*\d{1,2}\s*,\s*\d{1,2}\b|random\(|Math\.random|gethostname|os\.hostname/;
 const DESTRUCTIVE_WORD = /\b(?:delete|remove|drop|truncate|purge|wipe|destroy|unlink|rmtree|rmdir|overwrite|disable)\w*/i;
-const DESTRUCTIVE_OP = /\bDROP\s+(?:TABLE|DATABASE|SCHEMA)\b|\bTRUNCATE\s+(?:TABLE\s+)?\w|\bDELETE\s+FROM\b|\brm\s+-[a-zA-Z]*[rR][a-zA-Z]*\b|shutil\.rmtree|fs(?:\.promises)?\.(?:rm|rmdir)(?:Sync)?\(|push\s+(?:-f\b|--force)|reset\s+--hard|\.objects\.all\(\)\.delete\(/;
+// SQL keywords are case-insensitive, so `delete from users` must match as well as `DELETE FROM users`.
+const DESTRUCTIVE_SQL = /\bDROP\s+(?:TABLE|DATABASE|SCHEMA)\b|\bTRUNCATE\s+(?:TABLE\s+)?\w|\bDELETE\s+FROM\b/i;
+const DESTRUCTIVE_OP = /\brm\s+-[a-zA-Z]*[rR][a-zA-Z]*\b|shutil\.rmtree|fs(?:\.promises)?\.(?:rm|rmdir)(?:Sync)?\(|push\s+(?:-f\b|--force)|reset\s+--hard|\.objects\.all\(\)\.delete\(/;
 const REVIEWER_DIRECTED = /\b(?:ai|llm|automated|bot|copilot|claude|gpt|chatgpt|gemini|warden|coderabbit)\b[^\n]{0,40}\b(?:review(?:er|ers)?|scanner|auditor)s?\b|ignore (?:all )?(?:previous|prior|above) instructions|\bdo not (?:flag|report|review)\b|\bdon'?t (?:flag|report|review)\b|\bskip (?:this|the) (?:file|block|check|review)\b|\bpre-?approved\b|\balready (?:been )?(?:approved|reviewed)\b|\bno need to (?:review|check)\b/i;
 const CONTROL_TERM = /\baudit|\bauthori[sz]|\bauthenticat|\bpermission|\bhas_access|write_access|\bis_admin|\bis_superuser|signature|\bcsrf|rate_?limit|ratelimit|\bvalidat|\bassert|captureException|capture_exception|\bdef test_|\b(?:it|test|describe)\(/i;
 const EARLY_ALLOW = /\breturn\s+(?:True|true)\b|\bnext\(\)|\ballow(?:ed)?\s*=\s*(?:True|true)\b/;
@@ -162,7 +164,7 @@ const SIGNALS: GateSignal[] = [
   },
   {
     id: 'destructive-op',
-    matches: (h) => anyLine(h.added, DESTRUCTIVE_OP),
+    matches: (h) => anyLine(h.added, DESTRUCTIVE_OP) || anyLine(h.added, DESTRUCTIVE_SQL),
   },
   {
     id: 'reviewer-directed',

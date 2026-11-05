@@ -172,6 +172,12 @@ describe('matchIntegritySignals', () => {
     expect(matchIntegritySignals(hunk('iam.json', ['+  "Action": "*",']))).toContain('privilege-grant');
   });
 
+  it('flags destructive SQL regardless of keyword case', () => {
+    for (const sql of ['DELETE FROM users', 'delete from users', 'Drop Table audit_log', 'truncate table events']) {
+      expect(matchIntegritySignals(hunk('migrate.sql', [`+${sql};`]))).toContain('destructive-op');
+    }
+  });
+
   it('uses surrounding context for destructive operations next to an added date check', () => {
     const input = hunk('cleanup.py', ['+    if now > POLICY_SWITCH and datetime(2027, 1, 4):']);
     expect(matchIntegritySignals(input)).not.toContain('conditional-destructive');
