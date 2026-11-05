@@ -333,6 +333,7 @@ export async function runSkillTask(
           ignore: runnerOptions.ignore,
           scan: runnerOptions.scan,
           chunking: runnerOptions.chunking,
+          skipHunks: runnerOptions.skipHunks,
         });
 
         if (preparedFiles.length === 0) {

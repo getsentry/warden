@@ -102,6 +102,8 @@ export const SkillTriggerSchema = z.object({
   requestChanges: z.boolean().optional(),
   /** Fail the check run when findings exceed failOn */
   failCheck: z.boolean().optional(),
+  /** Skip hunks an earlier clean run on this PR already reviewed. Overrides skill/defaults. */
+  incremental: z.boolean().optional(),
   model: z.string().optional(),
   maxTurns: z.number().int().positive().optional(),
   /** Candidate finding verification. Overrides skill/defaults verification. */
@@ -147,6 +149,8 @@ export const SkillConfigSchema = z.object({
   requestChanges: z.boolean().optional(),
   /** Fail the check run when findings exceed failOn */
   failCheck: z.boolean().optional(),
+  /** Skip hunks an earlier clean run on this PR already reviewed. Overrides defaults.incremental. */
+  incremental: z.boolean().optional(),
   /** Model to use for this skill (e.g., 'openai/gpt-5.5'). Uses SDK default if not specified. */
   model: z.string().optional(),
   /** Maximum agentic turns (API round-trips) per hunk analysis. Overrides defaults.maxTurns. */
@@ -236,6 +240,16 @@ export const DefaultsSchema = z.object({
   requestChanges: z.boolean().optional(),
   /** Fail the check run when findings exceed failOn. Default: false */
   failCheck: z.boolean().optional(),
+  /**
+   * Skip hunks an earlier clean run on this PR already reviewed with the same
+   * skill config. Pull request runs in the GitHub Action only. Default: false
+   */
+  incremental: z.boolean().optional(),
+  /**
+   * Slug of the GitHub App that writes Warden's check runs. Only its checks
+   * count as incremental baselines. Required for incremental review.
+   */
+  incrementalApp: z.string().min(1).optional(),
   /** Create/update GitHub Check runs (core + per-skill). Default: true */
   postChecks: z.boolean().optional(),
   /** Default model for all skills (e.g., 'openai/gpt-5.5') */

@@ -182,6 +182,30 @@ describe('resolveSkillConfigs', () => {
     expect(resolved?.failCheck).toBe(true);
   });
 
+  it('incremental follows 3-level merge (trigger > skill > defaults)', () => {
+    const config: WardenConfig = {
+      version: 1,
+      defaults: { incremental: true, incrementalApp: 'sentry-warden' },
+      skills: [
+        { name: 'from-defaults' },
+        { name: 'skill-off', incremental: false },
+        {
+          name: 'trigger-on',
+          incremental: false,
+          triggers: [{ type: 'pull_request', actions: ['opened'], incremental: true }],
+        },
+      ],
+    };
+
+    const resolved = resolveSkillConfigs(config);
+
+    expect(resolved.map((t) => [t.name, t.incremental, t.incrementalApp])).toEqual([
+      ['from-defaults', true, 'sentry-warden'],
+      ['skill-off', false, 'sentry-warden'],
+      ['trigger-on', true, 'sentry-warden'],
+    ]);
+  });
+
   it('requestChanges and failCheck use defaults when not set at skill or trigger level', () => {
     const config: WardenConfig = {
       ...baseConfig,
@@ -951,6 +975,38 @@ describe('resolveLayeredSkillConfigs', () => {
       auxiliaryMaxRetries: 1,
       maxContextFiles: 5,
     });
+  });
+
+  it('keeps incremental mode per layer but lets repo skills inherit the base incrementalApp', () => {
+    const baseConfig: WardenConfig = {
+      version: 1,
+      defaults: { incremental: true, incrementalApp: 'sentry-warden' },
+      skills: [
+        { name: 'org-skill' },
+        { name: 'org-full-review', incremental: false },
+      ],
+    };
+    const repoConfig: WardenConfig = {
+      version: 1,
+      defaults: { incremental: false },
+      skills: [
+        { name: 'org-skill', incremental: false },
+        { name: 'repo-skill', incremental: true },
+      ],
+    };
+
+    const resolved = resolveLayeredSkillConfigs({
+      config: mergeWardenConfigs(baseConfig, repoConfig),
+      baseConfig,
+      repoConfig,
+    });
+
+    // The repo cannot change the mode of an org skill; its duplicate is dropped.
+    expect(resolved.map((t) => [t.name, t.incremental, t.incrementalApp])).toEqual([
+      ['org-skill', true, 'sentry-warden'],
+      ['org-full-review', false, 'sentry-warden'],
+      ['repo-skill', true, 'sentry-warden'],
+    ]);
   });
 
   it('lets repo-defined skills inherit the base runtime when repo defaults omit it', () => {
@@ -1731,6 +1787,34 @@ describe('requestChanges and failCheck config', () => {
     };
 
     const result = WardenConfigSchema.safeParse(config);
+    expect(result.success).toBe(false);
+  });
+});
+
+describe('incremental config', () => {
+  it('accepts incremental at every level and incrementalApp in defaults', () => {
+    const result = WardenConfigSchema.safeParse({
+      version: 1,
+      defaults: { incremental: true, incrementalApp: 'sentry-warden' },
+      skills: [{
+        name: 'test',
+        incremental: false,
+        triggers: [{ type: 'pull_request', actions: ['opened'], incremental: true }],
+      }],
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.data?.defaults?.incrementalApp).toBe('sentry-warden');
+    expect(result.data?.skills[0]?.triggers?.[0]?.incremental).toBe(true);
+  });
+
+  it('rejects an empty incrementalApp', () => {
+    const result = WardenConfigSchema.safeParse({
+      version: 1,
+      defaults: { incrementalApp: '' },
+      skills: [],
+    });
+
     expect(result.success).toBe(false);
   });
 });

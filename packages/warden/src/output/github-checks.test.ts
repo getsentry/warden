@@ -8,6 +8,9 @@ import {
   updateCoreCheck,
   failSkillCheck,
   createFailedSkillCheck,
+  createCompletedSkillCheck,
+  isBaselineConclusion,
+  markSkillCheckBaseline,
 } from './github-checks.js';
 import type { Finding, SkillReport } from '../types/index.js';
 
@@ -51,6 +54,43 @@ describe('check details URL', () => {
       'Failed to set details URL for check 123: Error: Bad credentials'
     );
     warn.mockRestore();
+  });
+});
+
+describe('incremental baseline marker', () => {
+  const options = { owner: 'getsentry', repo: 'warden', headSha: 'abc123' };
+  const highFinding: Finding = {
+    id: 'f1',
+    severity: 'high',
+    confidence: 'high',
+    title: 'Bad thing',
+    description: 'Bad',
+    location: { path: 'a.ts', startLine: 1 },
+  };
+
+  it('never writes external_id when completing a skill check', async () => {
+    const create = vi.fn().mockResolvedValue({ data: { id: 1, html_url: '' } });
+    const octokit = { checks: { create, update: vi.fn().mockResolvedValue({ data: {} }) } } as never;
+    await createCompletedSkillCheck(octokit, { skill: 's', summary: '', findings: [] }, options);
+    expect(create.mock.calls[0]?.[0].external_id).toBeUndefined();
+  });
+
+  it('allows passing and neutral checks as baselines, never failing ones', () => {
+    const report = { skill: 's', summary: '', findings: [highFinding] };
+    expect(isBaselineConclusion({ ...report, findings: [] }, {})).toBe(true);
+    expect(isBaselineConclusion(report, { failOn: 'high' })).toBe(true);
+    expect(isBaselineConclusion(report, { failOn: 'high', failCheck: true })).toBe(false);
+  });
+
+  it('writes the baseline id onto an existing check run', async () => {
+    const update = vi.fn().mockResolvedValue({ data: {} });
+    await markSkillCheckBaseline({ checks: { update } } as never, 7, 'warden-incremental:v1:abc', options);
+    expect(update).toHaveBeenCalledWith({
+      owner: 'getsentry',
+      repo: 'warden',
+      check_run_id: 7,
+      external_id: 'warden-incremental:v1:abc',
+    });
   });
 });
 

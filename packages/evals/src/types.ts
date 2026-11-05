@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { RuntimeNameSchema, SeveritySchema, type Finding, type RuntimeName } from '@sentry/warden';
 
-/** Default model for eval skill execution and judging. */
+/** Default model for eval skill execution. */
 export const DEFAULT_EVAL_MODEL = 'claude-sonnet-4-6';
 
 /** Default runtime for eval skill execution. */

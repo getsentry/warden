@@ -191,8 +191,12 @@ positive.
 ## Running Evals
 
 ```bash
-# Run all evals (requires ANTHROPIC_API_KEY or WARDEN_ANTHROPIC_API_KEY)
-pnpm evals
+# Run all evals with the checked-in Anthropic models
+WARDEN_ANTHROPIC_API_KEY=sk-ant-... pnpm evals
+
+# Run all evals through another provider
+WARDEN_EVAL_MODEL=openrouter/anthropic/claude-sonnet-4.6 \
+  WARDEN_OPENROUTER_API_KEY=sk-or-... pnpm evals
 
 # Run evals for a specific skill
 pnpm evals -t "code-review"
@@ -213,15 +217,32 @@ pnpm evals -t "verification"
 pnpm evals:scaffold https://github.com/getsentry/sentry/pull/12345
 ```
 
-Evals make real API calls and are skipped when `ANTHROPIC_API_KEY` is not set.
-`WARDEN_ANTHROPIC_API_KEY` is bridged into `ANTHROPIC_API_KEY` during eval
-setup, so the usual Warden-prefixed environment works too.
-Suites choose the runtime and model. The checked-in full-pipeline suites
-currently run Pi with `anthropic/claude-sonnet-4-6`.
+Evals make real API calls. Suites choose the runtime and model; the checked-in
+suites run Pi with `anthropic/claude-sonnet-4-6`, and the judge uses the same
+model. With only that default, evals are skipped unless `ANTHROPIC_API_KEY` or
+`WARDEN_ANTHROPIC_API_KEY` is set.
+
+To run against any other provider, set:
+
+- `WARDEN_EVAL_MODEL`: a Pi `provider/model` selector that replaces every
+  scenario's model, including Warden's auxiliary calls (extraction repair,
+  verification, merge), and forces the Pi runtime. Evals run whenever it is
+  set.
+- `WARDEN_EVAL_JUDGE_MODEL`: optional judge model. Defaults to
+  `WARDEN_EVAL_MODEL`.
+- The provider's Warden-prefixed key, e.g. `WARDEN_OPENROUTER_API_KEY`. Eval
+  setup bridges `WARDEN_<PROVIDER>_API_KEY` to the name the provider SDK reads.
+
+Scores are only comparable across runs that use the same model.
 
 CI runs evals when eval files or harness code change on a PR, when changes land
 on `main`, or when a maintainer adds the `run-evals` label to a same-repository
 PR. Fork PRs do not receive eval secrets.
+
+CI defaults `WARDEN_EVAL_MODEL` to `openrouter/anthropic/claude-sonnet-4.6`
+with `WARDEN_OPENROUTER_API_KEY`. Set the `WARDEN_EVAL_MODEL` (and optionally
+`WARDEN_EVAL_JUDGE_MODEL`) repository variable to switch providers, and add the
+matching `WARDEN_<PROVIDER>_API_KEY` secret to the workflow env.
 
 Individual eval misses are expected while we tune the harness. CI publishes a
 vitest-evals job summary and workflow annotations for per-case reporting, then
