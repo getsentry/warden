@@ -96,7 +96,9 @@ Triggered by `release: published`. This is where the GitHub Action bundle gets b
 3. Installs dependencies and runs `pnpm build:action`
 4. Commits only the ncc bundle files (`index.js`, chunk files, `licenses.txt`, `package.json`) via `git add -f`
 5. Force-updates `vX.Y.Z` to point to this new commit
-6. Force-updates the major tag (`vX`) to the same commit
+6. Force-updates the major tag (`vX`) to the same commit, for stable releases only. Prereleases (`vX.Y.Z-alpha.N`) leave `vX` unchanged.
+
+Steps 4 to 6 run in `bin/publish-action-bundle.sh`.
 
 After this step, `vX.Y.Z` and `vX` point to a detached commit that is NOT on main. This commit has everything from the source release plus `dist/action/`. The `vX.Y.Z-src` tag remains on the source release commit so Craft can find the previous release from main during the next prepare run.
 
@@ -152,6 +154,7 @@ Controls what goes into the npm tarball. Key exclusions:
 | `.github/workflows/release.yml` | Triggers release PR creation |
 | `.github/workflows/ci.yml` | Builds tarball for npm, validates ncc build |
 | `.github/workflows/update-major-tag.yml` | Creates `-src` tags, builds ncc bundle, commits to release tags |
+| `bin/publish-action-bundle.sh` | Commits the ncc bundle and moves the version tag, and `vX` for stable releases |
 | `action.yml` | GitHub Action definition, references `dist/action/index.js` |
 | `.gitignore` | Ignores all of `dist/` |
 | `packages/warden/.npmignore` | Excludes non-library files from npm tarball |
