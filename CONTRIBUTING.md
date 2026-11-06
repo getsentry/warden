@@ -25,7 +25,7 @@ pnpm test:run     # Run unit tests once
 
 ## GitHub Action Bundle
 
-The Action runs from the ncc bundle in `dist/action/`, which is committed. On PRs from a branch in this repo, the **Action Bundle** workflow rebuilds it and commits it back for you. On fork PRs, rebuild and commit it yourself:
+The Action runs from the ncc bundle in `dist/action/`, which is committed. On PRs from a branch in this repo, the **Action Bundle** workflow rebuilds it and commits it back for you. On fork and Dependabot PRs, rebuild and commit it yourself:
 
 ```bash
 pnpm build:action

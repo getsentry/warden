@@ -18,7 +18,10 @@ concurrency:
 
 jobs:
   rebuild:
-    if: github.event.pull_request.head.repo.full_name == github.repository
+    # Dependabot runs get no Actions secrets, so ci.yml is the gate there.
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.actor != 'dependabot[bot]'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4

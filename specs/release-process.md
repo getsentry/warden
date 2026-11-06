@@ -84,6 +84,8 @@ Craft's npm target publishes pre-built tarballs. It does not run builds at publi
 
 Triggered by `release: published`. `bin/update-major-tag.sh` makes a child commit of the release commit with the same tree, and force-updates the major tag (`vX`) to it. Prereleases (`vX.Y.Z-alpha.N`) leave `vX` unchanged, so `@v0` users never get a prerelease.
 
+Do not use the Craft github target `floatingTags` option instead. It puts `vX` on the release commit itself. Craft finds the last release with `git describe --tags --abbrev=0 --match 'v*'`, which can return `v0` there, so `auto` starts again from `0.0.0`. It also moves `vX` on prereleases.
+
 `vX` is not put on the release commit itself. When two tags are on the same commit, `git describe --tags` returns the annotated one (or the first by name), so Craft would read `v0` as the previous release and lose the real version. main never reaches the child commit, so Craft sees only `vX.Y.Z`.
 
 ## Sequencing
