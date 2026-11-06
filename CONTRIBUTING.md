@@ -32,6 +32,8 @@ pnpm build:action
 git add dist/action
 ```
 
+Releases tag the commit that has this bundle. On stable releases, Craft also moves `v0` to that commit. Prereleases leave `v0` unchanged. See `specs/release-process.md`.
+
 CI rebuilds the bundle and fails when the committed files differ.
 
 ## Testing Locally

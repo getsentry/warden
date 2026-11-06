@@ -27,7 +27,7 @@ The ncc bundle is built with `--no-source-map-register`. Only the bundle files (
 ```
 main branch          Source + action.yml + dist/action/ (ncc bundle).
 vX.Y.Z tag           The release commit on main. Same layout as main.
-v0 tag               Child commit of the latest stable v0.x.y tag, same tree. Not on main.
+v0 tag               The latest stable v0.x.y release commit. Craft moves it.
 npm tarball          packages/warden/dist/ (tsc output) plus runtime skill assets. No dist/action/.
 ```
 
@@ -74,19 +74,17 @@ The package `.npmignore` excludes `action.yml`, non-runtime source files, tests,
 
 After a maintainer approves the publish request, Craft:
 
-1. Creates the GitHub Release and tag `vX.Y.Z` on the release commit (triggers step 5)
+1. Creates the GitHub Release and tag `vX.Y.Z` on the release commit. For a stable release, it also moves the floating tag `vX` (`floatingTags: ['v{major}']`) to that commit
 2. Downloads the npm tarball from CI artifacts and publishes it to npm
 3. Merges the release branch into main, so `vX.Y.Z` is reachable from main
 
 Craft's npm target publishes pre-built tarballs. It does not run builds at publish time.
 
-### 5. Major tag update (update-major-tag.yml)
+### Floating major tag
 
-Triggered by `release: published`. `bin/update-major-tag.sh` makes a child commit of the release commit with the same tree, and force-updates the major tag (`vX`) to it. Prereleases (`vX.Y.Z-alpha.N`) leave `vX` unchanged, so `@v0` users never get a prerelease.
+Craft (3.11.1 or later, so `minVersion` is `3.11.1`) moves `vX` only on stable releases. A prerelease (`vX.Y.Z-alpha.N`) leaves `vX` unchanged, so `@v0` users never get a prerelease. `vX` is on the release commit, which has the committed `dist/action/`, so `@v0` runs the same bundle as `@vX.Y.Z`.
 
-Do not use the Craft github target `floatingTags` option instead. It puts `vX` on the release commit itself. Craft finds the last release with `git describe --tags --abbrev=0 --match 'v*'`, which can return `v0` there, so `auto` starts again from `0.0.0`. It also moves `vX` on prereleases.
-
-`vX` is not put on the release commit itself. When two tags are on the same commit, `git describe --tags` returns the annotated one (or the first by name), so Craft would read `v0` as the previous release and lose the real version. main never reaches the child commit, so Craft sees only `vX.Y.Z`.
+When Craft looks up the previous release, it skips tags that have no full `major.minor.patch` after the prefix. So `v0` on the same commit as `v0.53.0` does not hide `v0.53.0`.
 
 ## Sequencing
 
@@ -103,25 +101,20 @@ CI: build, test, check dist/action, pack tarball, upload artifact
 Maintainer approves the publish request
   |
   v
-Craft: tag vX.Y.Z, GitHub Release, publish npm, merge into main
-  |
-  v
-update-major-tag.yml: move vX to a same-tree child commit (stable releases only)
+Craft: tag vX.Y.Z, move vX (stable releases only), GitHub Release, publish npm, merge into main
 ```
 
 ## Transition from detached tags
 
 Releases up to 0.52.0 used a different layout. `dist/` was gitignored, a workflow committed the bundle on top of each release tag, and it force-moved `vX.Y.Z` and `v0` to that detached commit. A `vX.Y.Z-src` tag marked the source commit. Those tags stay as they are.
 
-main reaches only the old `vX.Y.Z-src` tags and `v0.46.0`. Craft reads `0.52.0-src` as a prerelease, so `auto` and bump types would resolve to `0.52.0` again. **Run the first release with an exact `version` (for example `0.53.0`).** Its changelog starts at `v0.46.0`, the latest stable tag main reaches, so remove the 0.47.0 to 0.52.0 entries from the release branch before you approve the publish request. After that release, `auto` works.
+main reaches only the old `vX.Y.Z-src` tags and `v0.46.0`. Craft reads `0.52.0-src` as a prerelease and skips it, so `auto` and bump types would compute from `0.46.0` and pick a version that already exists. **Run the first release with an exact `version` (for example `0.53.0`).** Its changelog starts at `v0.46.0`, the latest stable tag main reaches, so remove the 0.47.0 to 0.52.0 entries from the release branch before you approve the publish request. After that release, `auto` works.
 
 ## Failure modes
 
 **Stale bundle**: On same-repo PRs, `action-dist.yml` commits the rebuild. On fork PRs, CI fails until the contributor commits it. Two PRs that each pass can still leave main stale when both merge. The check on main shows it, and the release branch check blocks publish until a PR fixes it.
 
-**Major tag workflow failure**: `vX` keeps pointing at the previous stable release. Re-run the workflow from the Actions tab.
-
-**npm publish is independent**: The npm tarball is built by CI. A major tag failure does not affect npm.
+**npm publish is independent**: The npm tarball is built by CI. Craft publishes it from that artifact.
 
 ## .npmignore
 
@@ -137,15 +130,13 @@ Controls what goes into the npm tarball. Key exclusions:
 
 | File | Role |
 |------|------|
-| `.craft.yml` | Craft config: `minVersion`, `preReleaseCommand`, targets (github, npm) |
+| `.craft.yml` | Craft config: `minVersion`, `preReleaseCommand`, targets (github with `floatingTags`, npm) |
 | `bin/bump-version.sh` | Version bump + build validation for the release branch |
 | `bin/check-action-dist.sh` | Fails when the committed `dist/action/` is stale |
 | `bin/commit-action-dist.sh` | Commits a rebuilt `dist/action/` back to a same-repo PR branch |
 | `.github/workflows/action-dist.yml` | Rebuilds `dist/action/` on same-repo PRs and runs `bin/commit-action-dist.sh` |
-| `bin/update-major-tag.sh` | Moves `vX` to a same-tree child of the release, skipping prereleases |
 | `.github/workflows/release.yml` | Runs Craft to prepare the release |
 | `.github/workflows/ci.yml` | Builds tarball for npm, checks the action bundle |
-| `.github/workflows/update-major-tag.yml` | Runs `bin/update-major-tag.sh` on published releases |
 | `action.yml` | GitHub Action definition, references `dist/action/index.js` |
 | `.gitignore` | Ignores `dist/` except the committed action bundle files |
 | `.gitattributes` | Marks `dist/action/` as generated |

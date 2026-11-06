@@ -1,4 +1,4 @@
-minVersion: 3.9.0
+minVersion: 3.11.1
 changelog:
   policy: auto
 preReleaseCommand: bash bin/bump-version.sh
@@ -13,4 +13,4 @@ targets:
     access: public
   - name: github
     tagPrefix: v
-    # No floatingTags: update-major-tag.yml moves v0. See specs/release-process.md.
+    floatingTags: ['v{major}']

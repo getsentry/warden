@@ -73,7 +73,7 @@ Use `/testing-guidelines` when writing tests. Key principles:
 
 ## Build & Dist
 
-The ncc action bundle (`dist/action/`) is committed so every commit and release tag can run as an Action. On same-repo PRs, the `action-dist` workflow rebuilds and commits it back. On fork PRs, run `pnpm build:action` and commit `dist/action/`. CI fails when it is stale. The rest of `dist/` is gitignored. See `specs/release-process.md`.
+The ncc action bundle (`dist/action/`) is committed so every commit and release tag can run as an Action. On same-repo PRs, the `action-dist` workflow rebuilds and commits it back. On fork PRs, run `pnpm build:action` and commit `dist/action/`. CI fails when it is stale. The rest of `dist/` is gitignored. Craft moves `v0` to each stable release commit (`floatingTags`) and skips `v0` when it looks up versions. See `specs/release-process.md`.
 
 ## Verifying Changes
 
