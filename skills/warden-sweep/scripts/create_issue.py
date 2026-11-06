@@ -37,6 +37,9 @@ from _utils import (  # noqa: E402
 )
 
 
+DISPLAY_FIELDS = ("severity", "skill", "file", "startLine", "title")
+
+
 def join_finding_details(
     verified: list[dict[str, Any]],
     all_findings: list[dict[str, Any]],
@@ -45,13 +48,29 @@ def join_finding_details(
 
     verified.jsonl holds only verdict data (findingId, verdict, confidence);
     severity, skill, file, title and line live in all-findings.jsonl.
-    Fields the verified entry already sets win.
+    Display fields the verified entry sets to a value win; null or empty
+    ones count as unset. Two different findings with one findingId raise,
+    since the join could not tell which one the entry means.
     """
-    by_id = {f["findingId"]: f for f in all_findings if f.get("findingId")}
+    by_id: dict[str, dict[str, Any]] = {}
+    for f in all_findings:
+        finding_id = f.get("findingId")
+        if not isinstance(finding_id, str) or not finding_id:
+            continue
+        prior = by_id.get(finding_id)
+        if prior is not None and prior != f:
+            raise ValueError(
+                f"duplicate findingId {finding_id!r} in all-findings.jsonl "
+                "with different details"
+            )
+        by_id[finding_id] = f
     joined: list[dict[str, Any]] = []
     for entry in verified:
-        finding = by_id.get(entry.get("findingId", ""), {})
-        location = finding.get("location") or {}
+        finding_id = entry.get("findingId")
+        finding = by_id.get(finding_id, {}) if isinstance(finding_id, str) else {}
+        location = finding.get("location")
+        if not isinstance(location, dict):
+            location = {}
         details = {
             "severity": finding.get("severity"),
             "skill": finding.get("skill"),
@@ -59,8 +78,17 @@ def join_finding_details(
             "startLine": location.get("startLine"),
             "title": finding.get("title"),
         }
-        joined.append({**{k: v for k, v in details.items() if v is not None}, **entry})
+        overrides = {
+            k: v for k, v in entry.items()
+            if not (k in DISPLAY_FIELDS and v in (None, ""))
+        }
+        joined.append({**{k: v for k, v in details.items() if v is not None}, **overrides})
     return joined
+
+
+def table_cell(text: Any) -> str:
+    """Keep text inside one markdown table cell: escape pipes, flatten newlines."""
+    return str(text).replace("|", "\\|").replace("\r", " ").replace("\n", " ")
 
 
 def build_issue_body(
@@ -118,7 +146,9 @@ def build_issue_body(
             start_line = f.get("startLine") or (f.get("location") or {}).get("startLine")
             location = f"{file_path}:{start_line}" if start_line else file_path
             title = f.get("title", "")
-            lines.append(f"| {sev} | {skill} | `{location}` | {title} |")
+            lines.append(
+                f"| {table_cell(sev)} | {table_cell(skill)} | `{table_cell(location)}` | {table_cell(title)} |"
+            )
         lines.append("")
 
     if skills:
