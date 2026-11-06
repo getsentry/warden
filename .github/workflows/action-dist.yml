@@ -1,0 +1,60 @@
+name: Action Bundle
+
+# Rebuilds dist/action on same-repo PRs and commits it back. The push uses
+# an app token so CI runs again on the new commit. Fork PRs can't be pushed
+# to, so the "Check action bundle is committed" step in ci.yml stays as
+# the gate there and on every other commit.
+
+permissions:
+  contents: read
+
+on:
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: action-dist-${{ github.head_ref }}
+  cancel-in-progress: true
+
+jobs:
+  rebuild:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          ref: ${{ github.head_ref }}
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@02f6c237bd2518259fed6c71566509edfb3f2b74 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+          cache: 'pnpm'
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - run: pnpm build:action
+
+      - name: Stage bundle
+        run: git add -A -- dist/action
+
+      - name: Check for bundle changes
+        id: changes
+        run: git diff --cached --quiet -- dist/action || echo "stale=true" >> "$GITHUB_OUTPUT"
+
+      # Minted only after the build, so PR code never runs with the token.
+      - name: Get auth token
+        if: steps.changes.outputs.stale == 'true'
+        id: token
+        uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547 # v1
+        with:
+          app-id: ${{ vars.SENTRY_RELEASE_BOT_CLIENT_ID }}
+          private-key: ${{ secrets.SENTRY_RELEASE_BOT_PRIVATE_KEY }}
+
+      - name: Commit bundle
+        if: steps.changes.outputs.stale == 'true'
+        env:
+          PUSH_TOKEN: ${{ steps.token.outputs.token }}
+          HEAD_REF: ${{ github.head_ref }}
+        run: sh bin/commit-action-dist.sh

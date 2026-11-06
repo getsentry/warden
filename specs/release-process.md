@@ -35,7 +35,11 @@ npm tarball          packages/warden/dist/ (tsc output) plus runtime skill asset
 
 `dist/action/` is committed so every commit, including every release tag, can run as an Action. `.gitattributes` marks it `linguist-generated`, so GitHub collapses it in diffs.
 
-Contributors who change code that the Action bundles run `pnpm build:action` and commit `dist/action/`. CI rebuilds the bundle and `bin/check-action-dist.sh` fails when the committed files differ. The rest of `dist/` stays gitignored.
+On PRs from a branch in this repo, `action-dist.yml` rebuilds the bundle and `bin/commit-action-dist.sh` commits it back to the PR branch. The push uses a release bot app token, so CI runs again on the new commit. The token is created after the build, so PR code does not run with it.
+
+GitHub cannot push to fork PR branches. There, the contributor runs `pnpm build:action` and commits `dist/action/`.
+
+On every PR and every push to main and `release/*`, CI rebuilds the bundle and `bin/check-action-dist.sh` fails when the committed files differ. A PR cannot merge with a stale bundle, and Craft does not publish a release branch whose CI fails. The rest of `dist/` stays gitignored.
 
 ## Release Flow
 
@@ -111,7 +115,7 @@ main reaches only the old `vX.Y.Z-src` tags and `v0.46.0`. Craft reads `0.52.0-s
 
 ## Failure modes
 
-**Stale bundle**: CI fails on the PR until `dist/action/` is rebuilt and committed.
+**Stale bundle**: On same-repo PRs, `action-dist.yml` commits the rebuild. On fork PRs, CI fails until the contributor commits it. Two PRs that each pass can still leave main stale when both merge. The check on main shows it, and the release branch check blocks publish until a PR fixes it.
 
 **Major tag workflow failure**: `vX` keeps pointing at the previous stable release. Re-run the workflow from the Actions tab.
 
@@ -134,6 +138,8 @@ Controls what goes into the npm tarball. Key exclusions:
 | `.craft.yml` | Craft config: `minVersion`, `preReleaseCommand`, targets (github, npm) |
 | `bin/bump-version.sh` | Version bump + build validation for the release branch |
 | `bin/check-action-dist.sh` | Fails when the committed `dist/action/` is stale |
+| `bin/commit-action-dist.sh` | Commits a rebuilt `dist/action/` back to a same-repo PR branch |
+| `.github/workflows/action-dist.yml` | Rebuilds `dist/action/` on same-repo PRs and runs `bin/commit-action-dist.sh` |
 | `bin/update-major-tag.sh` | Moves `vX` to a same-tree child of the release, skipping prereleases |
 | `.github/workflows/release.yml` | Runs Craft to prepare the release |
 | `.github/workflows/ci.yml` | Builds tarball for npm, checks the action bundle |
