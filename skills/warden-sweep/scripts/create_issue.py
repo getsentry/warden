@@ -37,6 +37,32 @@ from _utils import (  # noqa: E402
 )
 
 
+def join_finding_details(
+    verified: list[dict[str, Any]],
+    all_findings: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Fill each verified entry's display fields from its full finding.
+
+    verified.jsonl holds only verdict data (findingId, verdict, confidence);
+    severity, skill, file, title and line live in all-findings.jsonl.
+    Fields the verified entry already sets win.
+    """
+    by_id = {f["findingId"]: f for f in all_findings if f.get("findingId")}
+    joined: list[dict[str, Any]] = []
+    for entry in verified:
+        finding = by_id.get(entry.get("findingId", ""), {})
+        location = finding.get("location") or {}
+        details = {
+            "severity": finding.get("severity"),
+            "skill": finding.get("skill"),
+            "file": finding.get("file") or location.get("path"),
+            "startLine": location.get("startLine"),
+            "title": finding.get("title"),
+        }
+        joined.append({**{k: v for k, v in details.items() if v is not None}, **entry})
+    return joined
+
+
 def build_issue_body(
     run_id: str,
     scan_index: list[dict[str, Any]],
@@ -172,6 +198,7 @@ def main() -> None:
     rejected = read_jsonl(os.path.join(data_dir, "rejected.jsonl"))
 
     files_scanned = sum(1 for e in scan_index if e.get("status") == "complete")
+    verified = join_finding_details(verified, all_findings)
 
     # Build issue
     title = f"Warden Sweep {run_id}: {len(verified)} findings across {files_scanned} files"
