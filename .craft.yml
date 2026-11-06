@@ -1,3 +1,4 @@
+minVersion: 3.9.0
 changelog:
   policy: auto
 preReleaseCommand: bash bin/bump-version.sh

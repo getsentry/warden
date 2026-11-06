@@ -4,19 +4,30 @@ on:
   workflow_dispatch:
     inputs:
       bump:
-        description: Version bump type
+        description: Version bump type (ignored when version is set). auto picks it from the commits; pre cuts a prerelease of that version.
         required: true
         type: choice
-        default: minor
+        default: auto
         options:
-          - minor
+          - auto
+          - pre
           - patch
+          - minor
           - major
+      version:
+        description: Exact version override (for example, 0.53.0)
+        required: false
+        type: string
       force:
         description: Force release (bypass blockers)
         required: false
         type: boolean
         default: false
+
+permissions:
+  contents: read
+  # Craft writes AI changelog summaries with the workflow token.
+  copilot-requests: write
 
 jobs:
   release:
@@ -41,45 +52,14 @@ jobs:
           node-version: '24'
           cache: 'pnpm'
 
-      - name: Calculate version
-        id: version
-        env:
-          BUMP: ${{ inputs.bump }}
-        run: |
-          CURRENT=$(node -p "require('./packages/warden/package.json').version")
-          NEW=$(npx semver -i "$BUMP" $CURRENT)
-          echo "current=$CURRENT" >> $GITHUB_OUTPUT
-          echo "new=$NEW" >> $GITHUB_OUTPUT
-
-      # Craft uses `git describe --tags` to find the previous version. The
-      # published action tags point to detached dist/ artifact commits, so the
-      # previous release must have created a reachable source tag before Craft
-      # prepares the next changelog.
-      - name: Verify previous source tag
-        run: |
-          VERSION="${{ steps.version.outputs.current }}"
-          SOURCE_TAG="v${VERSION}-src"
-
-          if ! git rev-parse "$SOURCE_TAG^{commit}" >/dev/null 2>&1; then
-            echo "::error::Missing source tag $SOURCE_TAG. The previous release did not finalize its source tag."
-            exit 1
-          fi
-
-          DESCRIBED_TAG="$(git describe --tags --abbrev=0)"
-          DESCRIBED_SHA="$(git rev-parse "$DESCRIBED_TAG^{commit}")"
-          SOURCE_SHA="$(git rev-parse "$SOURCE_TAG^{commit}")"
-
-          if [ "$DESCRIBED_SHA" != "$SOURCE_SHA" ]; then
-            echo "::error::Expected git describe to resolve to $SOURCE_TAG ($SOURCE_SHA), got $DESCRIBED_TAG ($DESCRIBED_SHA)"
-            exit 1
-          fi
-
-          echo "Craft previous-release baseline: $DESCRIBED_TAG ($DESCRIBED_SHA)"
+      - name: Prepare Craft release tags
+        run: sh bin/craft-release-tags.sh
 
       - name: Prepare release
-        uses: getsentry/action-prepare-release@c8e1c2009ab08259029170132c384f03c1064c0e # v1
+        uses: getsentry/craft@68615816cdad571fdc24b7d35f45238c835affc2 # v3.11.0
         env:
           GITHUB_TOKEN: ${{ steps.token.outputs.token }}
         with:
-          version: ${{ steps.version.outputs.new }}
+          version: ${{ inputs.version || inputs.bump }}
           force: ${{ inputs.force }}
+          llm_api_key: ${{ github.token }}

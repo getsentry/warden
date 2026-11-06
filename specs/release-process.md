@@ -41,22 +41,25 @@ All of `dist/` is gitignored. No exceptions, no whitelist. Build artifacts never
 
 ### 1. Trigger
 
-A maintainer runs the **Release** workflow (`release.yml`) via `workflow_dispatch`, choosing a semver bump type (patch, minor, major).
+A maintainer runs the **Release** workflow (`release.yml`) via `workflow_dispatch`, choosing a bump type (`auto`, `pre`, `patch`, `minor`, `major`; default `auto`) or an exact `version` override. `auto` picks the bump from the commits since the last stable release. `pre` cuts a prerelease of the version `auto` would release.
 
-### 2. Previous source tag preflight
+### 2. Map source tags for Craft
 
-Before preparing the release, the workflow verifies that the current version has a source tag (`vX.Y.Z-src`) and that `git describe --tags --abbrev=0` resolves to that same commit. This is required because the published version tags point to detached action artifact commits that are not ancestors of main.
+Craft resolves the version and changelog from the latest tag that `git describe --tags` reaches. The published version tags point to detached action artifact commits that are not ancestors of main, and Craft reads `vX.Y.Z-src` as a prerelease. Without a fix, `auto` or a bump type would turn `0.52.0-src` into `0.52.0`, and the changelog would start from an old reachable tag.
 
-The release workflow does not create this tag. It fails fast if the previous release did not finalize its source tag, preventing Craft from generating a full-history changelog from an old reachable tag.
+`bin/craft-release-tags.sh` verifies that the current version has a source tag (`vX.Y.Z-src`). It then points each `vX.Y.Z` tag at its source commit in the job checkout, deletes the local `-src` tags, and checks that `git describe` resolves to `vX.Y.Z`. Nothing is pushed.
+
+The release workflow does not create the source tag. It fails fast if the previous release did not finalize its source tag.
 
 ### 3. Prepare release PR
 
-The workflow runs `getsentry/action-prepare-release@v1` which:
+The workflow runs `getsentry/craft@v3` which:
 
-1. Runs `preReleaseCommand` from `.craft.yml` (`bash bin/bump-version.sh`)
-2. `bump-version.sh` bumps `packages/warden/package.json`, installs deps, and runs `pnpm build` as a compilation check
-3. Since `dist/` is gitignored, only package metadata and lockfile changes are committed
-4. A PR is opened on a `releases/X.Y.Z` branch
+1. Resolves the version from the `version` input or the bump type
+2. Runs `preReleaseCommand` from `.craft.yml` (`bash bin/bump-version.sh`)
+3. `bump-version.sh` bumps `packages/warden/package.json`, installs deps, and runs `pnpm build` as a compilation check
+4. Since `dist/` is gitignored, only package metadata and lockfile changes are committed
+5. A PR is opened on a `releases/X.Y.Z` branch
 
 ### 4. CI builds the npm tarball
 
@@ -103,7 +106,7 @@ After this step, `vX.Y.Z` and `vX` point to a detached commit that is NOT on mai
 workflow_dispatch
   |
   v
-release.yml: verify current -src tag, prepare PR (bump version)
+release.yml: map -src tags, prepare PR (resolve and bump version)
   |
   v
 CI: build, test, pack tarball, upload artifact
@@ -143,9 +146,10 @@ Controls what goes into the npm tarball. Key exclusions:
 
 | File | Role |
 |------|------|
-| `.craft.yml` | Craft config: `preReleaseCommand`, targets (github, npm) |
+| `.craft.yml` | Craft config: `minVersion`, `preReleaseCommand`, targets (github, npm) |
+| `bin/craft-release-tags.sh` | Verifies the previous `-src` tag and maps source tags for Craft |
 | `bin/bump-version.sh` | Version bump + build validation for release PR |
-| `.github/workflows/release.yml` | Triggers release PR creation, verifies the previous `-src` tag |
+| `.github/workflows/release.yml` | Triggers release PR creation |
 | `.github/workflows/ci.yml` | Builds tarball for npm, validates ncc build |
 | `.github/workflows/update-major-tag.yml` | Creates `-src` tags, builds ncc bundle, commits to release tags |
 | `action.yml` | GitHub Action definition, references `dist/action/index.js` |
