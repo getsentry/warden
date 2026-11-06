@@ -27,7 +27,7 @@ The ncc bundle is built with `--no-source-map-register`. Only the bundle files (
 ```
 main branch          Source + action.yml + dist/action/ (ncc bundle).
 vX.Y.Z tag           The release commit on main. Same layout as main.
-v0 tag               Same commit as the latest stable v0.x.y tag.
+v0 tag               Child commit of the latest stable v0.x.y tag, same tree. Not on main.
 npm tarball          packages/warden/dist/ (tsc output) plus runtime skill assets. No dist/action/.
 ```
 
@@ -78,7 +78,9 @@ Craft's npm target publishes pre-built tarballs. It does not run builds at publi
 
 ### 5. Major tag update (update-major-tag.yml)
 
-Triggered by `release: published`. `bin/update-major-tag.sh` force-updates the major tag (`vX`) to the release commit. Prereleases (`vX.Y.Z-alpha.N`) leave `vX` unchanged, so `@v0` users never get a prerelease.
+Triggered by `release: published`. `bin/update-major-tag.sh` makes a child commit of the release commit with the same tree, and force-updates the major tag (`vX`) to it. Prereleases (`vX.Y.Z-alpha.N`) leave `vX` unchanged, so `@v0` users never get a prerelease.
+
+`vX` is not put on the release commit itself. When two tags are on the same commit, `git describe --tags` returns the annotated one (or the first by name), so Craft would read `v0` as the previous release and lose the real version. main never reaches the child commit, so Craft sees only `vX.Y.Z`.
 
 ## Sequencing
 
@@ -98,7 +100,7 @@ Maintainer approves the publish request
 Craft: tag vX.Y.Z, GitHub Release, publish npm, merge into main
   |
   v
-update-major-tag.yml: move vX (stable releases only)
+update-major-tag.yml: move vX to a same-tree child commit (stable releases only)
 ```
 
 ## Transition from detached tags
@@ -132,7 +134,7 @@ Controls what goes into the npm tarball. Key exclusions:
 | `.craft.yml` | Craft config: `minVersion`, `preReleaseCommand`, targets (github, npm) |
 | `bin/bump-version.sh` | Version bump + build validation for the release branch |
 | `bin/check-action-dist.sh` | Fails when the committed `dist/action/` is stale |
-| `bin/update-major-tag.sh` | Moves `vX` to the release, skipping prereleases |
+| `bin/update-major-tag.sh` | Moves `vX` to a same-tree child of the release, skipping prereleases |
 | `.github/workflows/release.yml` | Runs Craft to prepare the release |
 | `.github/workflows/ci.yml` | Builds tarball for npm, checks the action bundle |
 | `.github/workflows/update-major-tag.yml` | Runs `bin/update-major-tag.sh` on published releases |
