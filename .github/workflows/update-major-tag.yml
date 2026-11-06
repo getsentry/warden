@@ -14,50 +14,6 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           ref: ${{ github.event.release.tag_name }}
-          fetch-depth: 0
-          fetch-tags: true
 
-      - name: Ensure source release tag
-        run: |
-          VERSION="${GITHUB_REF_NAME#v}"
-          SOURCE_TAG="v${VERSION}-src"
-          ARTIFACT_SUBJECT="Build dist/action for $GITHUB_REF_NAME"
-          SOURCE_SHA="$(git rev-parse HEAD)"
-
-          while [ "$(git show -s --format=%s "$SOURCE_SHA")" = "$ARTIFACT_SUBJECT" ]; do
-            SOURCE_SHA="$(git rev-parse "$SOURCE_SHA^")"
-            echo "Detected existing artifact commit. Walking back to $SOURCE_SHA for $SOURCE_TAG"
-          done
-
-          if git rev-parse "$SOURCE_TAG^{commit}" >/dev/null 2>&1; then
-            EXISTING_SHA="$(git rev-parse "$SOURCE_TAG^{commit}")"
-            if [ "$EXISTING_SHA" = "$SOURCE_SHA" ]; then
-              echo "Source tag $SOURCE_TAG already points to $SOURCE_SHA"
-              exit 0
-            fi
-
-            echo "::error::Source tag $SOURCE_TAG points to $EXISTING_SHA, expected $SOURCE_SHA"
-            exit 1
-          fi
-
-          echo "Creating source tag $SOURCE_TAG on $SOURCE_SHA"
-          git tag "$SOURCE_TAG" "$SOURCE_SHA"
-          git push origin "refs/tags/$SOURCE_TAG"
-
-      - uses: pnpm/action-setup@02f6c237bd2518259fed6c71566509edfb3f2b74 # v4
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
-        with:
-          node-version: '24'
-          cache: 'pnpm'
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Build service API
-        run: pnpm --filter @sentry/warden-service-api build
-
-      - name: Build action bundle
-        run: pnpm build:action
-
-      - name: Commit bundle and update tags
-        run: sh bin/publish-action-bundle.sh
+      - name: Update major tag
+        run: sh bin/update-major-tag.sh

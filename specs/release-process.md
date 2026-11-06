@@ -6,14 +6,12 @@ How Warden gets from source to published artifacts.
 
 ## Artifacts
 
-Warden ships two independent artifacts from the same repo:
+Warden ships two artifacts from the same repo:
 
 | Artifact | Consumers | Built by | Published via |
 |----------|-----------|----------|--------------|
 | **npm package** (`@sentry/warden`) | CLI users, library consumers | `tsc` + `pnpm --filter @sentry/warden pack` in CI | Craft downloads CI tarball, publishes to npm |
-| **GitHub Action** (`getsentry/warden@v0`) | GitHub Action users | `ncc` in `update-major-tag` workflow | Force-pushed to release tags |
-
-Neither artifact is committed to main. All of `dist/` is gitignored.
+| **GitHub Action** (`getsentry/warden@v0`) | GitHub Action users | `ncc` (`pnpm build:action`), committed to main | Craft tags the release commit |
 
 ## Build Commands
 
@@ -22,20 +20,22 @@ Neither artifact is committed to main. All of `dist/` is gitignored.
 | `pnpm build` | `packages/warden/dist/` (tsc) | Library + CLI for npm |
 | `pnpm build:action` | `dist/action/` (ncc) | Self-contained GitHub Action bundle |
 
-The ncc bundle is built with `--no-source-map-register`. No sourcemaps, declaration files, or type maps should ever appear in git history.
+The ncc bundle is built with `--no-source-map-register`. Only the bundle files (`dist/action/*.js`, `*.wasm`, `licenses.txt`, `package.json`) are committed. Declaration files and maps stay gitignored.
 
 ## What Lives Where
 
 ```
-main branch          Source + action.yml. No dist/.
-v0.7.0 tag           Source + action.yml + dist/action/ (ncc bundle only).
-v0 tag               Same commit as latest v0.x.y tag.
+main branch          Source + action.yml + dist/action/ (ncc bundle).
+vX.Y.Z tag           The release commit on main. Same layout as main.
+v0 tag               Same commit as the latest stable v0.x.y tag.
 npm tarball          packages/warden/dist/ (tsc output) plus runtime skill assets. No dist/action/.
 ```
 
-## Gitignore Policy
+## Action Bundle Policy
 
-All of `dist/` is gitignored. No exceptions, no whitelist. Build artifacts never land on main.
+`dist/action/` is committed so every commit, including every release tag, can run as an Action. `.gitattributes` marks it `linguist-generated`, so GitHub collapses it in diffs.
+
+Contributors who change code that the Action bundles run `pnpm build:action` and commit `dist/action/`. CI rebuilds the bundle and `bin/check-action-dist.sh` fails when the committed files differ. The rest of `dist/` stays gitignored.
 
 ## Release Flow
 
@@ -43,64 +43,42 @@ All of `dist/` is gitignored. No exceptions, no whitelist. Build artifacts never
 
 A maintainer runs the **Release** workflow (`release.yml`) via `workflow_dispatch`, choosing a bump type (`auto`, `pre`, `patch`, `minor`, `major`; default `auto`) or an exact `version` override. `auto` picks the bump from the commits since the last stable release. `pre` cuts a prerelease of the version `auto` would release.
 
-### 2. Map source tags for Craft
+Craft finds the previous release with `git describe --tags`, so release tags must be reachable from main. They are, because Craft tags the release commit and merges the release branch back into main.
 
-Craft resolves the version and changelog from the latest tag that `git describe --tags` reaches. The published version tags point to detached action artifact commits that are not ancestors of main, and Craft reads `vX.Y.Z-src` as a prerelease. Without a fix, `auto` or a bump type would turn `0.52.0-src` into `0.52.0`, and the changelog would start from an old reachable tag.
-
-`bin/craft-release-tags.sh` verifies that the current version has a source tag (`vX.Y.Z-src`). It then points each `vX.Y.Z` tag at its source commit in the job checkout, deletes the local `-src` tags, and checks that `git describe` resolves to `vX.Y.Z`. Nothing is pushed.
-
-The release workflow does not create the source tag. It fails fast if the previous release did not finalize its source tag.
-
-### 3. Prepare release PR
+### 2. Prepare the release branch
 
 The workflow runs `getsentry/craft@v3` which:
 
 1. Resolves the version from the `version` input or the bump type
 2. Runs `preReleaseCommand` from `.craft.yml` (`bash bin/bump-version.sh`)
-3. `bump-version.sh` bumps `packages/warden/package.json`, installs deps, and runs `pnpm build` as a compilation check
-4. Since `dist/` is gitignored, only package metadata and lockfile changes are committed
-5. A PR is opened on a `releases/X.Y.Z` branch
+3. `bump-version.sh` bumps the package versions, installs deps, and runs `pnpm build` as a compilation check
+4. Commits the version bump and changelog on a `release/X.Y.Z` branch
+5. Opens a publish request in `getsentry/publish`
 
-### 4. CI builds the npm tarball
+### 3. CI builds the npm tarball
 
-CI (`ci.yml`) runs on the release branch push and again on merge to main:
+CI (`ci.yml`) runs on the release branch push:
 
 1. Builds tsc output (`pnpm build`)
-2. Builds ncc bundle (`pnpm build:action`) as a validation step
+2. Builds the ncc bundle (`pnpm build:action`) and checks that it matches the committed `dist/action/`
 3. Creates a tarball (`pnpm --filter @sentry/warden pack`) which respects `packages/warden/.npmignore`
 4. Uploads the tarball as a GitHub Actions artifact
 
 The package `.npmignore` excludes `action.yml`, non-runtime source files, tests, and dev config. The tarball contains the tsc-compiled library and CLI plus runtime skill assets.
 
-### 5. Merge
+### 4. Craft publishes
 
-A maintainer reviews and merges the release PR into main. Main gets the version bump in `packages/warden/package.json` and lockfile updates, but no build artifacts.
+After a maintainer approves the publish request, Craft:
 
-### 6. Craft publishes
+1. Creates the GitHub Release and tag `vX.Y.Z` on the release commit (triggers step 5)
+2. Downloads the npm tarball from CI artifacts and publishes it to npm
+3. Merges the release branch into main, so `vX.Y.Z` is reachable from main
 
-After merge, Craft:
+Craft's npm target publishes pre-built tarballs. It does not run builds at publish time.
 
-1. Creates git tag `vX.Y.Z` on the source release commit
-2. Creates a GitHub Release (triggers step 7)
-3. Downloads the npm tarball from CI artifacts
-4. Publishes the tarball to npm (no build happens here)
+### 5. Major tag update (update-major-tag.yml)
 
-Craft's npm target publishes pre-built tarballs. It does not check out code or run builds at publish time.
-
-### 7. Tag update (update-major-tag.yml)
-
-Triggered by `release: published`. This is where the GitHub Action bundle gets built:
-
-1. Checks out the `vX.Y.Z` tag
-2. Creates the immutable source tag (`vX.Y.Z-src`) on the checked-out source commit
-3. Installs dependencies and runs `pnpm build:action`
-4. Commits only the ncc bundle files (`index.js`, chunk files, `licenses.txt`, `package.json`) via `git add -f`
-5. Force-updates `vX.Y.Z` to point to this new commit
-6. Force-updates the major tag (`vX`) to the same commit, for stable releases only. Prereleases (`vX.Y.Z-alpha.N`) leave `vX` unchanged.
-
-Steps 4 to 6 run in `bin/publish-action-bundle.sh`.
-
-After this step, `vX.Y.Z` and `vX` point to a detached commit that is NOT on main. This commit has everything from the source release plus `dist/action/`. The `vX.Y.Z-src` tag remains on the source release commit so Craft can find the previous release from main during the next prepare run.
+Triggered by `release: published`. `bin/update-major-tag.sh` force-updates the major tag (`vX`) to the release commit. Prereleases (`vX.Y.Z-alpha.N`) leave `vX` unchanged, so `@v0` users never get a prerelease.
 
 ## Sequencing
 
@@ -108,31 +86,34 @@ After this step, `vX.Y.Z` and `vX` point to a detached commit that is NOT on mai
 workflow_dispatch
   |
   v
-release.yml: map -src tags, prepare PR (resolve and bump version)
+release.yml: Craft resolves the version, pushes release/X.Y.Z
   |
   v
-CI: build, test, pack tarball, upload artifact
+CI: build, test, check dist/action, pack tarball, upload artifact
   |
   v
-Maintainer merges releases/X.Y.Z -> main
+Maintainer approves the publish request
   |
   v
-CI: build + pack on main (tarball for Craft)
+Craft: tag vX.Y.Z, GitHub Release, publish npm, merge into main
   |
   v
-Craft: tag vX.Y.Z, GitHub Release, download tarball, publish npm
-  |
-  v
-update-major-tag.yml: create vX.Y.Z-src, build ncc, commit to tag, force-update vX.Y.Z + vX
+update-major-tag.yml: move vX (stable releases only)
 ```
 
-## Timing and failure modes
+## Transition from detached tags
 
-**Tag update window**: There is a 1-3 minute window between Craft creating the GitHub Release and the tag workflow finishing. During this window, the version and major tags point to a commit without `dist/action/`. Any GitHub Action runs that resolve the tag during this window will fail. Existing users with cached action versions are unaffected.
+Releases up to 0.52.0 used a different layout. `dist/` was gitignored, a workflow committed the bundle on top of each release tag, and it force-moved `vX.Y.Z` and `v0` to that detached commit. A `vX.Y.Z-src` tag marked the source commit. Those tags stay as they are.
 
-**Tag workflow failure**: If `update-major-tag.yml` fails before creating the source tag, the next release prepare run will fail fast because the previous source tag is missing. If it fails after creating the source tag but before updating the artifact tags (build error, permission issue), changelog generation for the next release remains safe, but the GitHub Action tag may point to a commit without the ncc bundle. Recovery: fix the issue and re-run the workflow from the Actions tab.
+main reaches only the old `vX.Y.Z-src` tags and `v0.46.0`. Craft reads `0.52.0-src` as a prerelease, so `auto` and bump types would resolve to `0.52.0` again. **Run the first release with an exact `version` (for example `0.53.0`).** Its changelog starts at `v0.46.0`, the latest stable tag main reaches, so remove the 0.47.0 to 0.52.0 entries from the release branch before you approve the publish request. After that release, `auto` works.
 
-**npm publish is independent**: The npm tarball is built by CI and published by Craft before the tag workflow runs. A tag workflow failure does not affect npm.
+## Failure modes
+
+**Stale bundle**: CI fails on the PR until `dist/action/` is rebuilt and committed.
+
+**Major tag workflow failure**: `vX` keeps pointing at the previous stable release. Re-run the workflow from the Actions tab.
+
+**npm publish is independent**: The npm tarball is built by CI. A major tag failure does not affect npm.
 
 ## .npmignore
 
@@ -149,14 +130,15 @@ Controls what goes into the npm tarball. Key exclusions:
 | File | Role |
 |------|------|
 | `.craft.yml` | Craft config: `minVersion`, `preReleaseCommand`, targets (github, npm) |
-| `bin/craft-release-tags.sh` | Verifies the previous `-src` tag and maps source tags for Craft |
-| `bin/bump-version.sh` | Version bump + build validation for release PR |
-| `.github/workflows/release.yml` | Triggers release PR creation |
-| `.github/workflows/ci.yml` | Builds tarball for npm, validates ncc build |
-| `.github/workflows/update-major-tag.yml` | Creates `-src` tags, builds ncc bundle, commits to release tags |
-| `bin/publish-action-bundle.sh` | Commits the ncc bundle and moves the version tag, and `vX` for stable releases |
+| `bin/bump-version.sh` | Version bump + build validation for the release branch |
+| `bin/check-action-dist.sh` | Fails when the committed `dist/action/` is stale |
+| `bin/update-major-tag.sh` | Moves `vX` to the release, skipping prereleases |
+| `.github/workflows/release.yml` | Runs Craft to prepare the release |
+| `.github/workflows/ci.yml` | Builds tarball for npm, checks the action bundle |
+| `.github/workflows/update-major-tag.yml` | Runs `bin/update-major-tag.sh` on published releases |
 | `action.yml` | GitHub Action definition, references `dist/action/index.js` |
-| `.gitignore` | Ignores all of `dist/` |
+| `.gitignore` | Ignores `dist/` except the committed action bundle files |
+| `.gitattributes` | Marks `dist/action/` as generated |
 | `packages/warden/.npmignore` | Excludes non-library files from npm tarball |
 | `package.json` | Workspace scripts that delegate to `packages/warden` |
 | `packages/warden/package.json` | Package metadata and build scripts (`build`, `build:action`) |

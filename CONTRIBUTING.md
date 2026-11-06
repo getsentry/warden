@@ -23,6 +23,17 @@ pnpm test         # Run unit tests in watch mode
 pnpm test:run     # Run unit tests once
 ```
 
+## GitHub Action Bundle
+
+The Action runs from the ncc bundle in `dist/action/`, which is committed. After you change code under `packages/warden/src/` (or its dependencies), rebuild and commit it:
+
+```bash
+pnpm build:action
+git add dist/action
+```
+
+CI rebuilds the bundle and fails when the committed files differ.
+
 ## Testing Locally
 
 The CLI runs skills against local git changes. Set up your API key and run it:

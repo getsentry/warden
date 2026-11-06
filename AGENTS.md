@@ -73,7 +73,7 @@ Use `/testing-guidelines` when writing tests. Key principles:
 
 ## Build & Dist
 
-All of `dist/` is gitignored. The ncc action bundle (`dist/action/`) is built and committed to release tags only by the `update-major-tag` workflow. Never commit build artifacts to main.
+The ncc action bundle (`dist/action/`) is committed so every commit and release tag can run as an Action. After changing code the Action bundles, run `pnpm build:action` and commit `dist/action/`. CI fails when it is stale. The rest of `dist/` is gitignored. See `specs/release-process.md`.
 
 ## Verifying Changes
 
