@@ -35,7 +35,7 @@ npm tarball          packages/warden/dist/ (tsc output) plus runtime skill asset
 
 `dist/action/` is committed so every commit, including every release tag, can run as an Action. `.gitattributes` marks it `linguist-generated`, so GitHub collapses it in diffs.
 
-On PRs from a branch in this repo, `action-dist.yml` rebuilds the bundle and `bin/commit-action-dist.sh` commits it back to the PR branch. The push uses a release bot app token, so CI runs again on the new commit. The token is created after the build, so PR code does not run with it.
+On PRs from a branch in this repo, `action-dist.yml` rebuilds the bundle and `bin/commit-action-dist.sh` commits it back to the PR branch. The push uses a release bot app token, so CI runs again on the new commit. The work runs in two jobs. The `build` job runs PR code with no secrets and uploads the bundle as an artifact. The `commit` job creates the token, downloads the artifact and commits it. It runs no install or build, and git hooks are off. If the branch moved after the build, the push is not a fast-forward and fails.
 
 GitHub cannot push to fork PR branches. There, the contributor runs `pnpm build:action` and commits `dist/action/`.
 
