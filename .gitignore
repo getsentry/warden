@@ -11,6 +11,15 @@ node_modules/
 
 # Build output
 dist/
+# The GitHub Action runs from the committed ncc bundle. CI checks that it is fresh.
+!/dist/
+/dist/*
+!/dist/action/
+/dist/action/**
+!/dist/action/*.js
+!/dist/action/*.wasm
+!/dist/action/licenses.txt
+!/dist/action/package.json
 *.tgz
 
 # IDE

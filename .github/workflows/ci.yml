@@ -68,6 +68,8 @@ jobs:
           fail-ci-if-error: true
       - run: pnpm build
       - run: pnpm build:action
+      - name: Check action bundle is committed
+        run: sh bin/check-action-dist.sh
       - name: Smoke test action built-in skill resolution
         run: |
           GITHUB_ACTION_PATH="$PWD" node --input-type=module -e "

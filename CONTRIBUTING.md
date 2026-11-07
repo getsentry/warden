@@ -23,6 +23,19 @@ pnpm test         # Run unit tests in watch mode
 pnpm test:run     # Run unit tests once
 ```
 
+## GitHub Action Bundle
+
+The Action runs from the ncc bundle in `dist/action/`, which is committed. On PRs from a branch in this repo, the **Action Bundle** workflow rebuilds it and commits it back for you. On fork and Dependabot PRs, rebuild and commit it yourself:
+
+```bash
+pnpm build:action
+git add dist/action
+```
+
+Releases tag the commit that has this bundle. On stable releases, Craft also moves `v0` to that commit. Prereleases leave `v0` unchanged. See `specs/release-process.md`.
+
+CI rebuilds the bundle and fails when the committed files differ.
+
 ## Testing Locally
 
 The CLI runs skills against local git changes. Set up your API key and run it:

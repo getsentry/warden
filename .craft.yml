@@ -1,3 +1,4 @@
+minVersion: 3.11.1
 changelog:
   policy: auto
 preReleaseCommand: bash bin/bump-version.sh
@@ -12,3 +13,4 @@ targets:
     access: public
   - name: github
     tagPrefix: v
+    floatingTags: ['v{major}']

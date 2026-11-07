@@ -1,0 +1,55 @@
+name: Action Bundle
+
+# Rebuilds dist/action on same-repo PRs. When the committed bundle is stale,
+# the build job uploads the new bundle as an artifact. This workflow runs PR
+# code, so it gets no secrets and a read-only token. commit-action-dist.yml
+# runs on workflow_run from the default branch and commits the artifact back.
+# Fork PRs can't be pushed to, so the "Check action bundle is committed" step
+# in ci.yml stays as the gate there and on every other commit.
+
+permissions:
+  contents: read
+
+on:
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: action-dist-${{ github.head_ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    # Dependabot runs get no Actions secrets, so ci.yml is the gate there.
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.actor != 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@02f6c237bd2518259fed6c71566509edfb3f2b74 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+          cache: 'pnpm'
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - run: pnpm build:action
+
+      # A stale bundle is not a failure here; commit-action-dist.yml fixes it.
+      - name: Check for bundle changes
+        id: check
+        continue-on-error: true
+        run: sh bin/check-action-dist.sh
+
+      - if: steps.check.outcome == 'failure'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: action-dist
+          path: dist/action/
+          retention-days: 1
