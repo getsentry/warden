@@ -165,7 +165,7 @@ adding cases you want compared for free.
 
 ## Known gaps
 
-- Owned bug cases today: wrdn-authz 5, wrdn-dos-review 3, wrdn-data-exfil 2,
+- Owned bug cases today: wrdn-authz 5, wrdn-dos-review 6, wrdn-data-exfil 2,
   wrdn-code-execution 1, wrdn-pii 0. A skill below 5 reads
   `insufficient-evidence` unless it earns its keep outright.
 - The corpus has almost no DoS or exfiltration entries. Cases have to carry
