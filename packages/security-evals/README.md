@@ -34,10 +34,10 @@ git clone https://github.com/getsentry/warden-skills.git ~/src/warden-skills
 
 ```bash
 # Every lane over every entry
-pnpm evals:security --repo getsentry/sentry=~/src/sentry --skills-repo ~/src/warden-skills
+pnpm evals:security --repo getsentry/sentry=$HOME/src/sentry --skills-repo ~/src/warden-skills
 
 # One candidate lane on its own cases, three passes; other lanes come from the baseline
-pnpm evals:security --repo getsentry/sentry=~/src/sentry --skills-repo ~/src/warden-skills \
+pnpm evals:security --repo getsentry/sentry=$HOME/src/sentry --skills-repo ~/src/warden-skills \
   --skills wrdn-dos-review --entries 'wrdn-dos-review/*' --repeats 3
 ```
 
