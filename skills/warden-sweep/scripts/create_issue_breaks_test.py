@@ -5,7 +5,7 @@ Runs the script as a subprocess against a sweep directory on disk, with a
 fake `gh` on PATH that records the issue body instead of calling GitHub.
 Temp files are removed when the test exits.
 
-Run: python3 skills/warden-sweep/scripts/test_create_issue.py
+Run: python3 skills/warden-sweep/scripts/create_issue_breaks_test.py
 """
 from __future__ import annotations
 
