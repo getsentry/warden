@@ -15,9 +15,11 @@ permissions:
   contents: read
   actions: read
 
+# Key on the head SHA, not the branch. A late run for an older commit must
+# not cancel the push for a newer one. The fast-forward push rejects stale runs.
 concurrency:
-  group: commit-action-dist-${{ github.event.workflow_run.head_branch }}
-  cancel-in-progress: true
+  group: commit-action-dist-${{ github.event.workflow_run.head_sha }}
+  cancel-in-progress: false
 
 jobs:
   commit:
