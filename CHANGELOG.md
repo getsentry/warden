@@ -1,4 +1,149 @@
 # Changelog
+## 0.53.0
+
+### New Features ✨
+
+#### Dashboard
+
+- Show a dedicated finding Evidence section by @gricha and @claude in [#545](https://github.com/getsentry/warden/pull/545)
+- Redesign findings workspace and add automatic themes by @gricha and @claude in [#533](https://github.com/getsentry/warden/pull/533)
+
+#### Pi
+
+- Configure provider headers by @PaulM5406, @ppsmilesi and @dcramer with @sentry-junior in [#516](https://github.com/getsentry/warden/pull/516)
+- Configure provider base URLs by @PaulM5406 and @ppsmilesi in [#512](https://github.com/getsentry/warden/pull/512)
+
+#### Service
+
+- Add short finding URLs by @gricha and @claude in [#546](https://github.com/getsentry/warden/pull/546)
+- Show primary model for findings by @gricha with @sentry-junior in [#515](https://github.com/getsentry/warden/pull/515)
+- Show first observed on findings by @gricha with @sentry-junior in [#503](https://github.com/getsentry/warden/pull/503)
+- Add database tracing and typed reads by @gricha and @claude in [#499](https://github.com/getsentry/warden/pull/499)
+- Enable hosted memory and source context by @gricha and @claude in [#487](https://github.com/getsentry/warden/pull/487)
+
+#### Skills
+
+- New `integrity-review` skill by @Jeffreyhung and @claude with @sentry-junior in [#553](https://github.com/getsentry/warden/pull/553)
+- Add Warden Service API skill by @gricha and @claude in [#476](https://github.com/getsentry/warden/pull/476)
+
+#### Other
+
+- (action) Add incremental PR review by @claude and @Jeffreyhung with @sentry-junior in [#561](https://github.com/getsentry/warden/pull/561)
+- (config) Add postChecks toggle to disable GitHub Check-run posting by @CalebKAston and @claude in [#458](https://github.com/getsentry/warden/pull/458)
+- (evals) Record and replay model calls with Roach by @dcramer and @claude with @sentry-junior in [#564](https://github.com/getsentry/warden/pull/564)
+- (reporting) Add configuredSkills roster to findings output by @CalebKAston and @claude in [#473](https://github.com/getsentry/warden/pull/473)
+- (sdk) Surface verifierRejections across reports, CLI output, and findings-file export by @CalebKAston in [#474](https://github.com/getsentry/warden/pull/474)
+
+### Bug Fixes 🐛
+
+#### Dedup
+
+- Allow reasoning tokens and report output limits by @gricha and @claude in [#540](https://github.com/getsentry/warden/pull/540)
+- Group findings by semantic bug identity by @gricha with @sentry-junior in [#536](https://github.com/getsentry/warden/pull/536)
+
+#### Deps
+
+- Bump zod to 4.6.7 for GHSA-mrhx-c7xc-m3w5 by @Jeffreyhung with @sentry-junior in [#562](https://github.com/getsentry/warden/pull/562)
+- Patch vulnerable dependencies by @gricha and @claude in [#550](https://github.com/getsentry/warden/pull/550)
+
+#### Service
+
+- Make short finding URLs the default by @gricha and @claude in [#549](https://github.com/getsentry/warden/pull/549)
+- Explain findings skipped after PR changes by @gricha and @claude in [#507](https://github.com/getsentry/warden/pull/507)
+- Preserve finding timestamps in database reads by @gricha and @claude in [#505](https://github.com/getsentry/warden/pull/505)
+- Clarify finding detail context by @gricha and @claude in [#496](https://github.com/getsentry/warden/pull/496)
+- Skip ineligible memory jobs by @gricha and @claude in [#494](https://github.com/getsentry/warden/pull/494)
+- Record extraction calls once by @gricha and @claude in [#493](https://github.com/getsentry/warden/pull/493)
+- Apportion memory extraction usage by @gricha and @claude in [#492](https://github.com/getsentry/warden/pull/492)
+- Give memory evidence stable identities by @gricha and @claude in [#491](https://github.com/getsentry/warden/pull/491)
+- Release migration locks on timeout by @gricha and @claude in [#490](https://github.com/getsentry/warden/pull/490)
+- Allow bounded AI jobs to finish by @gricha and @claude in [#489](https://github.com/getsentry/warden/pull/489)
+- Run migrations against Vercel database by @gricha and @claude in [#488](https://github.com/getsentry/warden/pull/488)
+- Address production dashboard feedback by @gricha and @claude in [#486](https://github.com/getsentry/warden/pull/486)
+- Make ingest credentials write-only by @gricha and @claude in [#485](https://github.com/getsentry/warden/pull/485)
+- Preserve Vercel request bodies by @gricha and @claude in [#484](https://github.com/getsentry/warden/pull/484)
+- Buffer API bodies before authentication by @gricha and @claude in [#483](https://github.com/getsentry/warden/pull/483)
+- Keep OAuth redirects on the current origin by @gricha and @claude in [#482](https://github.com/getsentry/warden/pull/482)
+- Protect dashboard assets with OAuth by @gricha and @claude in [#481](https://github.com/getsentry/warden/pull/481)
+- Stop Vercel rewrite from polluting queries by @gricha and @claude in [#480](https://github.com/getsentry/warden/pull/480)
+- Rewrite nested Vercel API paths by @gricha and @claude in [#479](https://github.com/getsentry/warden/pull/479)
+- Route nested Vercel API paths by @gricha and @claude in [#478](https://github.com/getsentry/warden/pull/478)
+- Use Vercel Node request adapter by @gricha and @claude in [#477](https://github.com/getsentry/warden/pull/477)
+
+#### Other
+
+- (action) Do not record incremental baselines for runs that request changes by @Jeffreyhung with @sentry-junior in [#565](https://github.com/getsentry/warden/pull/565)
+- (ci) Load org config for Warden self-review by @gricha with @sentry-junior in [#537](https://github.com/getsentry/warden/pull/537)
+- (cli) Ship findings schema outside npm-ignored action dist by @NinjaLikesCheez with @sentry-junior in [#508](https://github.com/getsentry/warden/pull/508)
+- (config) Inherit org execution defaults for repo skills by @gricha and @claude in [#514](https://github.com/getsentry/warden/pull/514)
+- (dashboard) Open Usage first and make tab changes immediate by @gricha and @claude in [#534](https://github.com/getsentry/warden/pull/534)
+- (evals) Support any provider key, default CI to OpenRouter by @Jeffreyhung and @claude with @sentry-junior in [#563](https://github.com/getsentry/warden/pull/563)
+- (pi) Confine file tools to checkout by @gricha and @claude in [#513](https://github.com/getsentry/warden/pull/513)
+- (reporting) Resolve SkillReport.model from the actual API response by @CalebKAston and @claude in [#472](https://github.com/getsentry/warden/pull/472)
+- (warden) Avoid nested Pi provider retries by @gricha and @claude in [#511](https://github.com/getsentry/warden/pull/511)
+- Correct finding merging, skill access, and runtime limits by @gricha and @claude in [#531](https://github.com/getsentry/warden/pull/531)
+
+### Documentation 📚
+
+#### Benchmarks
+
+- Remove duplicate row and metadata labels by @gricha and @claude in [#532](https://github.com/getsentry/warden/pull/532)
+- Publish Gemini 3.8 Flash result by @gricha and @claude in [#527](https://github.com/getsentry/warden/pull/527)
+- Publish controlled Grok 4.5 and 4.6 rerun by @gricha and @claude in [#518](https://github.com/getsentry/warden/pull/518)
+- Add production and Kimi results by @gricha and @claude in [#517](https://github.com/getsentry/warden/pull/517)
+
+### Internal Changes 🔧
+
+#### Deps
+
+- Bump better-auth from 1.6.27 to 1.7.7 by @dependabot in [#557](https://github.com/getsentry/warden/pull/557)
+- Bump astro from 7.2.9 to 7.3.3 by @dependabot in [#253](https://github.com/getsentry/warden/pull/253)
+- Bump hono from 4.13.7 to 4.13.11 by @dependabot in [#552](https://github.com/getsentry/warden/pull/552)
+- Bump hono from 4.13.1 to 4.13.5 by @dependabot in [#529](https://github.com/getsentry/warden/pull/529)
+- Bump qs from 6.15.3 to 6.16.0 by @dependabot in [#528](https://github.com/getsentry/warden/pull/528)
+- Patch Dependabot vulnerabilities by @gricha and @claude in [#522](https://github.com/getsentry/warden/pull/522)
+- Bump smol-toml from 1.6.1 to 1.7.0 by @dependabot in [#252](https://github.com/getsentry/warden/pull/252)
+
+#### Deps Dev
+
+- Bump vite from 8.2.2 to 8.2.4 by @dependabot in [#551](https://github.com/getsentry/warden/pull/551)
+- Bump happy-dom from 20.14.5 to 21.0.4 by @dependabot in [#554](https://github.com/getsentry/warden/pull/554)
+
+#### Release
+
+- Move to Craft auto versioning by @BYK with @sentry-junior in [#567](https://github.com/getsentry/warden/pull/567)
+- Build service API before Action bundle by @gricha and @claude in [#475](https://github.com/getsentry/warden/pull/475)
+
+#### Service
+
+- Reduce dashboard cost query work by @gricha and @claude in [#506](https://github.com/getsentry/warden/pull/506)
+- Simplify dashboard database queries by @gricha and @claude in [#502](https://github.com/getsentry/warden/pull/502)
+- Render dashboard filters immediately by @gricha and @claude in [#501](https://github.com/getsentry/warden/pull/501)
+- Flatten dashboard data loading by @gricha and @claude in [#500](https://github.com/getsentry/warden/pull/500)
+- Speed up dashboard findings feed by @dcramer, @gricha and @claude with @sentry-junior in [#498](https://github.com/getsentry/warden/pull/498)
+- Default findings to last 30 days by @gricha and @claude in [#497](https://github.com/getsentry/warden/pull/497)
+
+#### Other
+
+- (dashboard) Adopt strict TypeScript, React, and Effect by @gricha and @claude in [#547](https://github.com/getsentry/warden/pull/547)
+- (dev) Add .worktreeinclude for local env files by @gricha in [#556](https://github.com/getsentry/warden/pull/556)
+- (runner) Parallelize hunk analysis by @gricha and @claude in [#519](https://github.com/getsentry/warden/pull/519)
+- (warden) Enable incremental review by @Jeffreyhung with @sentry-junior in [#566](https://github.com/getsentry/warden/pull/566)
+- Pin GitHub Actions to full-length commit SHAs by @joshuarli and @claude in [#251](https://github.com/getsentry/warden/pull/251)
+
+### Other
+
+- release: 0.52.0 by @getsentry-bot in [b3c0e984](https://github.com/getsentry/warden/commit/b3c0e9845d52b6089c7c5a8d206161a6db960564)
+- release: 0.51.1 by @getsentry-bot in [01045122](https://github.com/getsentry/warden/commit/010451228c843e28d8a71dd64a7e7001c5e89da4)
+- Prevent wrongly-rejected findings: keep the finding's own file in verifier changed_files by @babyalexford and @claude in [#539](https://github.com/getsentry/warden/pull/539)
+- release: 0.51.0 by @getsentry-bot in [c5e318c0](https://github.com/getsentry/warden/commit/c5e318c07d791a7e11eccd416baf3694f2101c66)
+- release: 0.50.0 by @getsentry-bot in [d2fc66db](https://github.com/getsentry/warden/commit/d2fc66dbaebf93aa8a52677ea1b6955e22b40c23)
+- release: 0.49.0 by @getsentry-bot in [ad93b080](https://github.com/getsentry/warden/commit/ad93b0805949f4432f62c1f16250109c05a726ee)
+- release: 0.48.0 by @getsentry-bot in [c4214110](https://github.com/getsentry/warden/commit/c421411016232fdd044139a065c38a4bbaed904a)
+- release: 0.47.0 by @getsentry-bot in [872ccb47](https://github.com/getsentry/warden/commit/872ccb4756804ee629e1f78e469302b611bf3197)
+- release: 0.46.2 by @getsentry-bot in [da5a6b8e](https://github.com/getsentry/warden/commit/da5a6b8e1aadc5c29da63804f5d93f01f2f8e872)
+- release: 0.46.1 by @getsentry-bot in [eba9c7a9](https://github.com/getsentry/warden/commit/eba9c7a9539c44ca77903f1f65459279a6be30be)
+
 ## 0.52.0
 
 ### New Features ✨
