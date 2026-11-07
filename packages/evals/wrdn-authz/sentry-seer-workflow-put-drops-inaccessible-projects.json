@@ -1,0 +1,36 @@
+{
+  "given": "Seer workflow config PUT validates only the project IDs in the request and then replaces the whole project selection, so a limited member can unlink projects they cannot access or narrow an all-projects workflow",
+  "files": [
+    "fixtures/sentry-seer-workflow-put-drops-inaccessible-projects/github/getsentry/sentry/src/sentry/seer/endpoints/organization_seer_workflow_configs.py"
+  ],
+  "should_find": [
+    {
+      "finding": "PUT replaces the workflow's project selection with the caller-supplied IDs after checking access only to those IDs, which deletes existing links to projects the caller cannot access and lets a member without global access convert an all_projects workflow to a narrower selection"
+    }
+  ],
+  "should_not_find": [
+    "monitor selection type validation",
+    "config ID parsing"
+  ],
+  "supporting_files": [
+    "fixtures/sentry-seer-workflow-put-drops-inaccessible-projects/github/getsentry/sentry/src/sentry/seer/workflows/workflow.py",
+    "fixtures/sentry-seer-workflow-put-drops-inaccessible-projects/github/getsentry/sentry/LICENSE.md"
+  ],
+  "notes": {
+    "source": "https://github.com/getsentry/sentry/pull/129734",
+    "repository": "getsentry/sentry",
+    "source_ref": "d74d48356f2c822f69463c41922823908683e084",
+    "source_files": [
+      {
+        "fixturePath": "fixtures/sentry-seer-workflow-put-drops-inaccessible-projects/github/getsentry/sentry/src/sentry/seer/endpoints/organization_seer_workflow_configs.py",
+        "sourcePath": "src/sentry/seer/endpoints/organization_seer_workflow_configs.py",
+        "ref": "d74d48356f2c822f69463c41922823908683e084"
+      },
+      {
+        "fixturePath": "fixtures/sentry-seer-workflow-put-drops-inaccessible-projects/github/getsentry/sentry/src/sentry/seer/workflows/workflow.py",
+        "sourcePath": "src/sentry/seer/workflows/workflow.py",
+        "ref": "d74d48356f2c822f69463c41922823908683e084"
+      }
+    ]
+  }
+}

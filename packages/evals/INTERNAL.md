@@ -59,10 +59,49 @@ source finding is not actually a reachable bug under the target skill.
 - `packages/evals/src/code-review.eval.ts`: code-review correctness benchmark scenarios.
 - `packages/evals/src/security-review.eval.ts`: security-review benchmark scenarios.
 - `packages/evals/src/verify.eval.ts`: verifier-only scenarios.
+- `packages/evals/wrdn-*/*.json`: one scenario per file for a remote
+  `getsentry/warden-skills` security skill.
+- `packages/evals/src/security-matrix.eval.ts`: runs each `wrdn-*` scenario
+  under both builtin security-review and the owning `wrdn-*` skill.
 
 Eval names should read as `<skill>/<case>`. Runtime and model belong to the
 suite configuration, not the case identity. Avoid category names that hide the
 real skill under test.
+
+## Security Coverage
+
+Security accuracy has two layers. Neither replaces the other.
+
+**PR-fixture matrix (CI).** `security-matrix.eval.ts` answers one question:
+does a `wrdn-*` skill catch bugs that security-review misses? Each scenario in
+`packages/evals/<wrdn-skill>/` runs in two lanes, `security-matrix/<skill>/security-review`
+and `security-matrix/<skill>/<skill>`. A case only the `wrdn-*` lane passes is
+coverage that skill adds. A skill whose cases security-review also passes is
+redundant on that evidence.
+
+- Remote skills load from the pinned `WARDEN_SKILLS_REMOTE` ref through
+  Warden's normal remote skill cache. Bump the SHA on purpose and rerun.
+- Seed scenarios from real findings that only the `wrdn-*` skill posted on a
+  PR. Write `should_find` for the real bug even when a lane misses it today.
+- These cases are expected to fail in the security-review lane. That lowers the
+  aggregate eval score by design; read the per-lane results, not the average.
+- Roach records them like any other eval. Add `run-evals` to record new cases.
+
+**Vulnerability corpus (repeated benchmark).** The
+[Sentry vulnerability corpus](../docs/src/content/docs/benchmarking/running.mdx)
+is the regression bar for security-review model, effort, and harness changes.
+It is not a CI eval: runs cost real money and are scored by hand.
+
+- One run is noise. Two identical Grok 4.5 runs agreed on only 32 of the 46
+  entries either one found. Compare configurations on at least 3 runs each.
+- Report per-entry hit rate across runs, not one found count. An entry found
+  3 of 3 times that drops to 0 of 3 is a regression; a 1 of 3 entry moving is
+  not evidence.
+- The corpus is mostly authorization bugs, with a few webhook, crypto,
+  injection, and secret-logging entries. It has close to nothing for DoS, data
+  exfiltration, or code execution, so `wrdn-dos-review`, `wrdn-data-exfil`,
+  and `wrdn-code-execution` need their own fixtures in the matrix before any
+  claim about their coverage holds.
 
 ## Adding Full-Pipeline Evals
 
