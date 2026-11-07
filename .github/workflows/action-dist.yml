@@ -1,11 +1,11 @@
 name: Action Bundle
 
-# Rebuilds dist/action on same-repo PRs and commits it back. The push uses
-# an app token so CI runs again on the new commit. The build job runs PR
-# code with no secrets. The commit job gets the token and runs no PR build
-# or install, so no PR lifecycle script or git hook runs next to it. Fork PRs can't be pushed
-# to, so the "Check action bundle is committed" step in ci.yml stays as
-# the gate there and on every other commit.
+# Rebuilds dist/action on same-repo PRs. When the committed bundle is stale,
+# the build job uploads the new bundle as an artifact. This workflow runs PR
+# code, so it gets no secrets and a read-only token. commit-action-dist.yml
+# runs on workflow_run from the default branch and commits the artifact back.
+# Fork PRs can't be pushed to, so the "Check action bundle is committed" step
+# in ci.yml stays as the gate there and on every other commit.
 
 permissions:
   contents: read
@@ -25,8 +25,6 @@ jobs:
       github.event.pull_request.head.repo.full_name == github.repository &&
       github.actor != 'dependabot[bot]'
     runs-on: ubuntu-latest
-    outputs:
-      stale: ${{ steps.changes.outputs.stale }}
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
@@ -43,46 +41,15 @@ jobs:
       - run: pnpm build
       - run: pnpm build:action
 
+      # A stale bundle is not a failure here; commit-action-dist.yml fixes it.
       - name: Check for bundle changes
-        id: changes
-        run: test -z "$(git status --porcelain -- dist/action)" || echo "stale=true" >> "$GITHUB_OUTPUT"
+        id: check
+        continue-on-error: true
+        run: sh bin/check-action-dist.sh
 
-      - if: steps.changes.outputs.stale == 'true'
+      - if: steps.check.outcome == 'failure'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: action-dist
           path: dist/action/
           retention-days: 1
-
-  commit:
-    needs: build
-    if: needs.build.outputs.stale == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      # The same commit the build job used. If the branch moved since, the
-      # push is not a fast-forward and fails; the new commit gets its own run.
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-        with:
-          ref: ${{ github.event.pull_request.head.sha }}
-          persist-credentials: false
-
-      - name: Remove old bundle
-        run: rm -rf dist/action
-
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
-        with:
-          name: action-dist
-          path: dist/action/
-
-      - name: Get auth token
-        id: token
-        uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547 # v1
-        with:
-          app-id: ${{ vars.SENTRY_RELEASE_BOT_CLIENT_ID }}
-          private-key: ${{ secrets.SENTRY_RELEASE_BOT_PRIVATE_KEY }}
-
-      - name: Commit bundle
-        env:
-          PUSH_TOKEN: ${{ steps.token.outputs.token }}
-          HEAD_REF: ${{ github.head_ref }}
-        run: sh bin/commit-action-dist.sh

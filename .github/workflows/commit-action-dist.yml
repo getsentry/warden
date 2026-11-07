@@ -1,0 +1,75 @@
+name: Commit Action Bundle
+
+# Commits the bundle that action-dist.yml built back to the PR branch.
+# workflow_run always runs this file from the default branch, so a PR cannot
+# change it to read the release bot key. The PR identity comes from the
+# workflow_run payload. The artifact is untrusted data: only regular files
+# are copied, and no code from the PR checkout runs.
+
+on:
+  workflow_run:
+    workflows: [Action Bundle]
+    types: [completed]
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: commit-action-dist-${{ github.event.workflow_run.head_branch }}
+  cancel-in-progress: true
+
+jobs:
+  commit:
+    if: >-
+      github.event.workflow_run.event == 'pull_request' &&
+      github.event.workflow_run.head_repository.full_name == github.repository &&
+      github.event.workflow_run.actor.login != 'dependabot[bot]' &&
+      github.event.workflow_run.head_branch != 'main' &&
+      !startsWith(github.event.workflow_run.head_branch, 'release/')
+    runs-on: ubuntu-latest
+    env:
+      ARTIFACT_DIR: artifact
+      HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+      HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+    steps:
+      # Scripts come from the default branch, not from the PR.
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          path: trusted
+          persist-credentials: false
+
+      # No artifact means the bundle was fresh. Then nothing is downloaded.
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          pattern: action-dist
+          merge-multiple: true
+          path: ${{ env.ARTIFACT_DIR }}
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+
+      # The exact commit that was built. If the branch moved since, the push
+      # is not a fast-forward and fails; the new commit gets its own run.
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          ref: ${{ env.HEAD_SHA }}
+          path: pr
+          persist-credentials: false
+
+      - name: Commit bundle
+        id: commit
+        run: sh trusted/bin/commit-action-dist.sh "$ARTIFACT_DIR" pr
+
+      - name: Get auth token
+        if: steps.commit.outputs.committed == 'true'
+        id: token
+        uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547 # v1
+        with:
+          app-id: ${{ vars.SENTRY_RELEASE_BOT_CLIENT_ID }}
+          private-key: ${{ secrets.SENTRY_RELEASE_BOT_PRIVATE_KEY }}
+
+      - name: Push bundle
+        if: steps.commit.outputs.committed == 'true'
+        env:
+          PUSH_TOKEN: ${{ steps.token.outputs.token }}
+        run: sh trusted/bin/push-action-dist.sh pr

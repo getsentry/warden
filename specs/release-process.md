@@ -35,7 +35,12 @@ npm tarball          packages/warden/dist/ (tsc output) plus runtime skill asset
 
 `dist/action/` is committed so every commit, including every release tag, can run as an Action. `.gitattributes` marks it `linguist-generated`, so GitHub collapses it in diffs.
 
-On PRs from a branch in this repo, `action-dist.yml` rebuilds the bundle and `bin/commit-action-dist.sh` commits it back to the PR branch. The push uses a release bot app token, so CI runs again on the new commit. The work runs in two jobs. The `build` job runs PR code with no secrets and uploads the bundle as an artifact. The `commit` job creates the token, downloads the artifact and commits it. It runs no install or build, and git hooks are off. If the branch moved after the build, the push is not a fast-forward and fails.
+On PRs from a branch in this repo, two workflows rebuild the bundle and commit it back to the PR branch:
+
+- `action-dist.yml` runs on `pull_request`. Its `build` job runs PR code with a read-only token and no secrets. When the committed bundle is stale, it uploads the new bundle as the `action-dist` artifact.
+- `commit-action-dist.yml` runs on `workflow_run` when `action-dist.yml` completes. GitHub always runs it from the default branch, so a PR cannot change it to read the release bot key. It takes the PR branch and commit from the `workflow_run` payload, not from the artifact. It skips runs that are not `pull_request`, runs from forks or Dependabot, and the `main` and `release/*` branches. It downloads the artifact from that run, checks out the PR commit with no credentials, and runs `bin/commit-action-dist.sh` from the default branch. The script treats the artifact as untrusted: it fails on anything that is not a regular file or directory, copies the files into `dist/action/`, and commits with git hooks off. No PR code runs. The job creates the release bot app token last, and `bin/push-action-dist.sh` pushes. CI runs again on the new commit because the push uses an app token. If the branch moved after the build, the push is not a fast-forward and fails.
+
+`workflow_run` uses the workflow file on the default branch, so a change to `commit-action-dist.yml` takes effect only after it merges.
 
 GitHub cannot push to fork PR branches. There, the contributor runs `pnpm build:action` and commits `dist/action/`.
 
@@ -116,7 +121,7 @@ After that release, run `git ls-remote origin refs/tags/v0` and make sure that `
 
 ## Failure modes
 
-**Stale bundle**: On same-repo PRs, `action-dist.yml` commits the rebuild. On fork PRs, CI fails until the contributor commits it. Two PRs that each pass can still leave main stale when both merge. The check on main shows it, and the release branch check blocks publish until a PR fixes it.
+**Stale bundle**: On same-repo PRs, `commit-action-dist.yml` commits the rebuild. On fork PRs, CI fails until the contributor commits it. Two PRs that each pass can still leave main stale when both merge. The check on main shows it, and the release branch check blocks publish until a PR fixes it.
 
 **npm publish is independent**: The npm tarball is built by CI. Craft publishes it from that artifact.
 
@@ -138,8 +143,10 @@ Controls what goes into the npm tarball. Key exclusions:
 | `bin/bump-version.sh` | Version bump + build validation for the release branch |
 | `bin/check-release-baseline.sh` | Fails a release without `version` when the latest version tag is not the package version |
 | `bin/check-action-dist.sh` | Fails when the committed `dist/action/` is stale |
-| `bin/commit-action-dist.sh` | Commits a rebuilt `dist/action/` back to a same-repo PR branch |
-| `.github/workflows/action-dist.yml` | Rebuilds `dist/action/` on same-repo PRs and runs `bin/commit-action-dist.sh` |
+| `bin/commit-action-dist.sh` | Copies the bundle artifact into a PR checkout and commits it |
+| `bin/push-action-dist.sh` | Pushes the bundle commit to the PR branch, fast-forward only |
+| `.github/workflows/action-dist.yml` | Rebuilds `dist/action/` on same-repo PRs and uploads it when stale |
+| `.github/workflows/commit-action-dist.yml` | On `workflow_run`, commits the uploaded bundle back to the PR branch |
 | `.github/workflows/release.yml` | Runs Craft to prepare the release |
 | `.github/workflows/ci.yml` | Builds tarball for npm, checks the action bundle |
 | `action.yml` | GitHub Action definition, references `dist/action/index.js` |
