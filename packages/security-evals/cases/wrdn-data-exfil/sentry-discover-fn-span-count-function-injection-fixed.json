@@ -1,0 +1,10 @@
+{
+  "kind": "clean",
+  "summary": "DiscoverDatasetConfig's fn_span_count declares its fn argument as an SnQLStringArg with no allowed_strings, so the caller's value passes through unchanged and becomes the name of the generated ClickHouse function, letting an events API caller call arbitrary ClickHouse functions in the query Sentry sends to Snuba",
+  "repository": "getsentry/sentry",
+  "ref": "be425544501ac37ccc6730d78d39b830bf69021e",
+  "targets": [
+    "src/sentry/search/events/datasets/discover.py"
+  ],
+  "source": "https://github.com/getsentry/sentry/commit/be425544501ac37ccc6730d78d39b830bf69021e"
+}
