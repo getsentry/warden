@@ -1,0 +1,84 @@
+{
+  "tenant": "getsentry/warden",
+  "allow": [
+    "https://api.anthropic.com",
+    "https://openrouter.ai",
+    "https://api.openai.com",
+    "https://pi.dev"
+  ],
+  "rules": [
+    {
+      "name": "model",
+      "match": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/"
+      },
+      "values": {
+        "worktree-root": "(?:/[A-Za-z0-9_.-]+)+/security-evals-worktrees",
+        "git-commit": {
+          "builtin": "gitCommit"
+        },
+        "uuid": {
+          "builtin": "uuid"
+        },
+        "time": {
+          "builtin": "isoTime"
+        },
+        "finding-id": "(?<![A-Za-z0-9-])[A-HJ-NP-Z2-9]{3}-[A-HJ-NP-Z2-9]{3}(?![A-Za-z0-9-])",
+        "warden-checkout": "(?:/[A-Za-z0-9_.-]+)+(?=/packages/warden/src/builtin-skills/)",
+        "skills-cache": "(?:/[A-Za-z0-9_.-]+)+(?=/getsentry/warden-skills@)"
+      }
+    },
+    {
+      "name": "model-openrouter",
+      "match": {
+        "method": "POST",
+        "url": "https://openrouter.ai/api/v1/"
+      },
+      "values": {
+        "worktree-root": "(?:/[A-Za-z0-9_.-]+)+/security-evals-worktrees",
+        "git-commit": {
+          "builtin": "gitCommit"
+        },
+        "uuid": {
+          "builtin": "uuid"
+        },
+        "time": {
+          "builtin": "isoTime"
+        },
+        "finding-id": "(?<![A-Za-z0-9-])[A-HJ-NP-Z2-9]{3}-[A-HJ-NP-Z2-9]{3}(?![A-Za-z0-9-])",
+        "warden-checkout": "(?:/[A-Za-z0-9_.-]+)+(?=/packages/warden/src/builtin-skills/)",
+        "skills-cache": "(?:/[A-Za-z0-9_.-]+)+(?=/getsentry/warden-skills@)"
+      }
+    },
+    {
+      "name": "model-openai",
+      "match": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/"
+      },
+      "values": {
+        "worktree-root": "(?:/[A-Za-z0-9_.-]+)+/security-evals-worktrees",
+        "git-commit": {
+          "builtin": "gitCommit"
+        },
+        "uuid": {
+          "builtin": "uuid"
+        },
+        "time": {
+          "builtin": "isoTime"
+        },
+        "finding-id": "(?<![A-Za-z0-9-])[A-HJ-NP-Z2-9]{3}-[A-HJ-NP-Z2-9]{3}(?![A-Za-z0-9-])",
+        "warden-checkout": "(?:/[A-Za-z0-9_.-]+)+(?=/packages/warden/src/builtin-skills/)",
+        "skills-cache": "(?:/[A-Za-z0-9_.-]+)+(?=/getsentry/warden-skills@)"
+      }
+    },
+    {
+      "name": "model-catalog",
+      "match": {
+        "method": "GET",
+        "url": "https://pi.dev/api/models/"
+      }
+    }
+  ]
+}

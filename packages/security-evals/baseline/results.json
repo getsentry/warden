@@ -1,0 +1,1292 @@
+{
+  "entries": {
+    "sentry-vuln-001": {
+      "kind": "bug",
+      "lanes": {
+        "security-review": {
+          "hits": 2,
+          "runs": 2
+        }
+      },
+      "ref": "788ba30f1aa42b00c02d64ed4b8b2515ff8ab8da",
+      "source": "corpus",
+      "targets": [
+        "src/sentry/api/endpoints/accept_organization_invite.py"
+      ]
+    },
+    "sentry-vuln-002": {
+      "kind": "bug",
+      "lanes": {
+        "security-review": {
+          "hits": 1,
+          "runs": 2
+        }
+      },
+      "ref": "2d929588e20b931d2631ade31405f6ddbd34603a",
+      "source": "corpus",
+      "targets": [
+        "src/sentry/workflow_engine/endpoints/organization_alertrule_detector_index.py"
+      ]
+    },
+    "sentry-vuln-003": {
+      "kind": "bug",
+      "lanes": {
+        "security-review": {
+          "hits": 2,
+          "runs": 2
+        }
+      },
+      "ref": "2d929588e20b931d2631ade31405f6ddbd34603a",
+      "source": "corpus",
+      "targets": [
+        "src/sentry/api/endpoints/internal_ea_features.py"
+      ]
+    },
+    "sentry-vuln-004": {
+      "kind": "bug",
+      "lanes": {
+        "security-review": {
+          "hits": 2,
+          "runs": 2
+        }
+      },
+      "ref": "2d929588e20b931d2631ade31405f6ddbd34603a",
+      "source": "corpus",
+      "targets": [
+        "src/sentry/api/endpoints/oauth_userinfo.py"
+      ]
+    },
+    "sentry-vuln-005": {
+      "kind": "bug",
+      "lanes": {
+        "security-review": {
+          "hits": 0,
+          "runs": 2
+        }
+      },
+      "ref": "2d929588e20b931d2631ade31405f6ddbd34603a",
+      "source": "corpus",
+      "targets": [
+        "src/sentry/api/endpoints/oauth_userinfo.py"
+      ]
+    },
+    "sentry-vuln-006": {
+      "kind": "bug",
+      "lanes": {
+        "security-review": {
+          "hits": 0,
+          "runs": 2
+        }
+      },
+      "ref": "2d929588e20b931d2631ade31405f6ddbd34603a",
+      "source": "corpus",
+      "targets": [
+        "src/sentry/api/endpoints/organization_plugin_deprecation_info.py"
+      ]
+    },
+    "sentry-vuln-007": {
+      "kind": "bug",
+      "lanes": {
+        "security-review": {
+          "hits": 2,
+          "runs": 2
+        }
+      },
+      "ref": "2d929588e20b931d2631ade31405f6ddbd34603a",
+      "source": "corpus",
+      "targets": [
+        "src/sentry/api/endpoints/release_thresholds/release_threshold_index.py"
+      ]
+    },
+    "sentry-vuln-008": {
+      "kind": "bug",
+      "lanes": {
+        "security-review": {
+          "hits": 0,
+          "runs": 2
+        }
+      },
+      "ref": "2d929588e20b931d2631ade31405f6ddbd34603a",
+      "source": "corpus",
+      "targets": [
+        "src/sentry/api/endpoints/system_options.py"
+      ]
+    },
+    "sentry-vuln-009": {
+      "kind": "bug",
+      "lanes": {
+        "security-review": {
+          "hits": 0,
+          "runs": 2
+        }
+      },
+      "ref": "fbecd17d210c2eacfad4bf17872be62320b8a110",
+      "source": "corpus",
+      "targets": [
+        "src/sentry/api/endpoints/organization_events_root_cause_analysis.py"
+      ]
+    },
+    "sentry-vuln-010": {
+      "kind": "bug",
+      "lanes": {
+        "security-review": {
+          "hits": 0,
+          "runs": 2
+        }
+      },
+      "ref": "fbecd17d210c2eacfad4bf17872be62320b8a110",
+      "source": "corpus",
+      "targets": [
+        "src/sentry/api/endpoints/system_options.py"
+      ]
+    },
+    "sentry-vuln-011": {
+      "kind": "bug",
+      "lanes": {
+        "security-review": {
+          "hits": 2,
+          "runs": 2
+        }
+      },
+      "ref": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "source": "corpus",
+      "targets": [
+        "src/sentry/integrations/jira/webhooks/installed.py"
+      ]
+    },
+    "sentry-vuln-012": {
+      "kind": "bug",
+      "lanes": {
+        "security-review": {
+          "hits": 2,
+          "runs": 2
+        }
+      },
+      "ref": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "source": "corpus",
+      "targets": [
+        "src/sentry/integrations/msteams/webhook.py"
+      ]
+    },
+    "sentry-vuln-013": {
+      "kind": "bug",
+      "lanes": {
+        "security-review": {
+          "hits": 2,
+          "runs": 2
+        }
+      },
+      "ref": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "source": "corpus",
+      "targets": [
+        "src/sentry/integrations/perforce/integration.py"
+      ]
+    },
+    "sentry-vuln-014": {
+      "kind": "bug",
+      "lanes": {
+        "security-review": {
+          "hits": 2,
+          "runs": 2
+        }
+      },
+      "ref": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "source": "corpus",
+      "targets": [
+        "src/sentry/integrations/slack/webhooks/options_load.py"
+      ]
+    },
+    "sentry-vuln-015": {
+      "kind": "bug",
+      "lanes": {
+        "security-review": {
+          "hits": 2,
+          "runs": 2
+        }
+      },
+      "ref": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "source": "corpus",
+      "targets": [
+        "src/sentry/replays/endpoints/data_export_notifications.py"
+      ]
+    },
+    "sentry-vuln-016": {
+      "kind": "bug",
+      "lanes": {
+        "security-review": {
+          "hits": 0,
+          "runs": 2
+        }
+      },
+      "ref": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "source": "corpus",
+      "targets": [
+        "src/sentry/replays/endpoints/project_replay_details.py"
+      ]
+    },
+    "sentry-vuln-017": {
+      "kind": "bug",
+      "lanes": {
+        "security-review": {
+          "hits": 2,
+          "runs": 2
+        }
+      },
+      "ref": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "source": "corpus",
+      "targets": [
+        "src/sentry/preprod/api/endpoints/preprod_artifact_snapshot.py"
+      ]
+    },
+    "sentry-vuln-018": {
+      "kind": "bug",
+      "lanes": {
+        "security-review": {
+          "hits": 2,
+          "runs": 2
+        }
+      },
+      "ref": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "source": "corpus",
+      "targets": [
+        "src/sentry/api/endpoints/organization_pinned_searches.py"
+      ]
+    },
+    "sentry-vuln-019": {
+      "kind": "bug",
+      "lanes": {
+        "security-review": {
+          "hits": 2,
+          "runs": 2
+        }
+      },
+      "ref": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "source": "corpus",
+      "targets": [
+        "src/sentry/auth/services/access/impl.py"
+      ]
+    },
+    "sentry-vuln-020": {
+      "kind": "bug",
+      "lanes": {
+        "security-review": {
+          "hits": 0,
+          "runs": 2
+        }
+      },
+      "ref": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "source": "corpus",
+      "targets": [
+        "src/sentry/users/models/user_merge_verification_code.py"
+      ]
+    },
+    "sentry-vuln-021": {
+      "kind": "bug",
+      "lanes": {
+        "security-review": {
+          "hits": 2,
+          "runs": 2
+        }
+      },
+      "ref": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "source": "corpus",
+      "targets": [
+        "src/sentry/codecov/endpoints/repository_token_regenerate/repository_token_regenerate.py"
+      ]
+    },
+    "sentry-vuln-022": {
+      "kind": "bug",
+      "lanes": {
+        "security-review": {
+          "hits": 0,
+          "runs": 2
+        }
+      },
+      "ref": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "source": "corpus",
+      "targets": [
+        "src/sentry/explore/endpoints/explore_saved_query_detail.py"
+      ]
+    },
+    "sentry-vuln-023": {
+      "kind": "bug",
+      "lanes": {
+        "security-review": {
+          "hits": 0,
+          "runs": 2
+        }
+      },
+      "ref": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "source": "corpus",
+      "targets": [
+        "src/sentry/flags/endpoints/secrets.py"
+      ]
+    },
+    "sentry-vuln-024": {
+      "kind": "bug",
+      "lanes": {
+        "security-review": {
+          "hits": 0,
+          "runs": 2
+        }
+      },
+      "ref": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "source": "corpus",
+      "targets": [
+        "src/sentry/api/endpoints/project_rules.py"
+      ]
+    },
+    "sentry-vuln-025": {
+      "kind": "bug",
+      "lanes": {
+        "security-review": {
+          "hits": 1,
+          "runs": 2
+        }
+      },
+      "ref": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "source": "corpus",
+      "targets": [
+        "src/sentry/integrations/api/endpoints/external_team_details.py"
+      ]
+    },
+    "sentry-vuln-026": {
+      "kind": "bug",
+      "lanes": {
+        "security-review": {
+          "hits": 2,
+          "runs": 2
+        }
+      },
+      "ref": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "source": "corpus",
+      "targets": [
+        "src/sentry/integrations/messaging/linkage.py"
+      ]
+    },
+    "sentry-vuln-027": {
+      "kind": "bug",
+      "lanes": {
+        "security-review": {
+          "hits": 0,
+          "runs": 2
+        }
+      },
+      "ref": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "source": "corpus",
+      "targets": [
+        "src/sentry/integrations/slack/webhooks/action.py"
+      ]
+    },
+    "sentry-vuln-028": {
+      "kind": "bug",
+      "lanes": {
+        "security-review": {
+          "hits": 0,
+          "runs": 2
+        }
+      },
+      "ref": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "source": "corpus",
+      "targets": [
+        "src/sentry/api/endpoints/accept_organization_invite.py"
+      ]
+    },
+    "sentry-vuln-029": {
+      "kind": "bug",
+      "lanes": {
+        "security-review": {
+          "hits": 1,
+          "runs": 2
+        }
+      },
+      "ref": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "source": "corpus",
+      "targets": [
+        "src/sentry/notifications/notification_action/group_type_notification_registry/handlers/metric_alert_registry_handler.py"
+      ]
+    },
+    "sentry-vuln-030": {
+      "kind": "bug",
+      "lanes": {
+        "security-review": {
+          "hits": 2,
+          "runs": 2
+        }
+      },
+      "ref": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "source": "corpus",
+      "targets": [
+        "src/sentry/preprod/api/endpoints/preprod_artifact_approve.py"
+      ]
+    },
+    "sentry-vuln-031": {
+      "kind": "bug",
+      "lanes": {
+        "security-review": {
+          "hits": 1,
+          "runs": 2
+        }
+      },
+      "ref": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "source": "corpus",
+      "targets": [
+        "src/sentry/preprod/api/endpoints/public/organization_preprod_size_analysis.py"
+      ]
+    },
+    "sentry-vuln-032": {
+      "kind": "bug",
+      "lanes": {
+        "security-review": {
+          "hits": 0,
+          "runs": 2
+        }
+      },
+      "ref": "7f41cc502faa1088108e896565409be72d92bc38",
+      "source": "corpus",
+      "targets": [
+        "src/sentry/projects/services/project_key/impl.py"
+      ]
+    },
+    "sentry-vuln-033": {
+      "kind": "bug",
+      "lanes": {
+        "security-review": {
+          "hits": 0,
+          "runs": 2
+        }
+      },
+      "ref": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "source": "corpus",
+      "targets": [
+        "src/sentry/replays/usecases/replay_counts.py"
+      ]
+    },
+    "sentry-vuln-034": {
+      "kind": "bug",
+      "lanes": {
+        "security-review": {
+          "hits": 2,
+          "runs": 2
+        }
+      },
+      "ref": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "source": "corpus",
+      "targets": [
+        "src/sentry/seer/autofix/autofix_agent.py"
+      ]
+    },
+    "sentry-vuln-035": {
+      "kind": "bug",
+      "lanes": {
+        "security-review": {
+          "hits": 2,
+          "runs": 2
+        }
+      },
+      "ref": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "source": "corpus",
+      "targets": [
+        "src/sentry/seer/endpoints/organization_autofix_automation_settings.py"
+      ]
+    },
+    "sentry-vuln-036": {
+      "kind": "bug",
+      "lanes": {
+        "security-review": {
+          "hits": 1,
+          "runs": 2
+        }
+      },
+      "ref": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "source": "corpus",
+      "targets": [
+        "src/sentry/seer/supergroups/endpoints/organization_supergroups_by_group.py"
+      ]
+    },
+    "sentry-vuln-037": {
+      "kind": "bug",
+      "lanes": {
+        "security-review": {
+          "hits": 2,
+          "runs": 2
+        }
+      },
+      "ref": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "source": "corpus",
+      "targets": [
+        "src/sentry/sentry_apps/services/cell/impl.py"
+      ]
+    },
+    "sentry-vuln-038": {
+      "kind": "bug",
+      "lanes": {
+        "security-review": {
+          "hits": 0,
+          "runs": 2
+        }
+      },
+      "ref": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "source": "corpus",
+      "targets": [
+        "src/sentry/sentry_apps/api/endpoints/installation_external_issue_actions.py"
+      ]
+    },
+    "sentry-vuln-039": {
+      "kind": "bug",
+      "lanes": {
+        "security-review": {
+          "hits": 2,
+          "runs": 2
+        }
+      },
+      "ref": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "source": "corpus",
+      "targets": [
+        "src/sentry/workflow_engine/endpoints/organization_open_periods.py"
+      ]
+    },
+    "sentry-vuln-040": {
+      "kind": "bug",
+      "lanes": {
+        "security-review": {
+          "hits": 0,
+          "runs": 2
+        }
+      },
+      "ref": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "source": "corpus",
+      "targets": [
+        "src/sentry/workflow_engine/endpoints/validators/utils.py"
+      ]
+    },
+    "sentry-vuln-041": {
+      "kind": "bug",
+      "lanes": {
+        "security-review": {
+          "hits": 1,
+          "runs": 2
+        }
+      },
+      "ref": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "source": "corpus",
+      "targets": [
+        "src/sentry/discover/endpoints/discover_saved_query_detail.py"
+      ]
+    },
+    "sentry-vuln-042": {
+      "kind": "bug",
+      "lanes": {
+        "security-review": {
+          "hits": 0,
+          "runs": 2
+        }
+      },
+      "ref": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "source": "corpus",
+      "targets": [
+        "src/sentry/integrations/slack/webhooks/action.py"
+      ]
+    },
+    "sentry-vuln-043": {
+      "kind": "bug",
+      "lanes": {
+        "security-review": {
+          "hits": 0,
+          "runs": 2
+        }
+      },
+      "ref": "9fc06de579fbbee810565304efcc982e5dea1d1a",
+      "source": "corpus",
+      "targets": [
+        "src/sentry/notifications/platform/api/endpoints/internal_registered_templates.py"
+      ]
+    },
+    "sentry-vuln-044": {
+      "kind": "bug",
+      "lanes": {
+        "security-review": {
+          "hits": 0,
+          "runs": 2
+        }
+      },
+      "ref": "6993246259d0193a6a6aac49aa3763959b1126df",
+      "source": "corpus",
+      "targets": [
+        "src/sentry/api/endpoints/auth_index.py"
+      ]
+    },
+    "sentry-vuln-045": {
+      "kind": "bug",
+      "lanes": {
+        "security-review": {
+          "hits": 0,
+          "runs": 2
+        }
+      },
+      "ref": "7f41cc502faa1088108e896565409be72d92bc38",
+      "source": "corpus",
+      "targets": [
+        "src/sentry/seer/endpoints/organization_seer_rpc.py"
+      ]
+    },
+    "sentry-vuln-046": {
+      "kind": "bug",
+      "lanes": {
+        "security-review": {
+          "hits": 2,
+          "runs": 2
+        }
+      },
+      "ref": "7f41cc502faa1088108e896565409be72d92bc38",
+      "source": "corpus",
+      "targets": [
+        "src/sentry/preprod/api/endpoints/pull_request/organization_pullrequest_size_analysis_download.py"
+      ]
+    },
+    "sentry-vuln-047": {
+      "kind": "bug",
+      "lanes": {
+        "security-review": {
+          "hits": 2,
+          "runs": 2
+        }
+      },
+      "ref": "7f41cc502faa1088108e896565409be72d92bc38",
+      "source": "corpus",
+      "targets": [
+        "src/sentry/api/endpoints/project_rule_details.py"
+      ]
+    },
+    "sentry-vuln-048": {
+      "kind": "bug",
+      "lanes": {
+        "security-review": {
+          "hits": 1,
+          "runs": 2
+        }
+      },
+      "ref": "7f41cc502faa1088108e896565409be72d92bc38",
+      "source": "corpus",
+      "targets": [
+        "src/sentry/preprod/api/endpoints/size_analysis/project_preprod_size_analysis_compare_download.py"
+      ]
+    },
+    "sentry-vuln-049": {
+      "kind": "bug",
+      "lanes": {
+        "security-review": {
+          "hits": 0,
+          "runs": 2
+        }
+      },
+      "ref": "7f41cc502faa1088108e896565409be72d92bc38",
+      "source": "corpus",
+      "targets": [
+        "src/sentry/api/endpoints/organization_pipeline.py"
+      ]
+    },
+    "sentry-vuln-050": {
+      "kind": "bug",
+      "lanes": {
+        "security-review": {
+          "hits": 0,
+          "runs": 2
+        }
+      },
+      "ref": "7f41cc502faa1088108e896565409be72d92bc38",
+      "source": "corpus",
+      "targets": [
+        "src/sentry/api/serializers/models/projectcodeowners.py"
+      ]
+    },
+    "sentry-vuln-051": {
+      "kind": "bug",
+      "lanes": {
+        "security-review": {
+          "hits": 2,
+          "runs": 2
+        }
+      },
+      "ref": "7f41cc502faa1088108e896565409be72d92bc38",
+      "source": "corpus",
+      "targets": [
+        "src/sentry/integrations/bitbucket_server/urls.py"
+      ]
+    },
+    "sentry-vuln-052": {
+      "kind": "bug",
+      "lanes": {
+        "security-review": {
+          "hits": 0,
+          "runs": 2
+        }
+      },
+      "ref": "7f41cc502faa1088108e896565409be72d92bc38",
+      "source": "corpus",
+      "targets": [
+        "src/sentry/integrations/models/data_forwarder.py"
+      ]
+    },
+    "sentry-vuln-053": {
+      "kind": "bug",
+      "lanes": {
+        "security-review": {
+          "hits": 0,
+          "runs": 2
+        }
+      },
+      "ref": "7f41cc502faa1088108e896565409be72d92bc38",
+      "source": "corpus",
+      "targets": [
+        "src/sentry/sentry_apps/api/endpoints/installation_external_issue_actions.py"
+      ]
+    },
+    "sentry-vuln-054": {
+      "kind": "bug",
+      "lanes": {
+        "security-review": {
+          "hits": 0,
+          "runs": 2
+        }
+      },
+      "ref": "7f41cc502faa1088108e896565409be72d92bc38",
+      "source": "corpus",
+      "targets": [
+        "src/sentry/relocation/api/endpoints/retry.py"
+      ]
+    },
+    "sentry-vuln-055": {
+      "kind": "bug",
+      "lanes": {
+        "security-review": {
+          "hits": 2,
+          "runs": 2
+        }
+      },
+      "ref": "7f41cc502faa1088108e896565409be72d92bc38",
+      "source": "corpus",
+      "targets": [
+        "src/sentry/seer/endpoints/organization_seer_rpc.py"
+      ]
+    },
+    "sentry-vuln-056": {
+      "kind": "bug",
+      "lanes": {
+        "security-review": {
+          "hits": 1,
+          "runs": 2
+        }
+      },
+      "ref": "7f41cc502faa1088108e896565409be72d92bc38",
+      "source": "corpus",
+      "targets": [
+        "src/sentry/api/serializers/models/apiapplication.py"
+      ]
+    },
+    "sentry-vuln-057": {
+      "kind": "bug",
+      "lanes": {
+        "security-review": {
+          "hits": 1,
+          "runs": 2
+        }
+      },
+      "ref": "7f41cc502faa1088108e896565409be72d92bc38",
+      "source": "corpus",
+      "targets": [
+        "src/sentry/tasks/post_process.py"
+      ]
+    },
+    "sentry-vuln-058": {
+      "kind": "bug",
+      "lanes": {
+        "security-review": {
+          "hits": 2,
+          "runs": 2
+        }
+      },
+      "ref": "7f41cc502faa1088108e896565409be72d92bc38",
+      "source": "corpus",
+      "targets": [
+        "src/sentry/workflow_engine/endpoints/organization_detector_anomaly_data.py"
+      ]
+    },
+    "sentry-vuln-059": {
+      "kind": "bug",
+      "lanes": {
+        "security-review": {
+          "hits": 0,
+          "runs": 2
+        }
+      },
+      "ref": "7f41cc502faa1088108e896565409be72d92bc38",
+      "source": "corpus",
+      "targets": [
+        "src/sentry/workflow_engine/endpoints/organization_alertrule_detector_index.py"
+      ]
+    },
+    "sentry-vuln-060": {
+      "kind": "bug",
+      "lanes": {
+        "security-review": {
+          "hits": 0,
+          "runs": 2
+        }
+      },
+      "ref": "7f41cc502faa1088108e896565409be72d92bc38",
+      "source": "corpus",
+      "targets": [
+        ".github/workflows/getsentry-dispatch.yml"
+      ]
+    },
+    "sentry-vuln-061": {
+      "kind": "bug",
+      "lanes": {
+        "security-review": {
+          "hits": 0,
+          "runs": 2
+        }
+      },
+      "ref": "7f41cc502faa1088108e896565409be72d92bc38",
+      "source": "corpus",
+      "targets": [
+        "scripts/analyze-styled.ts"
+      ]
+    },
+    "sentry-vuln-062": {
+      "kind": "bug",
+      "lanes": {
+        "security-review": {
+          "hits": 2,
+          "runs": 2
+        }
+      },
+      "ref": "7f41cc502faa1088108e896565409be72d92bc38",
+      "source": "corpus",
+      "targets": [
+        "src/sentry/api/authentication.py"
+      ]
+    },
+    "sentry-vuln-063": {
+      "kind": "bug",
+      "lanes": {
+        "security-review": {
+          "hits": 0,
+          "runs": 2
+        }
+      },
+      "ref": "7f41cc502faa1088108e896565409be72d92bc38",
+      "source": "corpus",
+      "targets": [
+        "src/sentry/flags/providers.py"
+      ]
+    },
+    "sentry-vuln-064": {
+      "kind": "bug",
+      "lanes": {
+        "security-review": {
+          "hits": 0,
+          "runs": 2
+        }
+      },
+      "ref": "7f41cc502faa1088108e896565409be72d92bc38",
+      "source": "corpus",
+      "targets": [
+        "src/sentry/integrations/bitbucket/webhook.py"
+      ]
+    },
+    "sentry-vuln-065": {
+      "kind": "bug",
+      "lanes": {
+        "security-review": {
+          "hits": 1,
+          "runs": 2
+        }
+      },
+      "ref": "7f41cc502faa1088108e896565409be72d92bc38",
+      "source": "corpus",
+      "targets": [
+        "src/sentry/integrations/discord/requests/base.py"
+      ]
+    },
+    "sentry-vuln-066": {
+      "kind": "bug",
+      "lanes": {
+        "security-review": {
+          "hits": 0,
+          "runs": 2
+        }
+      },
+      "ref": "7f41cc502faa1088108e896565409be72d92bc38",
+      "source": "corpus",
+      "targets": [
+        "src/sentry/integrations/discord/requests/base.py"
+      ]
+    },
+    "sentry-vuln-067": {
+      "kind": "bug",
+      "lanes": {
+        "security-review": {
+          "hits": 2,
+          "runs": 2
+        }
+      },
+      "ref": "7f41cc502faa1088108e896565409be72d92bc38",
+      "source": "corpus",
+      "targets": [
+        "src/sentry/integrations/github_enterprise/webhook.py"
+      ]
+    },
+    "sentry-vuln-068": {
+      "kind": "bug",
+      "lanes": {
+        "security-review": {
+          "hits": 0,
+          "runs": 2
+        }
+      },
+      "ref": "7f41cc502faa1088108e896565409be72d92bc38",
+      "source": "corpus",
+      "targets": [
+        "src/sentry/integrations/github_enterprise/webhook.py"
+      ]
+    },
+    "sentry-vuln-069": {
+      "kind": "bug",
+      "lanes": {
+        "security-review": {
+          "hits": 2,
+          "runs": 2
+        }
+      },
+      "ref": "7f41cc502faa1088108e896565409be72d92bc38",
+      "source": "corpus",
+      "targets": [
+        "src/sentry/integrations/utils/atlassian_connect.py"
+      ]
+    },
+    "sentry-vuln-070": {
+      "kind": "bug",
+      "lanes": {
+        "security-review": {
+          "hits": 1,
+          "runs": 2
+        }
+      },
+      "ref": "7f41cc502faa1088108e896565409be72d92bc38",
+      "source": "corpus",
+      "targets": [
+        "src/sentry/integrations/jira_server/webhooks.py"
+      ]
+    },
+    "sentry-vuln-071": {
+      "kind": "bug",
+      "lanes": {
+        "security-review": {
+          "hits": 2,
+          "runs": 2
+        }
+      },
+      "ref": "7f41cc502faa1088108e896565409be72d92bc38",
+      "source": "corpus",
+      "targets": [
+        "src/sentry/integrations/utils/atlassian_connect.py"
+      ]
+    },
+    "sentry-vuln-072": {
+      "kind": "bug",
+      "lanes": {
+        "security-review": {
+          "hits": 0,
+          "runs": 2
+        }
+      },
+      "ref": "7f41cc502faa1088108e896565409be72d92bc38",
+      "source": "corpus",
+      "targets": [
+        "src/sentry/models/apiapplication.py"
+      ]
+    },
+    "sentry-vuln-073": {
+      "kind": "bug",
+      "lanes": {
+        "security-review": {
+          "hits": 0,
+          "runs": 2
+        }
+      },
+      "ref": "7f41cc502faa1088108e896565409be72d92bc38",
+      "source": "corpus",
+      "targets": [
+        "src/sentry/releases/endpoints/project_releases_token.py"
+      ]
+    },
+    "sentry-vuln-074": {
+      "kind": "bug",
+      "lanes": {
+        "security-review": {
+          "hits": 0,
+          "runs": 2
+        }
+      },
+      "ref": "7f41cc502faa1088108e896565409be72d92bc38",
+      "source": "corpus",
+      "targets": [
+        "src/sentry/seer/endpoints/seer_rpc.py"
+      ]
+    },
+    "sentry-vuln-075": {
+      "kind": "bug",
+      "lanes": {
+        "security-review": {
+          "hits": 2,
+          "runs": 2
+        }
+      },
+      "ref": "7f41cc502faa1088108e896565409be72d92bc38",
+      "source": "corpus",
+      "targets": [
+        "src/sentry/web/frontend/mailgun_inbound_webhook.py"
+      ]
+    },
+    "sentry-vuln-076": {
+      "kind": "bug",
+      "lanes": {
+        "security-review": {
+          "hits": 0,
+          "runs": 2
+        }
+      },
+      "ref": "7f41cc502faa1088108e896565409be72d92bc38",
+      "source": "corpus",
+      "targets": [
+        "src/sentry/web/frontend/release_webhook.py"
+      ]
+    },
+    "sentry-vuln-077": {
+      "kind": "bug",
+      "lanes": {
+        "security-review": {
+          "hits": 1,
+          "runs": 2
+        }
+      },
+      "ref": "7f41cc502faa1088108e896565409be72d92bc38",
+      "source": "corpus",
+      "targets": [
+        "src/sentry_plugins/heroku/plugin.py"
+      ]
+    },
+    "sentry-vuln-078": {
+      "kind": "bug",
+      "lanes": {
+        "security-review": {
+          "hits": 0,
+          "runs": 2
+        }
+      },
+      "ref": "7f41cc502faa1088108e896565409be72d92bc38",
+      "source": "corpus",
+      "targets": [
+        "src/sentry_plugins/jira/client.py"
+      ]
+    },
+    "sentry-vuln-079": {
+      "kind": "bug",
+      "lanes": {
+        "security-review": {
+          "hits": 2,
+          "runs": 2
+        }
+      },
+      "ref": "7f41cc502faa1088108e896565409be72d92bc38",
+      "source": "corpus",
+      "targets": [
+        "src/sentry_plugins/jira/client.py"
+      ]
+    },
+    "sentry-vuln-080": {
+      "kind": "bug",
+      "lanes": {
+        "security-review": {
+          "hits": 0,
+          "runs": 2
+        }
+      },
+      "ref": "7f41cc502faa1088108e896565409be72d92bc38",
+      "source": "corpus",
+      "targets": [
+        "static/app/components/events/autofix/insights/autofixInsightSources.tsx"
+      ]
+    },
+    "sentry-vuln-081": {
+      "kind": "bug",
+      "lanes": {
+        "security-review": {
+          "hits": 2,
+          "runs": 2
+        }
+      },
+      "ref": "7f41cc502faa1088108e896565409be72d92bc38",
+      "source": "corpus",
+      "targets": [
+        "static/app/components/events/interfaces/utils.tsx"
+      ]
+    },
+    "sentry-vuln-082": {
+      "kind": "bug",
+      "lanes": {
+        "security-review": {
+          "hits": 2,
+          "runs": 2
+        }
+      },
+      "ref": "7f41cc502faa1088108e896565409be72d92bc38",
+      "source": "corpus",
+      "targets": [
+        "static/app/components/featureFlags/hooks/useFlagSeries.tsx"
+      ]
+    },
+    "sentry-vuln-083": {
+      "kind": "bug",
+      "lanes": {
+        "security-review": {
+          "hits": 0,
+          "runs": 2
+        }
+      },
+      "ref": "7f41cc502faa1088108e896565409be72d92bc38",
+      "source": "corpus",
+      "targets": [
+        "static/app/views/discover/utils.tsx"
+      ]
+    },
+    "sentry-vuln-084": {
+      "kind": "bug",
+      "lanes": {
+        "security-review": {
+          "hits": 1,
+          "runs": 2
+        }
+      },
+      "ref": "7f41cc502faa1088108e896565409be72d92bc38",
+      "source": "corpus",
+      "targets": [
+        "static/app/views/explore/releases/list/mobileBuildsChart.tsx"
+      ]
+    },
+    "sentry-vuln-085": {
+      "kind": "bug",
+      "lanes": {
+        "security-review": {
+          "hits": 1,
+          "runs": 2
+        }
+      },
+      "ref": "7f41cc502faa1088108e896565409be72d92bc38",
+      "source": "corpus",
+      "targets": [
+        "static/app/views/preprod/components/visualizations/appSizeTreemap.tsx"
+      ]
+    },
+    "sentry-vuln-086": {
+      "kind": "bug",
+      "lanes": {
+        "security-review": {
+          "hits": 0,
+          "runs": 2
+        }
+      },
+      "ref": "7f41cc502faa1088108e896565409be72d92bc38",
+      "source": "corpus",
+      "targets": [
+        "static/app/views/settings/organizationIntegrations/integrationDetailedView.tsx"
+      ]
+    }
+  },
+  "lanes": {
+    "security-review": {
+      "config": {
+        "auxiliaryEffort": "high",
+        "auxiliaryModel": "openrouter/openai/gpt-5.6-luna",
+        "effort": "high",
+        "judgeModel": "agent-semantic-match-pass",
+        "maxTurns": 100,
+        "model": "openrouter/x-ai/grok-4.5",
+        "origin": "sentry-security-review-pi-openrouter-grok-4-5-high-luna-aux-high-traced-corpus-2026-08-21-001, sentry-security-review-pi-openrouter-grok-4-5-high-luna-aux-high-traced-corpus-2026-08-23-001",
+        "runtime": "pi"
+      },
+      "failedRuns": 0,
+      "runs": 2,
+      "usage": {
+        "cacheReadInputTokens": 112996572,
+        "costUSD": 64.13501639,
+        "inputTokens": 137321818,
+        "judgeCostUSD": 0,
+        "outputTokens": 4385065
+      }
+    }
+  },
+  "summary": {
+    "security-review": {
+      "bugEntries": 86,
+      "cleanFlagged": {
+        "hits": 0,
+        "runs": 0
+      },
+      "found": 46,
+      "missedBySecurityReview": [],
+      "onlyThisLane": [
+        "sentry-vuln-001",
+        "sentry-vuln-002",
+        "sentry-vuln-003",
+        "sentry-vuln-004",
+        "sentry-vuln-007",
+        "sentry-vuln-011",
+        "sentry-vuln-012",
+        "sentry-vuln-013",
+        "sentry-vuln-014",
+        "sentry-vuln-015",
+        "sentry-vuln-017",
+        "sentry-vuln-018",
+        "sentry-vuln-019",
+        "sentry-vuln-021",
+        "sentry-vuln-025",
+        "sentry-vuln-026",
+        "sentry-vuln-029",
+        "sentry-vuln-030",
+        "sentry-vuln-031",
+        "sentry-vuln-034",
+        "sentry-vuln-035",
+        "sentry-vuln-036",
+        "sentry-vuln-037",
+        "sentry-vuln-039",
+        "sentry-vuln-041",
+        "sentry-vuln-046",
+        "sentry-vuln-047",
+        "sentry-vuln-048",
+        "sentry-vuln-051",
+        "sentry-vuln-055",
+        "sentry-vuln-056",
+        "sentry-vuln-057",
+        "sentry-vuln-058",
+        "sentry-vuln-062",
+        "sentry-vuln-065",
+        "sentry-vuln-067",
+        "sentry-vuln-069",
+        "sentry-vuln-070",
+        "sentry-vuln-071",
+        "sentry-vuln-075",
+        "sentry-vuln-077",
+        "sentry-vuln-079",
+        "sentry-vuln-081",
+        "sentry-vuln-082",
+        "sentry-vuln-084",
+        "sentry-vuln-085"
+      ],
+      "recall": 0.45348837209302323
+    }
+  },
+  "version": 1
+}

@@ -1,0 +1,10 @@
+{
+  "kind": "clean",
+  "summary": "_encode_value recurses into lists, tuples, and dicts from event data without a depth limit, so a deeply nested attribute in an ingested event exceeds protobuf nesting limits or Python recursion limits and fails serialization for that event",
+  "repository": "getsentry/sentry",
+  "ref": "57f0df6e319f9de3718e0e9804eb65ffc07aca3e",
+  "targets": [
+    "src/sentry/eventstream/item_helpers.py"
+  ],
+  "source": "https://github.com/getsentry/sentry/commit/57f0df6e319f9de3718e0e9804eb65ffc07aca3e (fixed state)"
+}
