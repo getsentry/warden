@@ -1,0 +1,10 @@
+{
+  "kind": "clean",
+  "summary": "Client._capture_log and Client._capture_metric copy the isolation scope user's id, username, and email onto every log and metric as user.* attributes without checking should_send_default_pii, so apps with send_default_pii off still send user identities with each log line and metric",
+  "repository": "getsentry/sentry-python",
+  "ref": "5606bb3e58e1c27e2c1e48d6dc69e09e30469897",
+  "targets": [
+    "sentry_sdk/client.py"
+  ],
+  "source": "https://github.com/getsentry/sentry-python/commit/5606bb3e58e1c27e2c1e48d6dc69e09e30469897"
+}

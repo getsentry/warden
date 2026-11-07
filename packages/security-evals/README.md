@@ -25,16 +25,19 @@ classes, and permission checks the way they do in production.
 ## Running it
 
 You need a local clone of every repository the selected entries pin (today
-only getsentry/sentry) and of getsentry/warden-skills. Blobless is enough:
+getsentry/sentry, plus getsentry/sentry-python for some `wrdn-pii` cases) and
+of getsentry/warden-skills. Blobless is enough:
 
 ```bash
 git clone --filter=blob:none https://github.com/getsentry/sentry.git ~/src/sentry
+git clone --filter=blob:none https://github.com/getsentry/sentry-python.git ~/src/sentry-python
 git clone https://github.com/getsentry/warden-skills.git ~/src/warden-skills
 ```
 
 ```bash
 # Every lane over every entry
-pnpm evals:security --repo getsentry/sentry=$HOME/src/sentry --skills-repo ~/src/warden-skills
+pnpm evals:security --repo getsentry/sentry=$HOME/src/sentry \
+  --repo getsentry/sentry-python=$HOME/src/sentry-python --skills-repo ~/src/warden-skills
 
 # One candidate lane on its own cases, three passes; other lanes come from the baseline
 pnpm evals:security --repo getsentry/sentry=$HOME/src/sentry --skills-repo ~/src/warden-skills \
@@ -166,7 +169,7 @@ adding cases you want compared for free.
 ## Known gaps
 
 - Owned bug cases today: wrdn-authz 5, wrdn-dos-review 6, wrdn-data-exfil 5,
-  wrdn-code-execution 1, wrdn-pii 0. A skill below 5 reads
+  wrdn-code-execution 1, wrdn-pii 6. A skill below 5 reads
   `insufficient-evidence` unless it earns its keep outright.
 - The corpus has almost no DoS or exfiltration entries. Cases have to carry
   those skills.

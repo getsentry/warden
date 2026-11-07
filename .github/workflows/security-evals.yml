@@ -39,6 +39,7 @@ jobs:
     timeout-minutes: 360
     env:
       SENTRY_CLONE: ${{ github.workspace }}/../sentry
+      SENTRY_PYTHON_CLONE: ${{ github.workspace }}/../sentry-python
       # Must match WARDEN_SKILLS_REF in packages/security-evals/src/options.ts.
       WARDEN_SKILLS_REF: daf01f970a28450627a8d2d61d9915a742a735e2
       SKILLS_CHECKOUT: packages/security-evals/.cache/warden-skills
@@ -69,13 +70,16 @@ jobs:
           restore-keys: sentry-blobless-
 
       - name: Prepare sentry clone
-        run: packages/security-evals/scripts/prepare-sentry-clone.sh
+        run: packages/security-evals/scripts/prepare-clone.sh getsentry/sentry "$SENTRY_CLONE"
+
+      - name: Prepare sentry-python clone
+        run: packages/security-evals/scripts/prepare-clone.sh getsentry/sentry-python "$SENTRY_PYTHON_CLONE"
 
       - name: Run security evals
         env:
           WARDEN_OPENROUTER_API_KEY: ${{ secrets.WARDEN_OPENROUTER_API_KEY }}
           ROACH_TOKEN: ${{ secrets.ROACH_TOKEN }}
-          WARDEN_SECURITY_EVALS_REPOS: getsentry/sentry=${{ env.SENTRY_CLONE }}
+          WARDEN_SECURITY_EVALS_REPOS: getsentry/sentry=${{ env.SENTRY_CLONE }},getsentry/sentry-python=${{ env.SENTRY_PYTHON_CLONE }}
           WARDEN_SECURITY_EVALS_SKILLS_REPO: ${{ github.workspace }}/${{ env.SKILLS_CHECKOUT }}
           WARDEN_SECURITY_EVALS_SKILLS: ${{ inputs.skills }}
           WARDEN_SECURITY_EVALS_ENTRIES: ${{ inputs.entries }}
