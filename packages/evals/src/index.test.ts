@@ -232,6 +232,9 @@ describe('standalone scenario files', () => {
       ...discoverEvalScenarioFiles('security-review', evalsDir),
       ...discoverEvalScenarioFiles('verification', evalsDir),
       ...discoverEvalScenarioFiles('wrdn-authz', evalsDir),
+      ...discoverEvalScenarioFiles('wrdn-code-execution', evalsDir),
+      ...discoverEvalScenarioFiles('wrdn-data-exfil', evalsDir),
+      ...discoverEvalScenarioFiles('wrdn-dos-review', evalsDir),
     ];
     const missingMetadata: string[] = [];
 

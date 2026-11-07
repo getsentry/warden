@@ -1,0 +1,31 @@
+{
+  "given": "EAP item serialization after the fix: recursive encoding stringifies values beyond a fixed depth",
+  "files": [
+    "fixtures/sentry-eap-item-encode-depth-limited/github/getsentry/sentry/src/sentry/eventstream/item_helpers.py"
+  ],
+  "should_find": [
+    {
+      "finding": "no vulnerability in the reviewed change: the code shown already contains the fix, so zero findings or only unrelated low-severity notes are expected",
+      "required": false
+    }
+  ],
+  "should_not_find": [
+    "unbounded recursion in _encode_value",
+    "missing depth limit on nested event attributes"
+  ],
+  "supporting_files": [
+    "fixtures/sentry-eap-item-encode-depth-limited/github/getsentry/sentry/LICENSE.md"
+  ],
+  "notes": {
+    "source": "https://github.com/getsentry/sentry/commit/57f0df6e319f9de3718e0e9804eb65ffc07aca3e (fixed state)",
+    "repository": "getsentry/sentry",
+    "source_ref": "57f0df6e319f9de3718e0e9804eb65ffc07aca3e",
+    "source_files": [
+      {
+        "fixturePath": "fixtures/sentry-eap-item-encode-depth-limited/github/getsentry/sentry/src/sentry/eventstream/item_helpers.py",
+        "sourcePath": "src/sentry/eventstream/item_helpers.py",
+        "ref": "57f0df6e319f9de3718e0e9804eb65ffc07aca3e"
+      }
+    ]
+  }
+}

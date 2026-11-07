@@ -1,0 +1,30 @@
+{
+  "given": "styled-components history analysis script builds git shell commands with template strings that include the current branch name",
+  "files": [
+    "fixtures/sentry-analyze-styled-branch-shell-injection/github/getsentry/sentry/scripts/analyze-styled.ts"
+  ],
+  "should_find": [
+    {
+      "finding": "originalBranch (the current git branch name) is interpolated into child_process.execSync shell command strings such as git show and git checkout, so a branch name containing shell metacharacters runs arbitrary commands"
+    }
+  ],
+  "should_not_find": [
+    "slow synchronous git calls",
+    "analysis accuracy of styled-components detection"
+  ],
+  "supporting_files": [
+    "fixtures/sentry-analyze-styled-branch-shell-injection/github/getsentry/sentry/LICENSE.md"
+  ],
+  "notes": {
+    "source": "https://github.com/getsentry/warden/blob/main/packages/docs/src/data/benchmarking/sentry-vulnerability-corpus.json (sentry-vuln-061)",
+    "repository": "getsentry/sentry",
+    "source_ref": "7f41cc502faa1088108e896565409be72d92bc38",
+    "source_files": [
+      {
+        "fixturePath": "fixtures/sentry-analyze-styled-branch-shell-injection/github/getsentry/sentry/scripts/analyze-styled.ts",
+        "sourcePath": "scripts/analyze-styled.ts",
+        "ref": "7f41cc502faa1088108e896565409be72d92bc38"
+      }
+    ]
+  }
+}

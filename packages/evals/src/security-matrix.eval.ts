@@ -1,5 +1,5 @@
 import { join } from 'node:path';
-import { expect } from 'vitest';
+import { afterAll, expect } from 'vitest';
 import { describeEval } from 'vitest-evals';
 import { resolveSkillAsync } from '@sentry/warden';
 import {
@@ -10,6 +10,12 @@ import {
 import { discoverEvalScenarios } from './index.js';
 import { formatEvalId, formatEvalTestName } from './names.js';
 import { resolveEvalProvider } from './provider.js';
+import {
+  matrixScenarioKind,
+  summarizeSecurityMatrix,
+  type MatrixLane,
+  type MatrixResult,
+} from './security-matrix.js';
 import type { EvalMeta } from './types.js';
 
 /**
@@ -18,30 +24,41 @@ import type { EvalMeta } from './types.js';
  */
 const WARDEN_SKILLS_REMOTE = 'getsentry/warden-skills@daf01f970a28450627a8d2d61d9915a742a735e2';
 
-/** Remote security skill under test. Its scenarios live in the category of the same name. */
-const WRDN_SKILL = 'wrdn-authz';
+/** Remote security skills under test. Each skill's scenarios live in the category of the same name. */
+const MATRIX_SKILLS = ['wrdn-authz', 'wrdn-code-execution', 'wrdn-data-exfil', 'wrdn-dos-review'] as const;
 
 const SECURITY_REVIEW_SKILL = '../warden/src/builtin-skills/security-review/SKILL.md';
 const MATRIX_RUN_TIMEOUT_MS = 240_000;
 const MATRIX_EVAL_TIMEOUT_MS = MATRIX_RUN_TIMEOUT_MS + 60_000;
 
 const provider = resolveEvalProvider();
-let wrdnSkillPath: Promise<string> | undefined;
+const remoteSkillPaths = new Map<string, Promise<string>>();
+const results: MatrixResult[] = [];
 
 // Fetch lazily inside tests so suites without credentials never touch the network.
-function resolveWrdnSkillPath(): Promise<string> {
-  wrdnSkillPath ??= resolveSkillAsync(WRDN_SKILL, undefined, { remote: WARDEN_SKILLS_REMOTE }).then((skill) => {
-    if (!skill.rootDir) {
-      throw new Error(`Remote skill ${WRDN_SKILL} resolved without a rootDir`);
-    }
-    return join(skill.rootDir, 'SKILL.md');
-  });
-  return wrdnSkillPath;
+function resolveRemoteSkillPath(name: string): Promise<string> {
+  let path = remoteSkillPaths.get(name);
+  if (!path) {
+    path = resolveSkillAsync(name, undefined, { remote: WARDEN_SKILLS_REMOTE }).then((skill) => {
+      if (!skill.rootDir) {
+        throw new Error(`Remote skill ${name} resolved without a rootDir`);
+      }
+      return join(skill.rootDir, 'SKILL.md');
+    });
+    remoteSkillPaths.set(name, path);
+  }
+  return path;
 }
 
-function describeLane(lane: string, evals: EvalMeta[], resolveMeta: (meta: EvalMeta) => Promise<EvalMeta>): void {
+function describeLane(
+  skill: string,
+  lane: MatrixLane,
+  evals: EvalMeta[],
+  resolveMeta: (meta: EvalMeta) => Promise<EvalMeta>,
+): void {
+  const laneSkill = lane === 'skill' ? skill : 'security-review';
   describeEval(
-    lane,
+    `security-matrix/${skill}/${laneSkill}`,
     {
       harness: createWardenEvalHarness({
         apiKey: provider.apiKey,
@@ -61,13 +78,26 @@ function describeLane(lane: string, evals: EvalMeta[], resolveMeta: (meta: EvalM
           formatEvalTestName(scenario),
           { timeout: MATRIX_EVAL_TIMEOUT_MS },
           async ({ run }) => {
+            const record = (passed: boolean) => results.push({
+              skill,
+              scenario: scenario.name,
+              kind: matrixScenarioKind(scenario),
+              lane,
+              passed,
+            });
             const meta = await resolveMeta(scenario);
-            const result = await run(meta);
-            const output = WardenEvalOutputSchema.parse(result.output);
-
-            expect(output.name).toBe(formatEvalId(meta));
-            console.log(`\n${output.summary}`);
-            console.log(`  Findings: ${output.findings.length}`);
+            try {
+              // run() throws when the judge score misses the threshold.
+              const result = await run(meta);
+              const output = WardenEvalOutputSchema.parse(result.output);
+              expect(output.name).toBe(formatEvalId(meta));
+              record(true);
+              console.log(`\n${output.summary}`);
+              console.log(`  Findings: ${output.findings.length}`);
+            } catch (error) {
+              record(false);
+              throw error;
+            }
           },
         );
       }
@@ -76,17 +106,26 @@ function describeLane(lane: string, evals: EvalMeta[], resolveMeta: (meta: EvalM
 }
 
 // Each scenario runs under security-review and under the wrdn skill that owns the
-// category. A scenario only the wrdn lane passes is coverage security-review lacks.
-const evals = discoverEvalScenarios({
-  category: WRDN_SKILL,
-  skill: SECURITY_REVIEW_SKILL,
-  runtime: 'pi',
-  model: 'anthropic/claude-sonnet-4-6',
-});
+// category. A bug only the wrdn lane catches is coverage security-review lacks.
+for (const skill of MATRIX_SKILLS) {
+  const evals = discoverEvalScenarios({
+    category: skill,
+    skill: SECURITY_REVIEW_SKILL,
+    runtime: 'pi',
+    model: 'anthropic/claude-sonnet-4-6',
+  });
 
-describeLane(`security-matrix/${WRDN_SKILL}/security-review`, evals, async (meta) => meta);
-describeLane(
-  `security-matrix/${WRDN_SKILL}/${WRDN_SKILL}`,
-  evals.map((meta) => ({ ...meta, skillName: WRDN_SKILL })),
-  async (meta) => ({ ...meta, skillPath: await resolveWrdnSkillPath() }),
-);
+  describeLane(skill, 'security-review', evals, async (meta) => meta);
+  describeLane(
+    skill,
+    'skill',
+    evals.map((meta) => ({ ...meta, skillName: skill })),
+    async (meta) => ({ ...meta, skillPath: await resolveRemoteSkillPath(skill) }),
+  );
+}
+
+afterAll(() => {
+  if (results.length > 0) {
+    console.log(`\n${summarizeSecurityMatrix(results)}`);
+  }
+});

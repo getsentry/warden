@@ -1,0 +1,30 @@
+{
+  "given": "message parameterization URL regex has an unbounded scheme quantifier that backtracks on long runs of scheme-valid characters",
+  "files": [
+    "fixtures/sentry-grouping-url-regex-backtracking/github/getsentry/sentry/src/sentry/grouping/parameterization.py"
+  ],
+  "should_find": [
+    {
+      "finding": "The URL pattern scheme [a-zA-Z][a-zA-Z0-9+\\-.]* is unbounded, so an event message with a long run of scheme-valid characters and no :// makes the regex retry from every position, giving quadratic CPU per message during grouping (ReDoS on event data)"
+    }
+  ],
+  "should_not_find": [
+    "IPv6 parameterization accuracy",
+    "hostname validation correctness"
+  ],
+  "supporting_files": [
+    "fixtures/sentry-grouping-url-regex-backtracking/github/getsentry/sentry/LICENSE.md"
+  ],
+  "notes": {
+    "source": "https://github.com/getsentry/sentry/commit/a111b7473cc002875a38a7ffd3792ee1d395f362 (pre-fix parent, getsentry/sentry#118512)",
+    "repository": "getsentry/sentry",
+    "source_ref": "f7c64397f494fe2da5c7775baa3943085998fa5a",
+    "source_files": [
+      {
+        "fixturePath": "fixtures/sentry-grouping-url-regex-backtracking/github/getsentry/sentry/src/sentry/grouping/parameterization.py",
+        "sourcePath": "src/sentry/grouping/parameterization.py",
+        "ref": "f7c64397f494fe2da5c7775baa3943085998fa5a"
+      }
+    ]
+  }
+}

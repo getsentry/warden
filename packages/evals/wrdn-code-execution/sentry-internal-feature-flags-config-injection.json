@@ -1,0 +1,30 @@
+{
+  "given": "self-hosted feature flag endpoint writes request values into sentry.conf.py as Python source and reloads the config",
+  "files": [
+    "fixtures/sentry-internal-feature-flags-config-injection/github/getsentry/sentry/src/sentry/api/endpoints/internal/feature_flags.py"
+  ],
+  "should_find": [
+    {
+      "finding": "PUT interpolates request.data values verbatim into SENTRY_FEATURES[\"flag\"]=<value> lines in sentry.conf.py and then calls configure(), which executes the file, so a crafted value injects arbitrary Python that runs on the server"
+    }
+  ],
+  "should_not_find": [
+    "GET leaking the list of early features",
+    "missing CSRF protection"
+  ],
+  "supporting_files": [
+    "fixtures/sentry-internal-feature-flags-config-injection/github/getsentry/sentry/LICENSE.md"
+  ],
+  "notes": {
+    "source": "https://github.com/getsentry/sentry/commit/2b2dd08cfd33eb13079bfa15b7e27863f157b866 (pre-fix parent, getsentry/sentry#112980)",
+    "repository": "getsentry/sentry",
+    "source_ref": "101823f59fee6d71221feceb0cbcb28cc6024606",
+    "source_files": [
+      {
+        "fixturePath": "fixtures/sentry-internal-feature-flags-config-injection/github/getsentry/sentry/src/sentry/api/endpoints/internal/feature_flags.py",
+        "sourcePath": "src/sentry/api/endpoints/internal/feature_flags.py",
+        "ref": "101823f59fee6d71221feceb0cbcb28cc6024606"
+      }
+    ]
+  }
+}

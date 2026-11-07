@@ -79,12 +79,26 @@ and `security-matrix/<skill>/<skill>`. A case only the `wrdn-*` lane passes is
 coverage that skill adds. A skill whose cases security-review also passes is
 redundant on that evidence.
 
+- After the lanes finish, the suite prints a `Security matrix` block. Per
+  skill, the first line is the number of bugs caught only by that skill. Zero
+  across a real fixture set is the evidence that the skill adds nothing
+  security-review does not already catch.
+- Bug scenarios come from real code: the parent of a fix commit, a corpus
+  entry, or a finding only the `wrdn-*` skill posted on a PR. Write
+  `should_find` for the real bug even when a lane misses it today.
+- Clean scenarios use the fixed state of the same file, with no required
+  `should_find` and the fixed bug in `should_not_find`. They count false
+  positives per lane.
+- Fixtures are whole files, so a lane sees the vulnerable code but not the
+  diff that introduced it. A bug that only shows as a removed check is harder
+  to catch here than on the real PR.
+- The matrix ignores `warden.toml` path filters. A catch in `scripts/` or
+  `.github/` proves the skill can find it, not that the production config
+  would run the skill there.
 - Remote skills load from the pinned `WARDEN_SKILLS_REMOTE` ref through
   Warden's normal remote skill cache. Bump the SHA on purpose and rerun.
-- Seed scenarios from real findings that only the `wrdn-*` skill posted on a
-  PR. Write `should_find` for the real bug even when a lane misses it today.
-- These cases are expected to fail in the security-review lane. That lowers the
-  aggregate eval score by design; read the per-lane results, not the average.
+- Some cases are expected to fail in one lane. That lowers the aggregate eval
+  score by design; read the matrix block, not the average.
 - Roach records them like any other eval. Add `run-evals` to record new cases.
 
 **Vulnerability corpus (repeated benchmark).** The
@@ -98,10 +112,8 @@ It is not a CI eval: runs cost real money and are scored by hand.
   3 of 3 times that drops to 0 of 3 is a regression; a 1 of 3 entry moving is
   not evidence.
 - The corpus is mostly authorization bugs, with a few webhook, crypto,
-  injection, and secret-logging entries. It has close to nothing for DoS, data
-  exfiltration, or code execution, so `wrdn-dos-review`, `wrdn-data-exfil`,
-  and `wrdn-code-execution` need their own fixtures in the matrix before any
-  claim about their coverage holds.
+  injection, and secret-logging entries, and no DoS entries. It only scores
+  security-review, so `wrdn-*` coverage claims come from the matrix.
 
 ## Adding Full-Pipeline Evals
 

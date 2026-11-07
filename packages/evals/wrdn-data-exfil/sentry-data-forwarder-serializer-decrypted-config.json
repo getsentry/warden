@@ -1,0 +1,42 @@
+{
+  "given": "data forwarder API serializer returns the stored provider config, which holds decrypted Segment, AWS SQS, and Splunk credentials",
+  "files": [
+    "fixtures/sentry-data-forwarder-serializer-decrypted-config/github/getsentry/sentry/src/sentry/integrations/api/serializers/models/data_forwarder.py"
+  ],
+  "should_find": [
+    {
+      "finding": "DataForwarderSerializer returns obj.config (and project effectiveConfig) in API responses; config is an EncryptedJSONField decrypted on read, so stored provider secrets such as Segment write keys, AWS secret access keys, and Splunk tokens are exposed to API callers"
+    }
+  ],
+  "should_not_find": [
+    "N+1 queries when loading project configs",
+    "missing pagination on enrolled projects"
+  ],
+  "supporting_files": [
+    "fixtures/sentry-data-forwarder-serializer-decrypted-config/github/getsentry/sentry/src/sentry/integrations/models/data_forwarder.py",
+    "fixtures/sentry-data-forwarder-serializer-decrypted-config/github/getsentry/sentry/src/sentry/integrations/api/endpoints/data_forwarding_index.py",
+    "fixtures/sentry-data-forwarder-serializer-decrypted-config/github/getsentry/sentry/LICENSE.md"
+  ],
+  "notes": {
+    "source": "https://github.com/getsentry/warden/blob/main/packages/docs/src/data/benchmarking/sentry-vulnerability-corpus.json (sentry-vuln-052)",
+    "repository": "getsentry/sentry",
+    "source_ref": "7f41cc502faa1088108e896565409be72d92bc38",
+    "source_files": [
+      {
+        "fixturePath": "fixtures/sentry-data-forwarder-serializer-decrypted-config/github/getsentry/sentry/src/sentry/integrations/api/serializers/models/data_forwarder.py",
+        "sourcePath": "src/sentry/integrations/api/serializers/models/data_forwarder.py",
+        "ref": "7f41cc502faa1088108e896565409be72d92bc38"
+      },
+      {
+        "fixturePath": "fixtures/sentry-data-forwarder-serializer-decrypted-config/github/getsentry/sentry/src/sentry/integrations/models/data_forwarder.py",
+        "sourcePath": "src/sentry/integrations/models/data_forwarder.py",
+        "ref": "7f41cc502faa1088108e896565409be72d92bc38"
+      },
+      {
+        "fixturePath": "fixtures/sentry-data-forwarder-serializer-decrypted-config/github/getsentry/sentry/src/sentry/integrations/api/endpoints/data_forwarding_index.py",
+        "sourcePath": "src/sentry/integrations/api/endpoints/data_forwarding_index.py",
+        "ref": "7f41cc502faa1088108e896565409be72d92bc38"
+      }
+    ]
+  }
+}

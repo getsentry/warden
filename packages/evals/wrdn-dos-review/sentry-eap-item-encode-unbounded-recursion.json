@@ -1,0 +1,30 @@
+{
+  "given": "occurrence-to-EAP item serialization recursively encodes nested event arrays and dicts with no depth limit",
+  "files": [
+    "fixtures/sentry-eap-item-encode-unbounded-recursion/github/getsentry/sentry/src/sentry/eventstream/item_helpers.py"
+  ],
+  "should_find": [
+    {
+      "finding": "_encode_value recurses into lists, tuples, and dicts from event data without a depth limit, so a deeply nested attribute in an ingested event exceeds protobuf nesting limits or Python recursion limits and fails serialization for that event"
+    }
+  ],
+  "should_not_find": [
+    "float precision when encoding numbers",
+    "attribute key naming"
+  ],
+  "supporting_files": [
+    "fixtures/sentry-eap-item-encode-unbounded-recursion/github/getsentry/sentry/LICENSE.md"
+  ],
+  "notes": {
+    "source": "https://github.com/getsentry/sentry/commit/57f0df6e319f9de3718e0e9804eb65ffc07aca3e (pre-fix parent, getsentry/sentry#108555)",
+    "repository": "getsentry/sentry",
+    "source_ref": "ee57ed6ac987a2774415335b98a69a6513e1cdc5",
+    "source_files": [
+      {
+        "fixturePath": "fixtures/sentry-eap-item-encode-unbounded-recursion/github/getsentry/sentry/src/sentry/eventstream/item_helpers.py",
+        "sourcePath": "src/sentry/eventstream/item_helpers.py",
+        "ref": "ee57ed6ac987a2774415335b98a69a6513e1cdc5"
+      }
+    ]
+  }
+}

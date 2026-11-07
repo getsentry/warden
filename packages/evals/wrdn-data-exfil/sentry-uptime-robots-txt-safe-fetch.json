@@ -1,0 +1,31 @@
+{
+  "given": "uptime autodetect after the fix: robots.txt is fetched with safe_urlopen and parsed from the response body",
+  "files": [
+    "fixtures/sentry-uptime-robots-txt-safe-fetch/github/getsentry/sentry/src/sentry/uptime/autodetect/tasks.py"
+  ],
+  "should_find": [
+    {
+      "finding": "no vulnerability in the reviewed change: the code shown already contains the fix, so zero findings or only unrelated low-severity notes are expected",
+      "required": false
+    }
+  ],
+  "should_not_find": [
+    "SSRF in the robots.txt fetch",
+    "robots.txt fetched through raw urllib or RobotFileParser.read"
+  ],
+  "supporting_files": [
+    "fixtures/sentry-uptime-robots-txt-safe-fetch/github/getsentry/sentry/LICENSE.md"
+  ],
+  "notes": {
+    "source": "https://github.com/getsentry/sentry/commit/e84e7a45b001de51cab826593b8a2f5f0f0b323b (fixed state)",
+    "repository": "getsentry/sentry",
+    "source_ref": "e84e7a45b001de51cab826593b8a2f5f0f0b323b",
+    "source_files": [
+      {
+        "fixturePath": "fixtures/sentry-uptime-robots-txt-safe-fetch/github/getsentry/sentry/src/sentry/uptime/autodetect/tasks.py",
+        "sourcePath": "src/sentry/uptime/autodetect/tasks.py",
+        "ref": "e84e7a45b001de51cab826593b8a2f5f0f0b323b"
+      }
+    ]
+  }
+}
