@@ -52,6 +52,10 @@ jobs:
           node-version: '24'
           cache: 'pnpm'
 
+      - name: Check release baseline
+        if: inputs.version == ''
+        run: sh bin/check-release-baseline.sh
+
       - name: Prepare release
         uses: getsentry/craft@v3
         env:

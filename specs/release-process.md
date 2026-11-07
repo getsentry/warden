@@ -49,6 +49,8 @@ A maintainer runs the **Release** workflow (`release.yml`) via `workflow_dispatc
 
 Craft finds the previous release with `git describe --tags`, so release tags must be reachable from main. They are, because Craft tags the release commit and merges the release branch back into main.
 
+Without a `version` input, `bin/check-release-baseline.sh` runs first. Craft bumps from the latest version tag that main reaches, prereleases included. The script fails when that tag is not `v` plus the version in `packages/warden/package.json`. A wrong base tag gives a wrong version, so the script stops the release and asks for an exact `version`.
+
 ### 2. Prepare the release branch
 
 The workflow runs `getsentry/craft@v3` which:
@@ -108,7 +110,9 @@ Craft: tag vX.Y.Z, move vX (stable releases only), GitHub Release, publish npm, 
 
 Releases up to 0.52.0 used a different layout. `dist/` was gitignored, a workflow committed the bundle on top of each release tag, and it force-moved `vX.Y.Z` and `v0` to that detached commit. A `vX.Y.Z-src` tag marked the source commit. Those tags stay as they are.
 
-main reaches only the old `vX.Y.Z-src` tags and `v0.46.0`. Craft reads `0.52.0-src` as a prerelease and skips it, so `auto` and bump types would compute from `0.46.0` and pick a version that already exists. **Run the first release with an exact `version` (for example `0.53.0`).** Its changelog starts at `v0.46.0`, the latest stable tag main reaches, so remove the 0.47.0 to 0.52.0 entries from the release branch before you approve the publish request. After that release, `auto` works.
+main reaches only the old `vX.Y.Z-src` tags and `v0.46.0`. Craft reads the current version from the latest tag, prereleases included, so it reads `0.52.0-src`. From there, `auto`, `patch` and `minor` give `0.52.0`, `pre` gives `0.52.0-src.0`, and `major` gives `1.0.0`. `bin/check-release-baseline.sh` stops all of these, because `v0.52.0-src` is not `v0.52.0`. **Run the first release with an exact `version` (for example `0.53.0`).** Its changelog starts at `v0.46.0`, the latest stable tag main reaches, so remove the 0.47.0 to 0.52.0 entries from the release branch before you approve the publish request.
+
+After that release, run `git ls-remote origin refs/tags/v0` and make sure that `v0` points to the `v0.53.0` commit. Craft logs only a warning when it cannot move a floating tag. From the next release on, `auto` works.
 
 ## Failure modes
 
@@ -132,6 +136,7 @@ Controls what goes into the npm tarball. Key exclusions:
 |------|------|
 | `.craft.yml` | Craft config: `minVersion`, `preReleaseCommand`, targets (github with `floatingTags`, npm) |
 | `bin/bump-version.sh` | Version bump + build validation for the release branch |
+| `bin/check-release-baseline.sh` | Fails a release without `version` when the latest version tag is not the package version |
 | `bin/check-action-dist.sh` | Fails when the committed `dist/action/` is stale |
 | `bin/commit-action-dist.sh` | Commits a rebuilt `dist/action/` back to a same-repo PR branch |
 | `.github/workflows/action-dist.yml` | Rebuilds `dist/action/` on same-repo PRs and runs `bin/commit-action-dist.sh` |
