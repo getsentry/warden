@@ -33,7 +33,7 @@ npm tarball          packages/warden/dist/ (tsc output) plus runtime skill asset
 
 ## Action Bundle Policy
 
-`dist/action/` is committed so every commit, including every release tag, can run as an Action. `.gitattributes` marks it `linguist-generated`, so GitHub collapses it in diffs.
+`dist/action/` is committed so every commit, including every release tag, can run as an Action. `.gitattributes` marks it `linguist-generated`, so GitHub collapses it in diffs. CodeQL skips `dist/` (`.github/codeql/codeql-config.yml`) and scans the source instead.
 
 On PRs from a branch in this repo, two workflows rebuild the bundle and commit it back to the PR branch:
 

@@ -1,0 +1,6 @@
+name: Warden CodeQL config
+
+# dist/ holds build output, such as the committed ncc bundle in dist/action/.
+# CodeQL scans the source that it is built from.
+paths-ignore:
+  - dist/**
