@@ -37,6 +37,60 @@ from _utils import (  # noqa: E402
 )
 
 
+DISPLAY_FIELDS = ("severity", "skill", "file", "startLine", "title")
+
+
+def join_finding_details(
+    verified: list[dict[str, Any]],
+    all_findings: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Fill each verified entry's display fields from its full finding.
+
+    verified.jsonl holds only verdict data (findingId, verdict, confidence);
+    severity, skill, file, title and line live in all-findings.jsonl.
+    Display fields the verified entry sets to a value win; null or empty
+    ones count as unset. Two different findings with one findingId raise,
+    since the join could not tell which one the entry means.
+    """
+    by_id: dict[str, dict[str, Any]] = {}
+    for f in all_findings:
+        finding_id = f.get("findingId")
+        if not isinstance(finding_id, str) or not finding_id:
+            continue
+        prior = by_id.get(finding_id)
+        if prior is not None and prior != f:
+            raise ValueError(
+                f"duplicate findingId {finding_id!r} in all-findings.jsonl "
+                "with different details"
+            )
+        by_id[finding_id] = f
+    joined: list[dict[str, Any]] = []
+    for entry in verified:
+        finding_id = entry.get("findingId")
+        finding = by_id.get(finding_id, {}) if isinstance(finding_id, str) else {}
+        location = finding.get("location")
+        if not isinstance(location, dict):
+            location = {}
+        details = {
+            "severity": finding.get("severity"),
+            "skill": finding.get("skill"),
+            "file": finding.get("file") or location.get("path"),
+            "startLine": location.get("startLine"),
+            "title": finding.get("title"),
+        }
+        overrides = {
+            k: v for k, v in entry.items()
+            if not (k in DISPLAY_FIELDS and v in (None, ""))
+        }
+        joined.append({**{k: v for k, v in details.items() if v is not None}, **overrides})
+    return joined
+
+
+def table_cell(text: Any) -> str:
+    """Keep text inside one markdown table cell: escape pipes, flatten newlines."""
+    return str(text).replace("|", "\\|").replace("\r", " ").replace("\n", " ")
+
+
 def build_issue_body(
     run_id: str,
     scan_index: list[dict[str, Any]],
@@ -80,14 +134,25 @@ def build_issue_body(
         lines.append("")
         lines.append("| Severity | Skill | File | Title |")
         lines.append("|----------|-------|------|-------|")
-        for f in verified:
+        # Verify agents return verdict fields (references/verify-prompt.md), so take severity, skill, file, line and title from all-findings.jsonl
+        by_id = {f["findingId"]: f for f in all_findings if isinstance(f.get("findingId"), str)}
+        for v in verified:
+            finding_id = v.get("findingId")
+            f = {**(by_id.get(finding_id, {}) if isinstance(finding_id, str) else {}), **v}
             sev = severity_badge(f.get("severity", "info"))
             skill = f.get("skill", "")
             file_path = f.get("file", "")
-            start_line = f.get("startLine")
+            # extract_findings.py nests the line under "location" (extract_findings.py:93-96);
+            # a top-level startLine (older records, or a verified entry) takes precedence
+            location_obj = f.get("location")
+            start_line = f.get("startLine") or (
+                location_obj.get("startLine") if isinstance(location_obj, dict) else None
+            )
             location = f"{file_path}:{start_line}" if start_line else file_path
             title = f.get("title", "")
-            lines.append(f"| {sev} | {skill} | `{location}` | {title} |")
+            lines.append(
+                f"| {table_cell(sev)} | {table_cell(skill)} | `{table_cell(location)}` | {table_cell(title)} |"
+            )
         lines.append("")
 
     if skills:
@@ -167,6 +232,7 @@ def main() -> None:
     rejected = read_jsonl(os.path.join(data_dir, "rejected.jsonl"))
 
     files_scanned = sum(1 for e in scan_index if e.get("status") == "complete")
+    verified = join_finding_details(verified, all_findings)
 
     # Build issue
     title = f"Warden Sweep {run_id}: {len(verified)} findings across {files_scanned} files"
