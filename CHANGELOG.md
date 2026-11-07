@@ -1,4 +1,16 @@
 # Changelog
+## 0.53.0
+
+### Internal Changes 🔧
+
+#### Release
+
+- Move to Craft auto versioning by @BYK with @sentry-junior in [#567](https://github.com/getsentry/warden/pull/567)
+
+#### Other
+
+- (warden) Enable incremental review by @Jeffreyhung with @sentry-junior in [#566](https://github.com/getsentry/warden/pull/566)
+
 ## 0.52.0
 
 ### New Features ✨
