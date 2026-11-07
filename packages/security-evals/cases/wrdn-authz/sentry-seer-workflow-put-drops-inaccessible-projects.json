@@ -6,5 +6,6 @@
   "targets": [
     "src/sentry/seer/endpoints/organization_seer_workflow_configs.py"
   ],
-  "source": "https://github.com/getsentry/sentry/pull/129734"
+  "source": "https://github.com/getsentry/sentry/pull/129734",
+  "noClean": "Production Warden catch on this pull request commit. No fixed commit has been verified, so there is no clean twin yet."
 }

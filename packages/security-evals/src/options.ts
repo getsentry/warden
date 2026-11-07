@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { EffortSchema, RuntimeNameSchema, type Effort, type RuntimeName } from '@sentry/warden';
 
@@ -24,7 +25,8 @@ const PACKAGE_DIR = join(import.meta.dirname, '..');
 export const DEFAULT_BASELINE = join(PACKAGE_DIR, 'baseline', 'results.json');
 
 export interface SuiteOptions {
-  sentryRepo?: string;
+  /** Local clone per repository, keyed `owner/name`. Every entry's repository needs one. */
+  repos: Record<string, string>;
   /** Local getsentry/warden-skills checkout. Required when a wrdn-* lane is selected. */
   skillsRepo?: string;
   skills: string[];
@@ -51,6 +53,27 @@ const PREFIX = 'WARDEN_SECURITY_EVALS_';
 
 function list(value: string | undefined): string[] {
   return (value ?? '').split(',').map((item) => item.trim()).filter(Boolean);
+}
+
+/** Parse `owner/name=<path>` pairs. `--sentry-repo` is an alias for the getsentry/sentry pair. */
+function repoPaths(value: string | undefined, sentryRepo: string | undefined): Record<string, string> {
+  const repos: Record<string, string> = {};
+  for (const pair of list(value)) {
+    const split = pair.indexOf('=');
+    const repository = pair.slice(0, split);
+    const path = pair.slice(split + 1);
+    if (split < 0 || !/^[\w.-]+\/[\w.-]+$/.test(repository) || !path) {
+      throw new Error(`${PREFIX}REPOS entries look like owner/name=<path>, got ${pair}`);
+    }
+    repos[repository] = path;
+  }
+  if (sentryRepo) {
+    if (repos['getsentry/sentry'] && repos['getsentry/sentry'] !== sentryRepo) {
+      throw new Error('getsentry/sentry is set by both --repo and --sentry-repo; pass one');
+    }
+    repos['getsentry/sentry'] = sentryRepo;
+  }
+  return repos;
 }
 
 function positiveInt(name: string, value: string | undefined, fallback: number): number {
@@ -80,7 +103,7 @@ export function resolveSuiteOptions(env: NodeJS.ProcessEnv = process.env): Suite
   const baseline = read('BASELINE') ?? DEFAULT_BASELINE;
 
   return {
-    sentryRepo: read('SENTRY_REPO'),
+    repos: repoPaths(read('REPOS'), read('SENTRY_REPO')),
     skillsRepo: read('SKILLS_REPO'),
     skills: skills.length > 0 ? skills : [...MATRIX_SKILLS],
     entries: list(read('ENTRIES')),
@@ -97,5 +120,41 @@ export function resolveSuiteOptions(env: NodeJS.ProcessEnv = process.env): Suite
     output: read('OUTPUT') ?? join(cacheDir, 'results.json'),
     baseline: baseline === 'none' ? undefined : baseline,
     removeWorktrees: read('REMOVE_WORKTREES') === '1',
+  };
+}
+
+const WARDEN_VERSION = (JSON.parse(
+  readFileSync(join(PACKAGE_DIR, '..', 'warden', 'package.json'), 'utf8'),
+) as { version: string }).version;
+
+/**
+ * Everything that changes what a lane finds or how it is scored. A baseline
+ * lane only stands in for a lane whose config matches field for field.
+ */
+export interface LaneConfig {
+  runtime: string;
+  model: string;
+  effort: string;
+  auxiliaryModel: string;
+  auxiliaryEffort: string;
+  maxTurns: number;
+  judgeModel: string;
+  wardenVersion: string;
+  /** `builtin` for security-review, `getsentry/warden-skills@<sha>` for wrdn-* skills. */
+  skillRef: string;
+}
+
+/** The config a lane runs with under these options. */
+export function laneConfig(skill: string, options: SuiteOptions): LaneConfig {
+  return {
+    runtime: options.runtime,
+    model: options.model,
+    effort: options.effort,
+    auxiliaryModel: options.auxiliaryModel,
+    auxiliaryEffort: options.auxiliaryEffort,
+    maxTurns: options.maxTurns,
+    judgeModel: options.judgeModel,
+    wardenVersion: WARDEN_VERSION,
+    skillRef: skill === 'security-review' ? 'builtin' : `getsentry/warden-skills@${WARDEN_SKILLS_REF}`,
   };
 }

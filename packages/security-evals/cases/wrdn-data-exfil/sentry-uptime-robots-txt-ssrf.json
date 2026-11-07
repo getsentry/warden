@@ -6,5 +6,5 @@
   "targets": [
     "src/sentry/uptime/autodetect/tasks.py"
   ],
-  "source": "https://github.com/getsentry/sentry/commit/e84e7a45b001de51cab826593b8a2f5f0f0b323b (pre-fix parent, getsentry/sentry#118358)"
+  "source": "https://github.com/getsentry/sentry/commit/e84e7a45b001de51cab826593b8a2f5f0f0b323b"
 }

@@ -6,5 +6,5 @@
   "targets": [
     "src/sentry/eventstream/item_helpers.py"
   ],
-  "source": "https://github.com/getsentry/sentry/commit/57f0df6e319f9de3718e0e9804eb65ffc07aca3e (fixed state)"
+  "source": "https://github.com/getsentry/sentry/commit/57f0df6e319f9de3718e0e9804eb65ffc07aca3e"
 }

@@ -1,5 +1,8 @@
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { filterEntries, groupShards, loadCaseEntries, loadCorpusEntries, type SuiteEntry } from './entries.js';
+import { filterEntries, groupShards, loadCaseEntries, loadCaseFiles, loadCorpusEntries, type SuiteEntry } from './entries.js';
 
 function entry(id: string, ref: string, targets: string[]): SuiteEntry {
   return { id, source: 'corpus', kind: 'bug', repository: 'getsentry/sentry', ref, targets, summary: id };
@@ -22,9 +25,18 @@ describe('loadCaseEntries', () => {
     expect(cases.every((c) => /^[0-9a-f]{40}$/.test(c.ref) && c.targets.length > 0)).toBe(true);
   });
 
-  it('does not duplicate corpus entries', () => {
-    const corpus = new Set(loadCorpusEntries().map((e) => `${e.ref}:${e.targets[0]}`));
-    expect(loadCaseEntries().filter((c) => corpus.has(`${c.ref}:${c.targets[0]}`))).toEqual([]);
+  it('rejects a malformed case with its path', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'security-evals-cases-'));
+    try {
+      mkdirSync(join(dir, 'wrdn-pii'));
+      writeFileSync(join(dir, 'wrdn-pii', 'leak.json'), JSON.stringify({
+        kind: 'clean', summary: 's', repository: 'getsentry/sentry', ref: 'a'.repeat(40),
+        targets: ['x.py'], source: 'https://github.com/getsentry/sentry/pull/1', noClean: 'why',
+      }));
+      expect(() => loadCaseFiles(dir)).toThrow(/wrdn-pii\/leak\.json:[\s\S]*noClean only applies to bug cases/);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
 

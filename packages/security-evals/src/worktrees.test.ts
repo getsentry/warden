@@ -3,7 +3,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'no
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { SENTRY_CHECKOUT, SKILLS_CHECKOUT, ensureWorktree, removeWorktree, resolveCheckout } from './worktrees.js';
+import { SKILLS_CHECKOUT, ensureWorktree, removeWorktree, repoCheckout, resolveCheckout } from './worktrees.js';
 
 function configuredEmail(): string {
   try {
@@ -89,8 +89,9 @@ describe('ensureWorktree', () => {
 
 describe('resolveCheckout', () => {
   it('fails fast without a clone instead of cloning', () => {
-    expect(() => resolveCheckout(SENTRY_CHECKOUT, undefined)).toThrow('WARDEN_SECURITY_EVALS_SENTRY_REPO (or --sentry-repo)');
+    expect(() => resolveCheckout(repoCheckout('getsentry/getsentry'), undefined))
+      .toThrow('WARDEN_SECURITY_EVALS_REPOS (or --repo getsentry/getsentry=<path>) must point at a local getsentry/getsentry clone');
     expect(() => resolveCheckout(SKILLS_CHECKOUT, undefined)).toThrow('getsentry/warden-skills clone');
-    expect(() => resolveCheckout(SENTRY_CHECKOUT, tmpdir())).toThrow('is not a git checkout');
+    expect(() => resolveCheckout(repoCheckout('getsentry/sentry'), tmpdir())).toThrow('is not a git checkout');
   });
 });

@@ -6,5 +6,5 @@
   "targets": [
     "src/sentry/grouping/parameterization.py"
   ],
-  "source": "https://github.com/getsentry/sentry/commit/a111b7473cc002875a38a7ffd3792ee1d395f362 (pre-fix parent, getsentry/sentry#118512)"
+  "source": "https://github.com/getsentry/sentry/commit/a111b7473cc002875a38a7ffd3792ee1d395f362"
 }

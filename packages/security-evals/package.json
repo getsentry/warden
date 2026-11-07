@@ -4,7 +4,8 @@
   "type": "module",
   "scripts": {
     "evals:security": "tsx scripts/run.ts",
-    "import-benchmark": "tsx scripts/import-benchmark.ts",
+    "add-case": "tsx scripts/add-case.ts",
+    "baseline:update": "tsx scripts/update-baseline.ts",
     "test": "vitest run --config vitest.unit.config.ts",
     "typecheck": "tsc --noEmit"
   },

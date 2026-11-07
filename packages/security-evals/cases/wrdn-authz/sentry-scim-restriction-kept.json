@@ -1,0 +1,10 @@
+{
+  "kind": "clean",
+  "summary": "OrganizationSCIMPermission authorizes any caller with member:/team: scopes once scim_enabled is set, instead of restricting SCIM endpoints to the SCIM provider's sentry-app proxy user, so managers or owners can mutate IdP-provisioned members and teams",
+  "repository": "getsentry/sentry",
+  "ref": "c347ba8739618e24da2e590ecfa3d7fc989866ca",
+  "targets": [
+    "src/sentry/core/endpoints/scim/utils.py"
+  ],
+  "source": "https://github.com/getsentry/sentry/pull/130141"
+}

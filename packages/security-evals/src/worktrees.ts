@@ -10,11 +10,10 @@ export interface CheckoutSpec {
   flag: string;
 }
 
-export const SENTRY_CHECKOUT: CheckoutSpec = {
-  repository: 'getsentry/sentry',
-  env: 'WARDEN_SECURITY_EVALS_SENTRY_REPO',
-  flag: '--sentry-repo',
-};
+/** A scanned repository. Entries name it; `--repo owner/name=<path>` supplies the clone. */
+export function repoCheckout(repository: string): CheckoutSpec {
+  return { repository, env: 'WARDEN_SECURITY_EVALS_REPOS', flag: `--repo ${repository}=<path>` };
+}
 
 export const SKILLS_CHECKOUT: CheckoutSpec = {
   repository: 'getsentry/warden-skills',

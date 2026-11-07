@@ -1,28 +1,16 @@
-import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { afterAll, describe, it } from 'vitest';
 import { filterEntries, groupShards, loadCaseEntries, loadCorpusEntries } from './entries.js';
-import { WARDEN_SKILLS_REF, resolveSuiteOptions } from './options.js';
-import {
-  createResults,
-  mergeBaseline,
-  recordShardRun,
-  renderMarkdown,
-  serializeResults,
-  summarize,
-  type SuiteResults,
-} from './results.js';
+import { mergeBaseline, loadResultsFile } from './baseline.js';
+import { WARDEN_SKILLS_REF, laneConfig, resolveSuiteOptions } from './options.js';
+import { createResults, recordShardRun, renderMarkdown, serializeResults, summarize } from './results.js';
 import { loadSkills, runShardPass } from './shard.js';
-import { SENTRY_CHECKOUT, SKILLS_CHECKOUT, ensureWorktree, removeWorktree, resolveCheckout } from './worktrees.js';
+import { SKILLS_CHECKOUT, ensureWorktree, removeWorktree, repoCheckout, resolveCheckout } from './worktrees.js';
 
 const options = resolveSuiteOptions();
-const sentryRepo = resolveCheckout(SENTRY_CHECKOUT, options.sentryRepo);
 const entries = filterEntries([...loadCorpusEntries(), ...loadCaseEntries()], options.entries);
 const shards = groupShards(entries);
-const foreign = shards.filter((shard) => shard.repository !== 'getsentry/sentry');
-if (foreign.length > 0) {
-  throw new Error(`Only getsentry/sentry entries are supported, got ${foreign.map((s) => s.repository).join(', ')}`);
-}
 
 // Both worktree directory names are Roach values in roach.json; keep them in sync.
 const worktreesDir = join(options.cacheDir, 'security-evals-worktrees');
@@ -47,11 +35,13 @@ const PASS_TIMEOUT_MS = 3 * 60 * 60 * 1000;
 
 describe('security evals', () => {
   for (const shard of shards) {
+    // Resolved while vitest collects tests, so a missing clone fails before any pass runs.
+    const clone = resolveCheckout(repoCheckout(shard.repository), options.repos[shard.repository]);
     for (let repeat = 1; repeat <= options.repeats; repeat++) {
       const name = `${shard.ref.slice(0, 8)} pass ${repeat}/${options.repeats} `
         + `(${shard.targets.length} files, ${shard.entries.length} entries)`;
       it(name, { timeout: PASS_TIMEOUT_MS }, async () => {
-        const worktree = ensureWorktree(sentryRepo, worktreesDir, shard.ref);
+        const worktree = ensureWorktree(clone, worktreesDir, shard.ref);
         try {
           const runs = await runShardPass({
             shard,
@@ -62,13 +52,14 @@ describe('security evals', () => {
             log: (message) => console.log(`  ${message}`),
           });
           for (const run of runs) recordShardRun(results, run);
-          const failed = runs.filter((run) => !run.hits).map((run) => run.skill);
+          const failed = runs.filter((run) => run.errors.length > 0)
+            .map((run) => `${run.skill} (${run.errors.length} entries)`);
           if (failed.length > 0) {
-            throw new Error(`Skill passes failed: ${failed.join(', ')}`);
+            throw new Error(`Entries errored, recorded as errors: ${failed.join(', ')}`);
           }
         } finally {
           if (options.removeWorktrees && repeat === options.repeats) {
-            removeWorktree(sentryRepo, worktree);
+            removeWorktree(clone, worktree);
           }
         }
       });
@@ -79,8 +70,9 @@ describe('security evals', () => {
 afterAll(() => {
   if (Object.keys(results.lanes).length === 0) return;
   if (options.baseline && existsSync(options.baseline)) {
-    const baseline = JSON.parse(readFileSync(options.baseline, 'utf8')) as SuiteResults;
-    mergeBaseline(results, baseline, options.skills);
+    const warnings = mergeBaseline(results, loadResultsFile(options.baseline), options.skills,
+      (skill) => laneConfig(skill, options));
+    for (const warning of warnings) console.warn(warning);
   }
   results.summary = summarize(results);
 

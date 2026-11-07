@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { MATRIX_SKILLS, WARDEN_SKILLS_REF, resolveSuiteOptions } from './options.js';
+import { MATRIX_SKILLS, WARDEN_SKILLS_REF, laneConfig, resolveSuiteOptions } from './options.js';
 
 describe('resolveSuiteOptions', () => {
   it('defaults to the production lane over every matrix skill', () => {
@@ -34,6 +34,25 @@ describe('resolveSuiteOptions', () => {
     expect(options.entries).toEqual(['wrdn-pii/*']);
     expect(options.repeats).toBe(3);
     expect(options.baseline).toBeUndefined();
+  });
+
+  it('maps --repo pairs and the --sentry-repo alias onto one clone per repository', () => {
+    expect(resolveSuiteOptions({
+      WARDEN_SECURITY_EVALS_REPOS: 'getsentry/getsentry=/src/getsentry',
+      WARDEN_SECURITY_EVALS_SENTRY_REPO: '/src/sentry',
+    }).repos).toEqual({ 'getsentry/getsentry': '/src/getsentry', 'getsentry/sentry': '/src/sentry' });
+    expect(() => resolveSuiteOptions({ WARDEN_SECURITY_EVALS_REPOS: '/src/sentry' })).toThrow('owner/name=<path>');
+    expect(() => resolveSuiteOptions({
+      WARDEN_SECURITY_EVALS_REPOS: 'getsentry/sentry=/a',
+      WARDEN_SECURITY_EVALS_SENTRY_REPO: '/b',
+    })).toThrow('set by both');
+  });
+
+  it('records provenance a baseline lane must match', () => {
+    const options = resolveSuiteOptions({});
+    expect(laneConfig('security-review', options)).toMatchObject({ skillRef: 'builtin', model: 'openrouter/x-ai/grok-4.5' });
+    expect(laneConfig('wrdn-pii', options).skillRef).toBe(`getsentry/warden-skills@${WARDEN_SKILLS_REF}`);
+    expect(laneConfig('wrdn-pii', options).wardenVersion).toMatch(/^\d+\.\d+\.\d+/);
   });
 
   it('pins the same warden-skills ref the CI workflow checks out', () => {

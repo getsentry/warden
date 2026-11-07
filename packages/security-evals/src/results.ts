@@ -1,19 +1,6 @@
 import type { SuiteEntry } from './entries.js';
-
-/** How a lane ran. Baseline lanes keep the config they were recorded with. */
-export interface LaneConfig {
-  runtime: string;
-  model: string;
-  effort: string;
-  auxiliaryModel: string;
-  auxiliaryEffort: string;
-  maxTurns: number;
-  judgeModel: string;
-  /** Pinned warden-skills ref for wrdn-* lanes. */
-  skillsRef?: string;
-  /** Where the lane came from when it was not run by this suite. */
-  origin?: string;
-}
+import type { LaneConfig } from './options.js';
+import { REFERENCE_SKILL, judgeSkill, type SkillVerdict } from './verdict.js';
 
 export interface LaneUsage {
   inputTokens: number;
@@ -26,21 +13,25 @@ export interface LaneUsage {
 export interface LaneResult {
   config: LaneConfig;
   usage: LaneUsage;
-  /** Passes completed: one per shard and repeat, or one per imported benchmark run. */
+  /** Passes completed: one per shard and repeat. */
   runs: number;
-  /** Shard passes that errored and were not scored. */
+  /** Shard passes that errored. Their entries count as errors, not misses. */
   failedRuns: number;
+  /** Set when the lane was copied from the baseline instead of run. */
+  fromBaseline?: true;
 }
 
-/** Hits over completed repeats for one entry in one lane. */
+/** One entry in one lane: hits over scored repeats, plus repeats that errored. */
 export interface Tally {
   hits: number;
   runs: number;
+  errors: number;
 }
 
 export interface EntryResult {
   source: SuiteEntry['source'];
   kind: SuiteEntry['kind'];
+  repository: string;
   ref: string;
   targets: string[];
   lanes: Record<string, Tally>;
@@ -48,18 +39,19 @@ export interface EntryResult {
 
 export interface LaneSummary {
   bugEntries: number;
-  /** Mean hit rate over bug entries this lane ran. */
+  /** Mean hit rate over bug entries this lane scored. */
   recall: number | null;
   found: number;
   /** Bug entries this lane found and every other lane that ran them missed. */
   onlyThisLane: string[];
-  /** Bug entries this lane found and security-review missed. The "do we need it" list. */
-  missedBySecurityReview: string[];
-  cleanFlagged: Tally;
+  cleanFlagged: { hits: number; runs: number };
+  errors: number;
+  /** Whether a wrdn-* skill catches what security-review misses. Absent for security-review itself. */
+  verdict?: SkillVerdict;
 }
 
 export interface SuiteResults {
-  version: 1;
+  version: 2;
   lanes: Record<string, LaneResult>;
   entries: Record<string, EntryResult>;
   summary: Record<string, LaneSummary>;
@@ -70,20 +62,22 @@ export interface ShardRun {
   skill: string;
   config: LaneConfig;
   usage: LaneUsage;
-  /** Undefined when the pass errored; the entries then get no repeat. */
-  hits?: Map<string, boolean>;
+  /** Set when the whole pass failed. */
+  error?: string;
+  hits: Map<string, boolean>;
+  /** Entries this pass could not score. */
+  errors: string[];
 }
-
-const SECURITY_REVIEW = 'security-review';
 
 /** Start an empty result set for the selected entries. */
 export function createResults(entries: SuiteEntry[]): SuiteResults {
   return {
-    version: 1,
+    version: 2,
     lanes: {},
     entries: Object.fromEntries(entries.map((entry) => [entry.id, {
       source: entry.source,
       kind: entry.kind,
+      repository: entry.repository,
       ref: entry.ref,
       targets: entry.targets,
       lanes: {},
@@ -103,48 +97,41 @@ export function recordShardRun(results: SuiteResults, run: ShardRun): void {
   for (const key of Object.keys(lane.usage) as (keyof LaneUsage)[]) {
     lane.usage[key] += run.usage[key];
   }
-  if (!run.hits) {
+  if (run.error) {
     lane.failedRuns += 1;
   } else {
     lane.runs += 1;
-    for (const [entryId, hit] of run.hits) {
-      const entry = results.entries[entryId];
-      if (!entry) continue;
-      const tally = entry.lanes[run.skill] ?? { hits: 0, runs: 0 };
-      tally.runs += 1;
-      tally.hits += hit ? 1 : 0;
-      entry.lanes[run.skill] = tally;
-    }
+  }
+  const tally = (entryId: string): Tally | undefined => {
+    const entry = results.entries[entryId];
+    if (!entry) return undefined;
+    entry.lanes[run.skill] ??= { hits: 0, runs: 0, errors: 0 };
+    return entry.lanes[run.skill];
+  };
+  for (const [entryId, hit] of run.hits) {
+    const t = tally(entryId);
+    if (!t) continue;
+    t.runs += 1;
+    t.hits += hit ? 1 : 0;
+  }
+  for (const entryId of run.errors) {
+    const t = tally(entryId);
+    if (t) t.errors += 1;
   }
   results.lanes[run.skill] = lane;
-}
-
-/**
- * Copy lanes this run skipped from a baseline, limited to the selected
- * entries, so a candidate lane compares without rerunning the rest.
- */
-export function mergeBaseline(results: SuiteResults, baseline: SuiteResults, ranSkills: string[]): void {
-  for (const [skill, lane] of Object.entries(baseline.lanes)) {
-    if (ranSkills.includes(skill)) continue;
-    results.lanes[skill] = lane;
-    for (const [entryId, entry] of Object.entries(results.entries)) {
-      const tally = baseline.entries[entryId]?.lanes[skill];
-      if (tally) entry.lanes[skill] = tally;
-    }
-  }
 }
 
 function hitRate(tally: Tally | undefined): number | undefined {
   return tally && tally.runs > 0 ? tally.hits / tally.runs : undefined;
 }
 
-/** Compute per-lane recall, unique catches, and clean-case false positives. */
+/** Compute per-lane recall, unique catches, clean-case false positives, and each wrdn-* verdict. */
 export function summarize(results: SuiteResults): Record<string, LaneSummary> {
   const entries = Object.entries(results.entries);
   const summary: Record<string, LaneSummary> = {};
 
   for (const skill of Object.keys(results.lanes).sort()) {
-    // Entries this lane ran, with its hit rate on each.
+    // Entries this lane scored, with its hit rate on each.
     const ran = entries.flatMap(([id, entry]) => {
       const rate = hitRate(entry.lanes[skill]);
       return rate === undefined ? [] : [{ id, entry, rate }];
@@ -160,37 +147,44 @@ export function summarize(results: SuiteResults): Record<string, LaneSummary> {
       recall: bugs.length > 0 ? bugs.reduce((sum, { rate }) => sum + rate, 0) / bugs.length : null,
       found: found.length,
       onlyThisLane: found.filter(({ entry }) => othersMissed(entry)).map(({ id }) => id),
-      missedBySecurityReview: skill === SECURITY_REVIEW
-        ? []
-        : found.filter(({ entry }) => entry.lanes[SECURITY_REVIEW]?.hits === 0).map(({ id }) => id),
       cleanFlagged: { hits: clean.filter(({ rate }) => rate > 0).length, runs: clean.length },
+      errors: entries.reduce((sum, [, entry]) => sum + (entry.lanes[skill]?.errors ?? 0), 0),
+      ...(skill === REFERENCE_SKILL ? {} : { verdict: judgeSkill(results, skill) }),
     };
   }
   return summary;
 }
 
 function cell(tally: Tally | undefined): string {
-  return tally ? `${tally.hits}/${tally.runs}` : '-';
+  if (!tally) return '-';
+  return `${tally.hits}/${tally.runs}${tally.errors > 0 ? ` (${tally.errors} err)` : ''}`;
 }
 
-/** Render the summary and the entry x lane hit table as Markdown. */
+/** Render verdicts, the lane table, and the entry x lane hit table as Markdown. */
 export function renderMarkdown(results: SuiteResults): string {
   const skills = Object.keys(results.lanes).sort();
-  const lines = [
-    '## Security evals',
+  const lines = ['## Security evals', '', '### Verdicts', ''];
+  for (const skill of skills) {
+    const verdict = results.summary[skill]?.verdict;
+    if (!verdict) continue;
+    const ids = verdict.uniqueCatches.length > 0 ? ` Unique: ${verdict.uniqueCatches.join(', ')}.` : '';
+    lines.push(`- **${skill}: ${verdict.verdict}**. ${verdict.reason}.${ids}`);
+  }
+
+  lines.push(
     '',
-    '| lane | recall | found | only this lane | missed by security-review | clean flagged | cost USD | input tokens | output tokens |',
+    '| lane | recall | found | only this lane | clean flagged | errors | cost USD | input tokens | output tokens |',
     '|---|---|---|---|---|---|---|---|---|',
-  ];
+  );
   for (const skill of skills) {
     const lane = results.lanes[skill];
     const s = results.summary[skill];
     if (!lane || !s) continue;
     const recall = s.recall === null ? '-' : s.recall.toFixed(2);
     lines.push(
-      `| ${skill}${lane.config.origin ? ' (baseline)' : ''} | ${recall} | ${s.found}/${s.bugEntries} `
-      + `| ${s.onlyThisLane.length} | ${skill === SECURITY_REVIEW ? '-' : s.missedBySecurityReview.length} `
-      + `| ${cell(s.cleanFlagged)} | ${lane.usage.costUSD.toFixed(2)} | ${lane.usage.inputTokens} | ${lane.usage.outputTokens} |`,
+      `| ${skill}${lane.fromBaseline ? ' (baseline)' : ''} | ${recall} | ${s.found}/${s.bugEntries} `
+      + `| ${s.onlyThisLane.length} | ${s.cleanFlagged.hits}/${s.cleanFlagged.runs} | ${s.errors} `
+      + `| ${lane.usage.costUSD.toFixed(2)} | ${lane.usage.inputTokens} | ${lane.usage.outputTokens} |`,
     );
   }
 

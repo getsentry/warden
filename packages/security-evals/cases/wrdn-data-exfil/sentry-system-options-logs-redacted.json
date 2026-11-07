@@ -6,5 +6,5 @@
   "targets": [
     "src/sentry/api/endpoints/system_options.py"
   ],
-  "source": "https://github.com/getsentry/sentry/commit/36ae5236a01ac174b5d3a432ac350fd469f05441 (fixed state)"
+  "source": "https://github.com/getsentry/sentry/commit/36ae5236a01ac174b5d3a432ac350fd469f05441"
 }

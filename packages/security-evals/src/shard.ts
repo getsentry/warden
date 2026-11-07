@@ -3,8 +3,8 @@ import { resolveSkillAsync, runSkill, type SkillReport, type UsageStats } from '
 // Not on the public surface; the CLI's file mode builds its context the same way.
 import { buildFileEventContext } from '../../warden/src/cli/context.js';
 import type { SuiteShard } from './entries.js';
-import { WARDEN_SKILLS_REF, type SuiteOptions } from './options.js';
-import type { LaneConfig, LaneUsage, ShardRun } from './results.js';
+import { laneConfig, type SuiteOptions } from './options.js';
+import type { LaneUsage, ShardRun } from './results.js';
 import { scoreEntry } from './score.js';
 
 type SkillDefinition = Awaited<ReturnType<typeof resolveSkillAsync>>;
@@ -44,20 +44,6 @@ export async function loadSkills(names: string[], skillsWorktree: string | undef
   return skills;
 }
 
-/** Lane config recorded with each result. */
-function laneConfig(skill: string, options: SuiteOptions): LaneConfig {
-  return {
-    runtime: options.runtime,
-    model: options.model,
-    effort: options.effort,
-    auxiliaryModel: options.auxiliaryModel,
-    auxiliaryEffort: options.auxiliaryEffort,
-    maxTurns: options.maxTurns,
-    judgeModel: options.judgeModel,
-    ...(skill === 'security-review' ? {} : { skillsRef: `getsentry/warden-skills@${WARDEN_SKILLS_REF}` }),
-  };
-}
-
 function reportUsage(report: SkillReport): LaneUsage {
   const parts: UsageStats[] = [report.usage, ...Object.values(report.auxiliaryUsage ?? {})]
     .filter((usage): usage is UsageStats => usage !== undefined);
@@ -72,8 +58,9 @@ function reportUsage(report: SkillReport): LaneUsage {
 
 /**
  * One Warden pass over a shard's worktree: build the file context once, run
- * every selected skill against it, then score each entry per skill. Entries in
- * a file with a failed chunk get no repeat instead of a false miss.
+ * every selected skill against it, then score each entry per skill. An entry
+ * the pass could not score (failed chunk, failed skill, failed judge) is
+ * recorded as an error for that skill, never as a miss.
  */
 export async function runShardPass(args: {
   shard: SuiteShard;
@@ -93,37 +80,48 @@ export async function runShardPass(args: {
 
   return Promise.all([...skills].map(async ([name, skill]): Promise<ShardRun> => {
     const config = laneConfig(name, options);
-    const report = await runSkill(skill, context, {
-      apiKey: apiKey || undefined,
-      runtime: options.runtime,
-      model: options.model,
-      effort: options.effort,
-      auxiliaryModel: options.auxiliaryModel,
-      auxiliaryEffort: options.auxiliaryEffort,
-      synthesisModel: options.auxiliaryModel,
-      maxTurns: options.maxTurns,
-      concurrency: options.concurrency,
-      verifyFindings: true,
-    });
-    const usage = reportUsage(report);
-    if (report.error) {
-      log(`${name} @ ${shard.ref.slice(0, 8)} failed: ${report.error.message}`);
-      return { skill: name, config, usage };
-    }
+    const allEntries = shard.entries.map((entry) => entry.id);
+    let usage: LaneUsage = { inputTokens: 0, outputTokens: 0, cacheReadInputTokens: 0, costUSD: 0, judgeCostUSD: 0 };
+    const failed = (error: unknown): ShardRun => {
+      const message = error instanceof Error ? error.message : String(error);
+      log(`${name} @ ${shard.ref.slice(0, 8)} failed: ${message}`);
+      return { skill: name, config, usage, error: message, hits: new Map(), errors: allEntries };
+    };
 
-    const failedFiles = new Set(report.hunkFailures?.map((failure) => failure.filename));
-    const hits = new Map<string, boolean>();
-    for (const entry of shard.entries) {
-      if (entry.targets.some((target) => failedFiles.has(target))) {
-        log(`${name} @ ${shard.ref.slice(0, 8)}: ${entry.id} skipped, a target chunk failed`);
-        continue;
+    try {
+      const report = await runSkill(skill, context, {
+        apiKey: apiKey || undefined,
+        runtime: options.runtime,
+        model: options.model,
+        effort: options.effort,
+        auxiliaryModel: options.auxiliaryModel,
+        auxiliaryEffort: options.auxiliaryEffort,
+        synthesisModel: options.auxiliaryModel,
+        maxTurns: options.maxTurns,
+        concurrency: options.concurrency,
+        verifyFindings: true,
+      });
+      usage = reportUsage(report);
+      if (report.error) return failed(report.error.message);
+
+      const failedFiles = new Set(report.hunkFailures?.map((failure) => failure.filename));
+      const hits = new Map<string, boolean>();
+      const errors: string[] = [];
+      for (const entry of shard.entries) {
+        if (entry.targets.some((target) => failedFiles.has(target))) {
+          log(`${name} @ ${shard.ref.slice(0, 8)}: ${entry.id} errored, a target chunk failed`);
+          errors.push(entry.id);
+          continue;
+        }
+        const verdict = await scoreEntry(entry, report.findings, { model: options.judgeModel, apiKey });
+        usage.judgeCostUSD += verdict.usage?.costUSD ?? 0;
+        hits.set(entry.id, verdict.hit);
       }
-      const verdict = await scoreEntry(entry, report.findings, { model: options.judgeModel, apiKey });
-      usage.judgeCostUSD += verdict.usage?.costUSD ?? 0;
-      hits.set(entry.id, verdict.hit);
+      log(`${name} @ ${shard.ref.slice(0, 8)}: ${report.findings.length} findings, `
+        + `${[...hits.values()].filter(Boolean).length}/${hits.size} entries hit, ${errors.length} errored`);
+      return { skill: name, config, usage, hits, errors };
+    } catch (error) {
+      return failed(error);
     }
-    log(`${name} @ ${shard.ref.slice(0, 8)}: ${report.findings.length} findings, `
-      + `${[...hits.values()].filter(Boolean).length}/${hits.size} entries hit`);
-    return { skill: name, config, usage, hits };
   }));
 }

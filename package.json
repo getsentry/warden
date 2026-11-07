@@ -18,6 +18,7 @@
     "evals": "pnpm -C packages/evals evals",
     "evals:scaffold": "pnpm -C packages/evals scaffold",
     "evals:security": "pnpm -C packages/security-evals evals:security",
+    "evals:security:add": "pnpm -C packages/security-evals add-case",
     "typecheck": "pnpm --filter @sentry/warden-service-api build && pnpm --filter @sentry/warden-service build && pnpm --filter warden-service-app typecheck && pnpm --filter @sentry/warden typecheck && pnpm -C packages/evals typecheck && pnpm -C packages/security-evals typecheck",
     "generate:jsonl-schema": "pnpm --filter @sentry/warden generate:jsonl-schema",
     "docs": "pnpm --filter warden-docs dev",
