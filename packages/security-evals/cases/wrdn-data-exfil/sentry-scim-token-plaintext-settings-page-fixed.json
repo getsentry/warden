@@ -1,0 +1,12 @@
+{
+  "kind": "clean",
+  "summary": "organization_auth_settings.handle_existing_provider puts auth_provider.get_scim_token() into the SSO settings page context, and the template renders the full SCIM bearer token in plaintext to every manager-level viewer for as long as SCIM stays enabled, so anyone who can open the page can copy a long-lived credential that provisions and deprovisions org members",
+  "repository": "getsentry/sentry",
+  "ref": "d84bf17e962269389a9f0fe6521e2f87c785f31d",
+  "targets": [
+    "src/sentry/web/frontend/organization_auth_settings.py",
+    "src/sentry/models/authprovider.py",
+    "src/sentry/auth/services/auth/model.py"
+  ],
+  "source": "https://github.com/getsentry/sentry/commit/d84bf17e962269389a9f0fe6521e2f87c785f31d"
+}

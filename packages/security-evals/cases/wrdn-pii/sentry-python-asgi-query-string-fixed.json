@@ -1,0 +1,10 @@
+{
+  "kind": "clean",
+  "summary": "_asgi_common._get_request_attributes records http.query and a url.full that carries the query string on every ASGI request span without checking should_send_default_pii, so apps that never opted into PII still ship query strings, which routinely hold emails, tokens, and user IDs, to Sentry",
+  "repository": "getsentry/sentry-python",
+  "ref": "f17dad95f33f59aa65bf023a4435e059c4145d37",
+  "targets": [
+    "sentry_sdk/integrations/_asgi_common.py"
+  ],
+  "source": "https://github.com/getsentry/sentry-python/commit/f17dad95f33f59aa65bf023a4435e059c4145d37"
+}

@@ -1,0 +1,10 @@
+{
+  "kind": "clean",
+  "summary": "OrganizationMemberTeamDetailsEndpoint.put treats a member with no explicit team role as freely changeable (can_set_old_role defaults to True), so a team contributor can rewrite the team role of an org admin or manager who inherits team admin from their org role, demoting them on that team",
+  "repository": "getsentry/sentry",
+  "ref": "d714026543ec355782969c8e702ca7e9d56251fd",
+  "targets": [
+    "src/sentry/core/endpoints/organization_member_team_details.py"
+  ],
+  "source": "https://github.com/getsentry/sentry/commit/d714026543ec355782969c8e702ca7e9d56251fd"
+}

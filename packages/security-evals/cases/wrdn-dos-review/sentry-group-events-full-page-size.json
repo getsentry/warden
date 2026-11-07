@@ -1,0 +1,10 @@
+{
+  "kind": "bug",
+  "summary": "GroupEventsEndpoint with full=true binds and serializes the complete nodestore body of every event with EventSerializer at the default per_page of 100, so a single request against native events with many threads and frames builds hundreds of megabytes of JSON and holds a web worker for a long time",
+  "repository": "getsentry/sentry",
+  "ref": "b597a2926d9b321b1da0ffc1018a41c283f4f781",
+  "targets": [
+    "src/sentry/issues/endpoints/group_events.py"
+  ],
+  "source": "https://github.com/getsentry/sentry/commit/1e21009cb0f03dd93714a4ac50356053176e5b6a"
+}

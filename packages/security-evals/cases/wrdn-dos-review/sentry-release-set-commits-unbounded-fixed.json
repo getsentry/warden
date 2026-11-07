@@ -1,0 +1,11 @@
+{
+  "kind": "clean",
+  "summary": "set_commits processes every commit in the release create/update commits list with no size limit, issuing several queries per commit inside the web request while holding the release lock for up to 10 minutes, so one request with a huge commits array ties up a worker, the database, and the lock",
+  "repository": "getsentry/sentry",
+  "ref": "b61768dc5582d1018ee2ad8a582591ddae110a53",
+  "targets": [
+    "src/sentry/models/releases/set_commits.py",
+    "src/sentry/api/serializers/rest_framework/release.py"
+  ],
+  "source": "https://github.com/getsentry/sentry/commit/b61768dc5582d1018ee2ad8a582591ddae110a53"
+}

@@ -1,0 +1,10 @@
+{
+  "kind": "clean",
+  "summary": "event_search.validate_regex_pattern compiles every logs key://pattern// filter with RE2 on the web worker with only a 64-character length cap, no RE2 max_mem and no limit on filters per query, so a short pattern like \\p{L}{100} repeated across many filters makes each search request burn CPU and memory compiling huge programs before any Snuba query runs",
+  "repository": "getsentry/sentry",
+  "ref": "a00270ad6dfe4beb9637e21582ad163c3284cfe3",
+  "targets": [
+    "src/sentry/api/event_search.py"
+  ],
+  "source": "https://github.com/getsentry/sentry/commit/a00270ad6dfe4beb9637e21582ad163c3284cfe3"
+}
