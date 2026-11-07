@@ -86,7 +86,7 @@ jobs:
     env:
       # Pi provider/model selector for every eval and the judge. Override with the
       # WARDEN_EVAL_MODEL repo variable; add the matching WARDEN_<PROVIDER>_API_KEY below.
-      WARDEN_EVAL_MODEL: ${{ vars.WARDEN_EVAL_MODEL || 'openrouter/anthropic/claude-sonnet-4.6' }}
+      WARDEN_EVAL_MODEL: ${{ vars.WARDEN_EVAL_MODEL || 'openrouter/openai/gpt-6-luna' }}
       WARDEN_EVAL_JUDGE_MODEL: ${{ vars.WARDEN_EVAL_JUDGE_MODEL }}
       WARDEN_OPENROUTER_API_KEY: ${{ secrets.WARDEN_OPENROUTER_API_KEY }}
       WARDEN_ANTHROPIC_API_KEY: ${{ secrets.WARDEN_ANTHROPIC_API_KEY }}

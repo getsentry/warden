@@ -87,7 +87,7 @@ Requirements:
 }
 
 export interface JudgeOptions {
-  /** Pi model selector for the judge, e.g. `openrouter/anthropic/claude-sonnet-4.6`. */
+  /** Pi model selector for the judge, e.g. `openrouter/openai/gpt-6-luna`. */
   model: string;
   /** Anthropic key for Warden's legacy `apiKey` option. Other providers read their env key. */
   apiKey?: string;

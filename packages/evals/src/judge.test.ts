@@ -30,7 +30,7 @@ const meta: EvalMeta = {
   given: 'code that dereferences a possibly undefined value',
   skillPath: '/skills/bug-detection.md',
   filePaths: ['/fixtures/handler.ts'],
-  model: 'openrouter/anthropic/claude-sonnet-4.6',
+  model: 'openrouter/openai/gpt-6-luna',
   runtime: 'pi',
   should_find: [{ finding: 'null access on user', required: true }],
   should_not_find: ['style issues'],
@@ -49,12 +49,12 @@ describe('runJudge', () => {
     };
     runAuxiliary.mockResolvedValue({ success: true, data: response, usage });
 
-    const result = await runJudge(meta, [], { model: 'openrouter/anthropic/claude-sonnet-4.6' });
+    const result = await runJudge(meta, [], { model: 'openrouter/openai/gpt-6-luna' });
 
     expect(mockedGetRuntime).toHaveBeenCalledWith('pi');
     expect(runAuxiliary).toHaveBeenCalledWith(expect.objectContaining({
       task: 'eval_judge',
-      model: 'openrouter/anthropic/claude-sonnet-4.6',
+      model: 'openrouter/openai/gpt-6-luna',
       apiKey: undefined,
       maxRetries: 0,
     }));
@@ -64,7 +64,7 @@ describe('runJudge', () => {
   it('passes an Anthropic key through when one is configured', async () => {
     runAuxiliary.mockResolvedValue({ success: false, error: 'boom', usage });
 
-    await runJudge(meta, [], { model: 'anthropic/claude-sonnet-4-6', apiKey: 'sk-ant' });
+    await runJudge(meta, [], { model: 'openai/gpt-6-luna', apiKey: 'sk-ant' });
 
     expect(runAuxiliary).toHaveBeenCalledWith(expect.objectContaining({ apiKey: 'sk-ant' }));
   });
@@ -72,7 +72,7 @@ describe('runJudge', () => {
   it('marks every assertion failed when the judge call fails', async () => {
     runAuxiliary.mockResolvedValue({ success: false, error: 'No API key for provider: openrouter', usage });
 
-    const result = await runJudge(meta, [], { model: 'openrouter/anthropic/claude-sonnet-4.6' });
+    const result = await runJudge(meta, [], { model: 'openrouter/openai/gpt-6-luna' });
 
     expect(result.error).toBe('Judge call failed: No API key for provider: openrouter');
     expect(result.usage).toBe(usage);
@@ -91,7 +91,7 @@ describe('runJudge', () => {
       usage,
     });
 
-    const result = await runJudge(meta, [], { model: 'openrouter/anthropic/claude-sonnet-4.6' });
+    const result = await runJudge(meta, [], { model: 'openrouter/openai/gpt-6-luna' });
 
     expect(result.error).toBe('Judge returned 0 verdicts, expected 1');
   });

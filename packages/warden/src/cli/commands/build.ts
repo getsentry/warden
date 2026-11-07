@@ -173,7 +173,7 @@ type GeneratedSkillCommandMode = 'build' | 'improve';
 
 function reportInvalidPiModelSelector(reporter: Reporter, invalid: InvalidPiModelSelector): void {
   reporter.error(invalidPiModelSelectorMessage(invalid));
-  reporter.tip('Set a Pi model selector such as anthropic/claude-sonnet-4-6.');
+  reporter.tip('Set a Pi model selector such as openai/gpt-6-luna.');
 }
 
 async function resolvePrompt(

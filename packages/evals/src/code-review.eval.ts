@@ -14,7 +14,7 @@ const evals = discoverEvalScenarios({
   category: 'code-review',
   skill: '../warden/src/builtin-skills/code-review/SKILL.md',
   runtime: 'pi',
-  model: 'anthropic/claude-sonnet-4-6',
+  model: 'openai/gpt-6-luna',
 });
 const CODE_REVIEW_RUN_TIMEOUT_MS = 120_000;
 const CODE_REVIEW_EVAL_TIMEOUT_MS = CODE_REVIEW_RUN_TIMEOUT_MS + 60_000;

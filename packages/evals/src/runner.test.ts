@@ -36,7 +36,7 @@ describe('setupEvalRepo', () => {
           'organization_preprod_size_analysis.py'
         ),
       ],
-      model: 'anthropic/claude-sonnet-4-6',
+      model: 'openai/gpt-6-luna',
       runtime: 'pi',
       should_find: [{ finding: 'baseArtifactId bypass', required: true }],
       should_not_find: [],
@@ -97,7 +97,7 @@ describe('setupEvalRepo', () => {
       skillPath: join(repoRoot, 'packages', 'warden', 'src', 'builtin-skills', 'security-review', 'SKILL.md'),
       filePaths: [fixturePath],
       supportingFilePaths: [licensePath],
-      model: 'anthropic/claude-sonnet-4-6',
+      model: 'openai/gpt-6-luna',
       runtime: 'pi',
       should_find: [{ finding: 'source path context', required: true }],
       should_not_find: [],
@@ -146,7 +146,7 @@ describe('runEvalSkill', () => {
       filePaths: [
         join(evalsDir, 'fixtures', 'sentry-preprod-size-analysis-base-artifact-access', 'organization_preprod_size_analysis.py'),
       ],
-      model: 'anthropic/claude-sonnet-4-6',
+      model: 'openai/gpt-6-luna',
       runtime: 'pi',
       should_find: [],
       should_not_find: [],
@@ -154,15 +154,15 @@ describe('runEvalSkill', () => {
 
     await runEvalSkill(meta, {
       apiKey: '',
-      model: 'openrouter/anthropic/claude-sonnet-4.6',
+      model: 'openrouter/openai/gpt-6-luna',
       runtime: 'pi',
-      auxiliaryModel: 'openrouter/anthropic/claude-sonnet-4.6',
+      auxiliaryModel: 'openrouter/openai/gpt-6-luna',
     });
 
     expect(runLocalSkill).toHaveBeenCalledWith(expect.objectContaining({
-      model: 'openrouter/anthropic/claude-sonnet-4.6',
-      auxiliaryModel: 'openrouter/anthropic/claude-sonnet-4.6',
-      synthesisModel: 'openrouter/anthropic/claude-sonnet-4.6',
+      model: 'openrouter/openai/gpt-6-luna',
+      auxiliaryModel: 'openrouter/openai/gpt-6-luna',
+      synthesisModel: 'openrouter/openai/gpt-6-luna',
     }));
   });
 });

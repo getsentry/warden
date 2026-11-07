@@ -1,6 +1,6 @@
 skill: skills/precision.md
 runtime: pi
-model: anthropic/claude-sonnet-4-6
+model: openai/gpt-6-luna
 
 evals:
   - name: ignores-style-issues

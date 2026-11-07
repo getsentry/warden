@@ -13,7 +13,7 @@ const evals = discoverVerificationEvalScenarios({
   category: 'verification',
   skill: '../warden/src/builtin-skills/security-review/SKILL.md',
   runtime: 'pi',
-  model: 'anthropic/claude-sonnet-4-6',
+  model: 'openai/gpt-6-luna',
 });
 
 describeEval(

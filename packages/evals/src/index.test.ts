@@ -180,7 +180,7 @@ describe('standalone scenario files', () => {
       category: 'security-review',
       skill: '../warden/src/builtin-skills/security-review/SKILL.md',
       runtime: 'pi',
-      model: 'anthropic/claude-sonnet-4-6',
+      model: 'openai/gpt-6-luna',
       baseDir: evalsDir,
     });
 
@@ -189,7 +189,7 @@ describe('standalone scenario files', () => {
     expect(meta.skillName).toBe('security-review');
     expect(meta.skillPath).toContain('src/builtin-skills/security-review/SKILL.md');
     expect(meta.runtime).toBe('pi');
-    expect(meta.model).toBe('anthropic/claude-sonnet-4-6');
+    expect(meta.model).toBe('openai/gpt-6-luna');
     expect(meta.filePaths[0]).toContain('evals/fixtures/sentry-replay-delete-read-scope/');
   });
 
@@ -198,7 +198,7 @@ describe('standalone scenario files', () => {
       category: 'security-review',
       skill: '../warden/src/builtin-skills/security-review/SKILL.md',
       runtime: 'pi',
-      model: 'anthropic/claude-sonnet-4-6',
+      model: 'openai/gpt-6-luna',
       baseDir: evalsDir,
     });
 
@@ -211,7 +211,7 @@ describe('standalone scenario files', () => {
       category: 'code-review',
       skill: '../warden/src/builtin-skills/code-review/SKILL.md',
       runtime: 'pi',
-      model: 'anthropic/claude-sonnet-4-6',
+      model: 'openai/gpt-6-luna',
       baseDir: evalsDir,
     });
 
@@ -391,7 +391,7 @@ describe('EvalFileSchema', () => {
     const valid = {
       skill: '../warden/src/builtin-skills/security-review/SKILL.md',
       runtime: 'pi',
-      model: 'anthropic/claude-sonnet-4-6',
+      model: 'openai/gpt-6-luna',
       evals: [{
         name: 'sentry-miss',
         given: 'Sentry endpoint with a known authorization miss',

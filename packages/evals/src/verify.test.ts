@@ -78,7 +78,7 @@ describe('resolveVerificationEvalMeta', () => {
       supportingFilePaths: [licensePath],
       candidate,
       expectedVerdict: 'reject',
-      model: 'anthropic/claude-sonnet-4-6',
+      model: 'openai/gpt-6-luna',
       runtime: 'pi',
     }, {
       apiKey: 'test-api-key',

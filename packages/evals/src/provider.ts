@@ -1,13 +1,13 @@
 import type { RuntimeName } from '@sentry/warden';
 
-/** Env var that points every live eval at one Pi model selector, e.g. `openrouter/anthropic/claude-sonnet-4.6`. */
+/** Env var that points every live eval at one Pi model selector, e.g. `openrouter/openai/gpt-6-luna`. */
 const EVAL_MODEL_ENV = 'WARDEN_EVAL_MODEL';
 
 /** Env var that overrides the judge model. Defaults to the eval model. */
 const EVAL_JUDGE_MODEL_ENV = 'WARDEN_EVAL_JUDGE_MODEL';
 
 /** Judge model used when no eval model is configured. */
-export const DEFAULT_JUDGE_MODEL = 'anthropic/claude-sonnet-4-6';
+export const DEFAULT_JUDGE_MODEL = 'openai/gpt-6-luna';
 
 export interface EvalProviderConfig {
   /** Anthropic key for Warden's legacy `apiKey` option. Empty when unset. */
@@ -23,7 +23,7 @@ export interface EvalProviderConfig {
   auxiliaryModel?: string;
   /** Pi model selector for the LLM judge. */
   judgeModel: string;
-  /** Whether live evals have a configured model or Anthropic key to run with. */
+  /** Whether live evals have a configured model or an OpenAI key for the default models. */
   enabled: boolean;
 }
 
@@ -33,7 +33,7 @@ function readModelSelector(env: NodeJS.ProcessEnv, name: string): string | undef
     return undefined;
   }
   if (!value.includes('/')) {
-    throw new Error(`${name} must be a provider/model selector, for example openrouter/anthropic/claude-sonnet-4.6`);
+    throw new Error(`${name} must be a provider/model selector, for example openrouter/openai/gpt-6-luna`);
   }
   return value;
 }
@@ -41,13 +41,14 @@ function readModelSelector(env: NodeJS.ProcessEnv, name: string): string | undef
 /**
  * Resolve which model and credentials live evals use.
  *
- * Without `WARDEN_EVAL_MODEL`, scenarios keep their YAML models and evals run only
- * when an Anthropic key is present. With it, every scenario, Warden's auxiliary
- * calls, and the judge use that selector, and credentials come from the
- * provider's `WARDEN_<PROVIDER>_API_KEY`.
+ * Without `WARDEN_EVAL_MODEL`, scenarios keep their checked-in OpenAI models and
+ * evals run only when an OpenAI key is present. With it, every scenario,
+ * Warden's auxiliary calls, and the judge use that selector, and credentials
+ * come from the provider's `WARDEN_<PROVIDER>_API_KEY`.
  */
 export function resolveEvalProvider(env: NodeJS.ProcessEnv = process.env): EvalProviderConfig {
   const apiKey = env['WARDEN_ANTHROPIC_API_KEY'] || env['ANTHROPIC_API_KEY'] || '';
+  const openaiKey = env['WARDEN_OPENAI_API_KEY'] || env['OPENAI_API_KEY'] || '';
   const model = readModelSelector(env, EVAL_MODEL_ENV);
   const judgeModel = readModelSelector(env, EVAL_JUDGE_MODEL_ENV) ?? model ?? DEFAULT_JUDGE_MODEL;
 
@@ -57,6 +58,6 @@ export function resolveEvalProvider(env: NodeJS.ProcessEnv = process.env): EvalP
     runtime: model ? 'pi' : undefined,
     auxiliaryModel: model,
     judgeModel,
-    enabled: Boolean(model || apiKey),
+    enabled: Boolean(model || openaiKey),
   };
 }

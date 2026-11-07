@@ -32,7 +32,7 @@ name, such as `packages/evals/code-review/` or `packages/evals/security-review/`
 ```yaml
 skill: skills/bug-detection.md
 runtime: pi
-model: anthropic/claude-sonnet-4-6
+model: openai/gpt-6-luna
 
 evals:
   - name: null-property-access
@@ -121,7 +121,7 @@ Eval test names are formatted as:
 ```
 
 The suite chooses runtime and model. The current full-pipeline suites run Pi
-with `anthropic/claude-sonnet-4-6`; future suites can matrix the same fixtures
+with `openai/gpt-6-luna`; future suites can matrix the same fixtures
 over multiple runtimes or models without changing case identity.
 
 The Vitest entrypoints are intentionally split by eval layer:
@@ -139,8 +139,8 @@ The Vitest entrypoints are intentionally split by eval layer:
 | Field | Required | Description |
 |-------|----------|-------------|
 | `skill` | Yes | Path to test skill, relative to `packages/evals/` |
-| `runtime` | No | Default runtime for all evals: `claude` or `pi` (default: `claude`) |
-| `model` | No | Default model for all evals (default: `claude-sonnet-4-6`; Pi models must use provider/model format, e.g. `anthropic/claude-sonnet-4-6`) |
+| `runtime` | No | Default runtime for all evals: `claude` or `pi` (default: `pi`) |
+| `model` | No | Default model for all evals (default: `openai/gpt-6-luna`; Pi models must use provider/model format) |
 | `evals` | Yes | List of eval scenarios (at least one) |
 
 ### Per-eval fields
@@ -198,11 +198,11 @@ positive.
 # through its dist/ entry point
 pnpm build
 
-# Run all evals with the checked-in Anthropic models
-WARDEN_ANTHROPIC_API_KEY=sk-ant-... pnpm evals
+# Run all evals with the checked-in OpenAI models
+WARDEN_OPENAI_API_KEY=sk-... pnpm evals
 
 # Run all evals through another provider
-WARDEN_EVAL_MODEL=openrouter/anthropic/claude-sonnet-4.6 \
+WARDEN_EVAL_MODEL=openrouter/openai/gpt-6-luna \
   WARDEN_OPENROUTER_API_KEY=sk-or-... pnpm evals
 
 # Run evals for a specific skill
@@ -228,9 +228,9 @@ pnpm evals:scaffold https://github.com/getsentry/sentry/pull/12345
 ```
 
 Evals make real API calls. Suites choose the runtime and model; the checked-in
-suites run Pi with `anthropic/claude-sonnet-4-6`, and the judge uses the same
-model. With only that default, evals are skipped unless `ANTHROPIC_API_KEY` or
-`WARDEN_ANTHROPIC_API_KEY` is set.
+suites run Pi with `openai/gpt-6-luna`, and the judge uses the same
+model. With only that default, evals are skipped unless `OPENAI_API_KEY` or
+`WARDEN_OPENAI_API_KEY` is set.
 
 To run against any other provider, set:
 
@@ -249,7 +249,7 @@ CI runs evals when eval files or harness code change on a PR, when changes land
 on `main`, or when a maintainer adds the `run-evals` label to a same-repository
 PR. Fork PRs do not receive eval secrets.
 
-CI defaults `WARDEN_EVAL_MODEL` to `openrouter/anthropic/claude-sonnet-4.6`
+CI defaults `WARDEN_EVAL_MODEL` to `openrouter/openai/gpt-6-luna`
 with `WARDEN_OPENROUTER_API_KEY`. Set the `WARDEN_EVAL_MODEL` (and optionally
 `WARDEN_EVAL_JUDGE_MODEL`) repository variable to switch providers, and add the
 matching `WARDEN_<PROVIDER>_API_KEY` secret to the workflow env.
@@ -350,6 +350,6 @@ them in CLI output. Review that list before committing the eval.
 4. **Context**: Build `EventContext` from real `git diff main...eval`
 5. **Execution**: Run the skill via `runSkill()` with the real SDK pipeline;
    the agent operates in the temp repo with Read/Grep tools
-6. **Judgment**: An LLM judge (Sonnet) evaluates findings against assertions
+6. **Judgment**: An LLM judge (GPT 6 Luna by default) evaluates findings against assertions
 7. **Verdict**: Pass if all required `should_find` are met and no
    `should_not_find` are violated

@@ -26,7 +26,7 @@ import type { EvalMeta } from './types.js';
 import { usageToSummary } from './usage.js';
 
 const DEFAULT_VERIFICATION_RUNTIME: RuntimeName = 'pi';
-const DEFAULT_VERIFICATION_MODEL = 'anthropic/claude-sonnet-4-6';
+const DEFAULT_VERIFICATION_MODEL = 'openai/gpt-6-luna';
 
 const VerificationVerdictSchema = z.enum(['keep', 'reject']);
 

@@ -14,7 +14,7 @@ const evals = discoverEvalScenarios({
   category: 'integrity-review',
   skill: '../warden/src/builtin-skills/integrity-review/SKILL.md',
   runtime: 'pi',
-  model: 'anthropic/claude-sonnet-4-6',
+  model: 'openai/gpt-6-luna',
 });
 // Multi-file fixtures run several hunks plus verification and merge passes,
 // which can exceed the 120s the single-file suites use.

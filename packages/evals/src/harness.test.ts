@@ -101,7 +101,7 @@ describe('createWardenEvalJudge', () => {
       usage: emptyUsage(),
     });
 
-    const judge = createWardenEvalJudge({ apiKey: 'test-key', model: 'anthropic/claude-sonnet-4-6' });
+    const judge = createWardenEvalJudge({ apiKey: 'test-key', model: 'openai/gpt-6-luna' });
     const result = await judge.assess(makeJudgeContext(meta, findings));
 
     expect(result.score).toBe(1);
@@ -122,7 +122,7 @@ describe('createWardenEvalJudge', () => {
       usage: emptyUsage(),
     });
 
-    const judge = createWardenEvalJudge({ apiKey: 'test-key', model: 'anthropic/claude-sonnet-4-6' });
+    const judge = createWardenEvalJudge({ apiKey: 'test-key', model: 'openai/gpt-6-luna' });
     const result = await judge.assess(makeJudgeContext(meta, [makeFinding()]));
 
     expect(result.score).toBe(0);
@@ -149,7 +149,7 @@ describe('createWardenEvalJudge', () => {
       error: 'No JSON found in judge response',
     });
 
-    const judge = createWardenEvalJudge({ apiKey: 'test-key', model: 'anthropic/claude-sonnet-4-6' });
+    const judge = createWardenEvalJudge({ apiKey: 'test-key', model: 'openai/gpt-6-luna' });
     const result = await judge.assess(makeJudgeContext(meta, [makeFinding()]));
 
     expect(result.score).toBe(0);
