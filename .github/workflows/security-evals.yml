@@ -39,6 +39,9 @@ jobs:
     timeout-minutes: 360
     env:
       SENTRY_CLONE: ${{ github.workspace }}/../sentry
+      # Must match WARDEN_SKILLS_REF in packages/security-evals/src/options.ts.
+      WARDEN_SKILLS_REF: daf01f970a28450627a8d2d61d9915a742a735e2
+      SKILLS_CHECKOUT: packages/security-evals/.cache/warden-skills
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
@@ -49,6 +52,13 @@ jobs:
           cache: 'pnpm'
 
       - run: pnpm install --frozen-lockfile
+
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          repository: getsentry/warden-skills
+          ref: ${{ env.WARDEN_SKILLS_REF }}
+          path: ${{ env.SKILLS_CHECKOUT }}
+          persist-credentials: false
 
       # Keyed on the files that pin the scanned SHAs. Older clones still restore;
       # the suite fetches whatever SHA they lack.
@@ -66,6 +76,7 @@ jobs:
           WARDEN_OPENROUTER_API_KEY: ${{ secrets.WARDEN_OPENROUTER_API_KEY }}
           ROACH_TOKEN: ${{ secrets.ROACH_TOKEN }}
           WARDEN_SECURITY_EVALS_SENTRY_REPO: ${{ env.SENTRY_CLONE }}
+          WARDEN_SECURITY_EVALS_SKILLS_REPO: ${{ github.workspace }}/${{ env.SKILLS_CHECKOUT }}
           WARDEN_SECURITY_EVALS_SKILLS: ${{ inputs.skills }}
           WARDEN_SECURITY_EVALS_ENTRIES: ${{ inputs.entries }}
           WARDEN_SECURITY_EVALS_REPEATS: ${{ inputs.repeats }}

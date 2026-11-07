@@ -6,6 +6,7 @@ import { parseArgs } from 'node:util';
 // Each flag maps to WARDEN_SECURITY_EVALS_<ENV>; see src/options.ts for defaults.
 const FLAGS = {
   'sentry-repo': 'SENTRY_REPO',
+  'skills-repo': 'SKILLS_REPO',
   skills: 'SKILLS',
   entries: 'ENTRIES',
   repeats: 'REPEATS',
@@ -22,11 +23,12 @@ const FLAGS = {
   baseline: 'BASELINE',
 } as const;
 
-const PATH_FLAGS = new Set(['sentry-repo', 'cache-dir', 'output', 'baseline']);
+const PATH_FLAGS = new Set(['sentry-repo', 'skills-repo', 'cache-dir', 'output', 'baseline']);
 
-const USAGE = `usage: pnpm evals:security --sentry-repo <path> [options]
+const USAGE = `usage: pnpm evals:security --sentry-repo <path> [--skills-repo <path>] [options]
 
   --sentry-repo <path>   Local getsentry/sentry clone (required)
+  --skills-repo <path>   Local getsentry/warden-skills clone (required for wrdn-* lanes)
   --skills <a,b>         Lanes to run (default: security-review and the five wrdn-* skills)
   --entries <a,b>        Entry ids, or prefixes ending in * (default: all)
   --repeats <n>          Passes per shard (default: 1)

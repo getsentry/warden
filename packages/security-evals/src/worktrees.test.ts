@@ -3,7 +3,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'no
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { ensureWorktree, removeWorktree, resolveSentryRepo } from './worktrees.js';
+import { SENTRY_CHECKOUT, SKILLS_CHECKOUT, ensureWorktree, removeWorktree, resolveCheckout } from './worktrees.js';
 
 function configuredEmail(): string {
   try {
@@ -66,6 +66,15 @@ describe('ensureWorktree', () => {
     expect(readFileSync(join(path, 'app.py'), 'utf8')).toBe('v2');
   });
 
+  it('checks out a blobless clone, fetching blobs on demand', () => {
+    const ref = commit(upstream, 'v1');
+    git(['config', 'uploadpack.allowFilter', 'true'], upstream);
+    git(['clone', '-q', '--filter=blob:none', '--no-checkout', `file://${upstream}`, clone], root);
+
+    const path = ensureWorktree(clone, join(root, 'worktrees'), ref);
+    expect(readFileSync(join(path, 'app.py'), 'utf8')).toBe('v1');
+  });
+
   it('refuses a worktree that moved off its ref', () => {
     const first = commit(upstream, 'v1');
     const second = commit(upstream, 'v2');
@@ -78,9 +87,10 @@ describe('ensureWorktree', () => {
   });
 });
 
-describe('resolveSentryRepo', () => {
+describe('resolveCheckout', () => {
   it('fails fast without a clone instead of cloning', () => {
-    expect(() => resolveSentryRepo(undefined)).toThrow('WARDEN_SECURITY_EVALS_SENTRY_REPO');
-    expect(() => resolveSentryRepo(tmpdir())).toThrow('is not a git checkout');
+    expect(() => resolveCheckout(SENTRY_CHECKOUT, undefined)).toThrow('WARDEN_SECURITY_EVALS_SENTRY_REPO (or --sentry-repo)');
+    expect(() => resolveCheckout(SKILLS_CHECKOUT, undefined)).toThrow('getsentry/warden-skills clone');
+    expect(() => resolveCheckout(SENTRY_CHECKOUT, tmpdir())).toThrow('is not a git checkout');
   });
 });

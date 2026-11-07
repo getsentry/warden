@@ -2,41 +2,59 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
-/** Env var that points the suite at a local getsentry/sentry clone. */
-const SENTRY_REPO_ENV = 'WARDEN_SECURITY_EVALS_SENTRY_REPO';
+/** A repository the suite reads from a local clone, never clones itself. */
+export interface CheckoutSpec {
+  repository: string;
+  /** Env var that names the clone; the CLI flag maps onto it. */
+  env: string;
+  flag: string;
+}
 
-function git(args: string[], cwd: string): string {
-  return execFileSync('git', args, {
-    cwd,
-    encoding: 'utf8',
-    // A partial clone would otherwise fetch a missing object on a presence check.
-    env: { ...process.env, GIT_NO_LAZY_FETCH: '1' },
-    stdio: ['ignore', 'pipe', 'pipe'],
-  }).trim();
+export const SENTRY_CHECKOUT: CheckoutSpec = {
+  repository: 'getsentry/sentry',
+  env: 'WARDEN_SECURITY_EVALS_SENTRY_REPO',
+  flag: '--sentry-repo',
+};
+
+export const SKILLS_CHECKOUT: CheckoutSpec = {
+  repository: 'getsentry/warden-skills',
+  env: 'WARDEN_SECURITY_EVALS_SKILLS_REPO',
+  flag: '--skills-repo',
+};
+
+// Roach hands its proxy variables to test workers and refuses origins other
+// than the model APIs, so git goes direct.
+const PROXY_VARS = new Set(['HTTPS_PROXY', 'https_proxy', 'HTTP_PROXY', 'http_proxy', 'ALL_PROXY', 'all_proxy']);
+
+function git(args: string[], cwd: string, extraEnv: NodeJS.ProcessEnv = {}): string {
+  const env = Object.fromEntries(Object.entries({ ...process.env, ...extraEnv })
+    .filter(([name]) => !PROXY_VARS.has(name)));
+  return execFileSync('git', args, { cwd, encoding: 'utf8', env, stdio: ['ignore', 'pipe', 'pipe'] }).trim();
 }
 
 function hasCommit(repoPath: string, ref: string): boolean {
   try {
-    git(['cat-file', '-e', `${ref}^{commit}`], repoPath);
+    // Without this, a blobless clone would fetch a missing commit during the check.
+    git(['cat-file', '-e', `${ref}^{commit}`], repoPath, { GIT_NO_LAZY_FETCH: '1' });
     return true;
   } catch {
     return false;
   }
 }
 
-/** Resolve the clone the suite builds worktrees from. Never clones on its own. */
-export function resolveSentryRepo(path: string | undefined): string {
+/** Resolve a local clone the suite builds worktrees from. Never clones on its own. */
+export function resolveCheckout(spec: CheckoutSpec, path: string | undefined): string {
   if (!path) {
     throw new Error(
-      `${SENTRY_REPO_ENV} (or --sentry-repo) must point at a local getsentry/sentry clone. `
-      + 'A blobless clone is enough: git clone --filter=blob:none https://github.com/getsentry/sentry.git',
+      `${spec.env} (or ${spec.flag}) must point at a local ${spec.repository} clone. `
+      + `A blobless clone is enough: git clone --filter=blob:none https://github.com/${spec.repository}.git`,
     );
   }
   const repoPath = resolve(path);
   try {
     return git(['rev-parse', '--show-toplevel'], repoPath);
   } catch {
-    throw new Error(`${repoPath} is not a git checkout. Point ${SENTRY_REPO_ENV} at a getsentry/sentry clone.`);
+    throw new Error(`${repoPath} is not a git checkout. Point ${spec.env} at a ${spec.repository} clone.`);
   }
 }
 

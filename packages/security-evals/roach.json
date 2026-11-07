@@ -26,7 +26,7 @@
         },
         "finding-id": "(?<![A-Za-z0-9-])[A-HJ-NP-Z2-9]{3}-[A-HJ-NP-Z2-9]{3}(?![A-Za-z0-9-])",
         "warden-checkout": "(?:/[A-Za-z0-9_.-]+)+(?=/packages/warden/src/builtin-skills/)",
-        "skills-cache": "(?:/[A-Za-z0-9_.-]+)+(?=/getsentry/warden-skills@)"
+        "skills-worktree-root": "(?:/[A-Za-z0-9_.-]+)+/skills-worktrees"
       }
     },
     {
@@ -48,7 +48,7 @@
         },
         "finding-id": "(?<![A-Za-z0-9-])[A-HJ-NP-Z2-9]{3}-[A-HJ-NP-Z2-9]{3}(?![A-Za-z0-9-])",
         "warden-checkout": "(?:/[A-Za-z0-9_.-]+)+(?=/packages/warden/src/builtin-skills/)",
-        "skills-cache": "(?:/[A-Za-z0-9_.-]+)+(?=/getsentry/warden-skills@)"
+        "skills-worktree-root": "(?:/[A-Za-z0-9_.-]+)+/skills-worktrees"
       }
     },
     {
@@ -70,7 +70,7 @@
         },
         "finding-id": "(?<![A-Za-z0-9-])[A-HJ-NP-Z2-9]{3}-[A-HJ-NP-Z2-9]{3}(?![A-Za-z0-9-])",
         "warden-checkout": "(?:/[A-Za-z0-9_.-]+)+(?=/packages/warden/src/builtin-skills/)",
-        "skills-cache": "(?:/[A-Za-z0-9_.-]+)+(?=/getsentry/warden-skills@)"
+        "skills-worktree-root": "(?:/[A-Za-z0-9_.-]+)+/skills-worktrees"
       }
     },
     {

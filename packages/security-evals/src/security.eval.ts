@@ -2,7 +2,7 @@ import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } fr
 import { dirname, join } from 'node:path';
 import { afterAll, describe, it } from 'vitest';
 import { filterEntries, groupShards, loadCaseEntries, loadCorpusEntries } from './entries.js';
-import { resolveSuiteOptions } from './options.js';
+import { WARDEN_SKILLS_REF, resolveSuiteOptions } from './options.js';
 import {
   createResults,
   mergeBaseline,
@@ -13,10 +13,10 @@ import {
   type SuiteResults,
 } from './results.js';
 import { loadSkills, runShardPass } from './shard.js';
-import { ensureWorktree, removeWorktree, resolveSentryRepo } from './worktrees.js';
+import { SENTRY_CHECKOUT, SKILLS_CHECKOUT, ensureWorktree, removeWorktree, resolveCheckout } from './worktrees.js';
 
 const options = resolveSuiteOptions();
-const sentryRepo = resolveSentryRepo(options.sentryRepo);
+const sentryRepo = resolveCheckout(SENTRY_CHECKOUT, options.sentryRepo);
 const entries = filterEntries([...loadCorpusEntries(), ...loadCaseEntries()], options.entries);
 const shards = groupShards(entries);
 const foreign = shards.filter((shard) => shard.repository !== 'getsentry/sentry');
@@ -24,11 +24,23 @@ if (foreign.length > 0) {
   throw new Error(`Only getsentry/sentry entries are supported, got ${foreign.map((s) => s.repository).join(', ')}`);
 }
 
-// The directory name is the Roach `worktree-root` value; keep the two in sync.
+// Both worktree directory names are Roach values in roach.json; keep them in sync.
 const worktreesDir = join(options.cacheDir, 'security-evals-worktrees');
+const skillsWorktreesDir = join(options.cacheDir, 'skills-worktrees');
 const apiKey = process.env['WARDEN_ANTHROPIC_API_KEY'] || process.env['ANTHROPIC_API_KEY'] || '';
 const results = createResults(entries);
-let skills: ReturnType<typeof loadSkills> | undefined;
+
+// Setup, once per run: a skills problem fails collection here, so no pass runs and
+// no entry is scored as a miss. No network unless the clone lacks the pinned ref.
+const needsSkillsRepo = options.skills.some((skill) => skill !== 'security-review');
+const skillsWorktree = needsSkillsRepo
+  ? ensureWorktree(
+    resolveCheckout(SKILLS_CHECKOUT, options.skillsRepo),
+    skillsWorktreesDir,
+    WARDEN_SKILLS_REF,
+  )
+  : undefined;
+const skills = await loadSkills(options.skills, skillsWorktree);
 
 // A pass runs every selected skill over a whole shard, which can take an hour on large shards.
 const PASS_TIMEOUT_MS = 3 * 60 * 60 * 1000;
@@ -39,13 +51,12 @@ describe('security evals', () => {
       const name = `${shard.ref.slice(0, 8)} pass ${repeat}/${options.repeats} `
         + `(${shard.targets.length} files, ${shard.entries.length} entries)`;
       it(name, { timeout: PASS_TIMEOUT_MS }, async () => {
-        skills ??= loadSkills(options.skills);
         const worktree = ensureWorktree(sentryRepo, worktreesDir, shard.ref);
         try {
           const runs = await runShardPass({
             shard,
             worktree,
-            skills: await skills,
+            skills,
             options,
             apiKey,
             log: (message) => console.log(`  ${message}`),

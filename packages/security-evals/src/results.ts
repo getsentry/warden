@@ -9,8 +9,8 @@ export interface LaneConfig {
   auxiliaryEffort: string;
   maxTurns: number;
   judgeModel: string;
-  /** Pinned remote ref for wrdn-* skills. */
-  skillsRemote?: string;
+  /** Pinned warden-skills ref for wrdn-* lanes. */
+  skillsRef?: string;
   /** Where the lane came from when it was not run by this suite. */
   origin?: string;
 }

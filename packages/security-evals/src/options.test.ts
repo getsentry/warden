@@ -1,5 +1,7 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { MATRIX_SKILLS, resolveSuiteOptions } from './options.js';
+import { MATRIX_SKILLS, WARDEN_SKILLS_REF, resolveSuiteOptions } from './options.js';
 
 describe('resolveSuiteOptions', () => {
   it('defaults to the production lane over every matrix skill', () => {
@@ -25,11 +27,21 @@ describe('resolveSuiteOptions', () => {
       WARDEN_SECURITY_EVALS_ENTRIES: 'wrdn-pii/*',
       WARDEN_SECURITY_EVALS_REPEATS: '3',
       WARDEN_SECURITY_EVALS_BASELINE: 'none',
+      WARDEN_SECURITY_EVALS_SKILLS_REPO: '/src/warden-skills',
     });
+    expect(options.skillsRepo).toBe('/src/warden-skills');
     expect(options.skills).toEqual(['wrdn-pii', 'security-review']);
     expect(options.entries).toEqual(['wrdn-pii/*']);
     expect(options.repeats).toBe(3);
     expect(options.baseline).toBeUndefined();
+  });
+
+  it('pins the same warden-skills ref the CI workflow checks out', () => {
+    const workflow = readFileSync(
+      join(import.meta.dirname, '..', '..', '..', '.github', 'workflows', 'security-evals.yml'),
+      'utf8',
+    );
+    expect(workflow).toContain(`WARDEN_SKILLS_REF: ${WARDEN_SKILLS_REF}`);
   });
 
   it('rejects unknown skills and bad counts', () => {

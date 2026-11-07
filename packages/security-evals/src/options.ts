@@ -12,10 +12,11 @@ export const MATRIX_SKILLS = [
 ] as const;
 
 /**
- * Pinned so a warden-skills edit cannot silently move results.
- * Bump on purpose and rerun the affected lanes.
+ * getsentry/warden-skills commit the wrdn-* lanes load from. Pinned so a
+ * warden-skills edit cannot silently move results. Bump on purpose, update
+ * .github/workflows/security-evals.yml to match, and rerun the affected lanes.
  */
-export const WARDEN_SKILLS_REMOTE = 'getsentry/warden-skills@daf01f970a28450627a8d2d61d9915a742a735e2';
+export const WARDEN_SKILLS_REF = 'daf01f970a28450627a8d2d61d9915a742a735e2';
 
 const PACKAGE_DIR = join(import.meta.dirname, '..');
 
@@ -24,6 +25,8 @@ export const DEFAULT_BASELINE = join(PACKAGE_DIR, 'baseline', 'results.json');
 
 export interface SuiteOptions {
   sentryRepo?: string;
+  /** Local getsentry/warden-skills checkout. Required when a wrdn-* lane is selected. */
+  skillsRepo?: string;
   skills: string[];
   entries: string[];
   repeats: number;
@@ -78,6 +81,7 @@ export function resolveSuiteOptions(env: NodeJS.ProcessEnv = process.env): Suite
 
   return {
     sentryRepo: read('SENTRY_REPO'),
+    skillsRepo: read('SKILLS_REPO'),
     skills: skills.length > 0 ? skills : [...MATRIX_SKILLS],
     entries: list(read('ENTRIES')),
     repeats: positiveInt('REPEATS', read('REPEATS'), 1),

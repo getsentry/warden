@@ -3,8 +3,7 @@ import { resolveSkillAsync, runSkill, type SkillReport, type UsageStats } from '
 // Not on the public surface; the CLI's file mode builds its context the same way.
 import { buildFileEventContext } from '../../warden/src/cli/context.js';
 import type { SuiteShard } from './entries.js';
-import type { SuiteOptions } from './options.js';
-import { WARDEN_SKILLS_REMOTE } from './options.js';
+import { WARDEN_SKILLS_REF, type SuiteOptions } from './options.js';
 import type { LaneConfig, LaneUsage, ShardRun } from './results.js';
 import { scoreEntry } from './score.js';
 
@@ -16,17 +15,31 @@ const BUILTIN_SECURITY_REVIEW = join(import.meta.dirname, '..', '..', 'warden', 
 const SCAN = { maxFiles: 200, maxChangedLines: 50_000 };
 
 /**
- * Load each skill once. security-review comes from this checkout by path, so a
- * same-named skill in the scanned repo cannot shadow it. wrdn-* skills come
- * from the pinned warden-skills ref.
+ * Load each skill once, from disk only. security-review comes from this
+ * checkout by path, so a same-named skill in the scanned repo cannot shadow
+ * it. wrdn-* skills come from a worktree of warden-skills at the pinned ref.
+ * Any failure throws once, before a pass runs, instead of reading as misses.
  */
-export async function loadSkills(names: string[]): Promise<Map<string, SkillDefinition>> {
+export async function loadSkills(names: string[], skillsWorktree: string | undefined): Promise<Map<string, SkillDefinition>> {
   const skills = new Map<string, SkillDefinition>();
-  // Sequential: remote skills share one checkout of the pinned ref.
   for (const name of names) {
-    skills.set(name, name === 'security-review'
-      ? await resolveSkillAsync(BUILTIN_SECURITY_REVIEW)
-      : await resolveSkillAsync(name, undefined, { remote: WARDEN_SKILLS_REMOTE }));
+    let dir = BUILTIN_SECURITY_REVIEW;
+    if (name !== 'security-review') {
+      if (!skillsWorktree) {
+        throw new Error(`${name} needs a getsentry/warden-skills checkout; set --skills-repo`);
+      }
+      dir = join(skillsWorktree, 'skills', name);
+    }
+    try {
+      const skill = await resolveSkillAsync(dir);
+      if (skill.name !== name) {
+        throw new Error(`loaded ${skill.name}`);
+      }
+      skills.set(name, skill);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(`Could not load ${name} from ${dir}: ${message}`);
+    }
   }
   return skills;
 }
@@ -41,7 +54,7 @@ function laneConfig(skill: string, options: SuiteOptions): LaneConfig {
     auxiliaryEffort: options.auxiliaryEffort,
     maxTurns: options.maxTurns,
     judgeModel: options.judgeModel,
-    ...(skill === 'security-review' ? {} : { skillsRemote: WARDEN_SKILLS_REMOTE }),
+    ...(skill === 'security-review' ? {} : { skillsRef: `getsentry/warden-skills@${WARDEN_SKILLS_REF}` }),
   };
 }
 

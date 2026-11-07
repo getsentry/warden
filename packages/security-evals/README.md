@@ -24,18 +24,20 @@ classes, and permission checks the way they do in production.
 
 ## Running it
 
-You need a local getsentry/sentry clone. Blobless is enough:
+You need local clones of getsentry/sentry and getsentry/warden-skills. Blobless
+is enough:
 
 ```bash
 git clone --filter=blob:none https://github.com/getsentry/sentry.git ~/src/sentry
+git clone https://github.com/getsentry/warden-skills.git ~/src/warden-skills
 ```
 
 ```bash
 # Every lane over every entry
-pnpm evals:security --sentry-repo ~/src/sentry
+pnpm evals:security --sentry-repo ~/src/sentry --skills-repo ~/src/warden-skills
 
 # One candidate lane on its own cases, three passes; other lanes come from the baseline
-pnpm evals:security --sentry-repo ~/src/sentry \
+pnpm evals:security --sentry-repo ~/src/sentry --skills-repo ~/src/warden-skills \
   --skills wrdn-dos-review --entries 'wrdn-dos-review/*' --repeats 3
 ```
 
@@ -44,16 +46,21 @@ pnpm evals:security --sentry-repo ~/src/sentry \
 runtime, `openrouter/x-ai/grok-4.5` at high effort, and
 `openrouter/openai/gpt-5.6-luna` at high effort for auxiliary work. `maxTurns`
 defaults to 100, as in the corpus runbook, so a turn cap does not read as a
-miss.
+miss. `--skills-repo` is only needed when a `wrdn-*` lane is selected.
 
-Setup is the only network step: remote skills load from the pinned
-warden-skills ref, and each SHA gets `git fetch origin <sha>` if the clone
-lacks it, then `git worktree add --detach` under `.cache/`. Worktrees are
-reused across lanes, entries, and repeats. Without `--sentry-repo` the suite
-fails before doing anything.
+Each pinned ref gets `git fetch origin <sha>` only if its clone lacks it, then
+one `git worktree add --detach` under `.cache/`. The warden-skills worktree
+(ref in `src/options.ts`) and every skill load happen once, before any pass. A
+missing clone or a skill that will not load fails the run there, before any
+entry is scored. Each sentry SHA gets its worktree before its first pass, and
+it is reused across lanes, entries, and repeats. Past that one fetch, model
+APIs are the only network a pass touches.
 
-In CI, run the **Security Evals** workflow by hand. It restores a cached
-blobless clone, runs the suite, and uploads `results.json`.
+In CI, run the **Security Evals** workflow by hand. It checks out
+warden-skills at the pinned ref, restores a cached blobless sentry clone,
+runs the suite, and uploads `results.json`. Bumping the pin means editing
+`WARDEN_SKILLS_REF` in both `src/options.ts` and the workflow; a unit test
+fails if they drift.
 
 ## How it scores
 
