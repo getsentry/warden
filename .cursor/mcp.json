@@ -1,7 +1,8 @@
 {
   "mcpServers": {
     "sentry": {
-      "url": "https://mcp.sentry.dev/mcp/sentry/warden"
+      "command": "sentry",
+      "args": ["mcp", "sentry/warden"]
     }
   }
 }
