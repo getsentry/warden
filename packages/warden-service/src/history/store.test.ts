@@ -123,6 +123,24 @@ describe('history store', () => {
     }
   });
 
+  it('counts only matching skill findings when outcomes filter by skill', async () => {
+    const statements: { sql: string; values: readonly unknown[] }[] = [];
+    const database = databaseFor((sql, values) => {
+      statements.push({ sql, values });
+      return { rows: [], rowCount: 0 };
+    });
+
+    await summarizeOutcomes(database, context, {});
+    await summarizeOutcomes(database, context, { skill: 'integrity-review' });
+
+    const [unfiltered, filtered] = statements.filter((statement) => statement.sql.includes('COUNT(*)'));
+    expect(unfiltered?.sql).toContain('SUM("runs"."finding_count")');
+    expect(filtered?.sql).not.toContain('SUM("runs"."finding_count")');
+    expect(filtered?.sql).toContain('SUM((select SUM("finding_count") from "skill_executions" "filtered_se"');
+    expect(filtered?.sql).toContain('"filtered_se"."run_id" = "runs"."id"');
+    expect(filtered?.values.filter((value) => value === 'integrity-review')).toHaveLength(2);
+  });
+
   it('lists findings with literal search and investigation filters', async () => {
     let captured: { sql: string; values: readonly unknown[] } | undefined;
     const database = databaseFor((sql, values) => {
