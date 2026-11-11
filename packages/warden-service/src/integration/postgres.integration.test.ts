@@ -373,6 +373,24 @@ function defineDriverIntegration(driver: DatabaseDriver, environmentName: string
           { dimension: 'skill', groups: expect.any(Array) },
         ],
       });
+      const multiSkill = findingsEnvelope(`history-multi-${randomUUID()}`);
+      await ingestRun(database, context, {
+        ...multiSkill,
+        findingCounts: counts(3),
+        skills: [
+          { ...multiSkill.skills[0]!, findingCounts: counts(1) },
+          { ...metricsEnvelope(multiSkill.clientRunId).skills[1]!, findingCounts: counts(2) },
+        ],
+      });
+      await expect(summarizeOutcomes(database, context, {})).resolves.toMatchObject({
+        totals: { runs: 2, findings: 4 },
+      });
+      await expect(summarizeOutcomes(database, context, { skill: 'performance' })).resolves.toMatchObject({
+        totals: { runs: 1, findings: 2 },
+      });
+      await expect(summarizeOutcomes(database, context, { skill: 'security' })).resolves.toMatchObject({
+        totals: { runs: 2, findings: 2 },
+      });
     }, 30_000);
 
     it('persists multiple passive evidence rows in one transaction', async () => {

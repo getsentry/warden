@@ -216,18 +216,22 @@ function historyWhere(
     }
     conditions.push(exists(usageQuery.where(and(...executionConditions))));
   } else if (filters.skill || filters.errorCode) {
-    const executionConditions: SQL[] = [
-      eq(filteredSkillExecutions.tenantId, runs.tenantId),
-      eq(filteredSkillExecutions.runId, runs.id),
-    ];
-    if (filters.skill) executionConditions.push(eq(filteredSkillExecutions.skill, filters.skill));
-    if (filters.errorCode) executionConditions.push(eq(filteredSkillExecutions.errorCode, filters.errorCode));
     conditions.push(exists(
       database.select({ value: sql`1` })
         .from(filteredSkillExecutions)
-        .where(and(...executionConditions)),
+        .where(and(...runSkillExecutionConditions(filters))),
     ));
   }
+  return conditions;
+}
+
+function runSkillExecutionConditions(filters: HistoryFilters): SQL[] {
+  const conditions: SQL[] = [
+    eq(filteredSkillExecutions.tenantId, runs.tenantId),
+    eq(filteredSkillExecutions.runId, runs.id),
+  ];
+  if (filters.skill) conditions.push(eq(filteredSkillExecutions.skill, filters.skill));
+  if (filters.errorCode) conditions.push(eq(filteredSkillExecutions.errorCode, filters.errorCode));
   return conditions;
 }
 
@@ -1037,11 +1041,20 @@ async function aggregateOutcomeRow(
     failed: sql<number>`COUNT(*) FILTER (WHERE ${runs.outcome} = 'failure')::integer`.as('failed'),
     cancelled: sql<number>`COUNT(*) FILTER (WHERE ${runs.outcome} = 'cancelled')::integer`.as('cancelled'),
     skipped: sql<number>`COUNT(*) FILTER (WHERE ${runs.outcome} = 'skipped')::integer`.as('skipped'),
-    findings: sql<number>`COALESCE(SUM(${runs.findingCount}), 0)::integer`.as('findings'),
+    findings: sql<number>`COALESCE(SUM(${runFindingCount(read, filters)}), 0)::integer`.as('findings'),
   })
     .from(runs)
     .where(and(...conditions));
   return rows[0];
+}
+
+// runs.finding_count covers every skill in the run. With a skill or error
+// filter, count only the matching executions so totals match the findings list.
+function runFindingCount(database: WardenReadDatabase, filters: HistoryFilters): SQL {
+  if (!filters.skill && !filters.errorCode) return sql`${runs.findingCount}`;
+  return sql`${database.select({ value: sql`SUM(${filteredSkillExecutions.findingCount})` })
+    .from(filteredSkillExecutions)
+    .where(and(...runSkillExecutionConditions(filters)))}`;
 }
 
 function mapOutcomeRow(row: Awaited<ReturnType<typeof aggregateOutcomeRow>>) {
