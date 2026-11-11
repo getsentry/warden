@@ -1,0 +1,10 @@
+{
+  "kind": "bug",
+  "summary": "EventAiSuggestedFixEndpoint.get decides whether to send an event's message and stacktrace to OpenAI from the OpenAI policy and per-request consent flags only and never checks the organization's sentry:ai_suggested_solution option, so event data, including any user data inside it, goes to a third-party model for orgs that turned the feature off",
+  "repository": "getsentry/sentry",
+  "ref": "d8ff0cb911134cf4a8ad24e179247a2e96c06d20",
+  "targets": [
+    "src/sentry/api/endpoints/event_ai_suggested_fix.py"
+  ],
+  "source": "https://github.com/getsentry/sentry/commit/2204fde6870055ee4fcd7551464559282973c188"
+}

@@ -1,0 +1,10 @@
+{
+  "kind": "bug",
+  "summary": "PUT interpolates request.data values verbatim into SENTRY_FEATURES[\"flag\"]=<value> lines in sentry.conf.py and then calls configure(), which executes the file, so a crafted value injects arbitrary Python that runs on the server",
+  "repository": "getsentry/sentry",
+  "ref": "101823f59fee6d71221feceb0cbcb28cc6024606",
+  "targets": [
+    "src/sentry/api/endpoints/internal/feature_flags.py"
+  ],
+  "source": "https://github.com/getsentry/sentry/commit/2b2dd08cfd33eb13079bfa15b7e27863f157b866"
+}

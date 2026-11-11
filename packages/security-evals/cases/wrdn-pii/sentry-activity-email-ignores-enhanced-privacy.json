@@ -1,0 +1,10 @@
+{
+  "kind": "bug",
+  "summary": "ActivityNotification.get_subject and the generic activity email templates put the issue title and group details in the subject, preheader, and text body even when the organization has enhanced_privacy enabled, so regression and other activity emails ship event-derived titles, which often carry user data, to inboxes the org asked to keep them out of",
+  "repository": "getsentry/sentry",
+  "ref": "660849756331cc9e2a232ee8a2133ea7e2267b29",
+  "targets": [
+    "src/sentry/notifications/notifications/activity/base.py"
+  ],
+  "source": "https://github.com/getsentry/sentry/commit/aedeffac61f00a3a7c39b3df8fc62f263c2686ca"
+}
