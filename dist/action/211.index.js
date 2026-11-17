@@ -1271,7 +1271,9 @@ async function evaluateFixAttempts(octokit, comments, context, currentFindings, 
 /* harmony export */   GR: () => (/* binding */ feedbackDelivered),
 /* harmony export */   P7: () => (/* binding */ createIncrementalBaselineSource),
 /* harmony export */   SW: () => (/* binding */ hasOpenCarriedComment),
+/* harmony export */   VI: () => (/* binding */ gateCoveredEverything),
 /* harmony export */   Z5: () => (/* binding */ collectCarriedRanges),
+/* harmony export */   _W: () => (/* binding */ gateScopeMarker),
 /* harmony export */   lO: () => (/* binding */ reviewedEverything),
 /* harmony export */   qw: () => (/* binding */ baselineExternalId),
 /* harmony export */   y3: () => (/* binding */ isOnCarriedHunk)
@@ -1280,7 +1282,8 @@ async function evaluateFixAttempts(octokit, comments, context, currentFindings, 
 /* harmony import */ var node_crypto__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(77598);
 /* harmony import */ var node_crypto__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(node_crypto__WEBPACK_IMPORTED_MODULE_0__);
 /* harmony import */ var _diff_index_js__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(96497);
-/* harmony import */ var _utils_version_js__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(56317);
+/* harmony import */ var _event_context_js__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(58147);
+/* harmony import */ var _utils_version_js__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(56317);
 /**
  * Incremental PR review.
  *
@@ -1295,11 +1298,19 @@ async function evaluateFixAttempts(octokit, comments, context, currentFindings, 
  *
  * Every lookup fails open: if the baseline cannot be found or read, the skill
  * reviews the full PR as it would without incremental review.
+ *
+ * The same check history scopes push-scoped skill gates (the built-in
+ * `integrity-review`). A run whose gate saw every hunk changed since the last
+ * covered commit records a scope marker, so the next push gates everything
+ * since that commit rather than only its own push. Runs that were skipped,
+ * cancelled, or failed leave no marker, so their pushes are not lost.
  */
 
 
 
+
 const EXTERNAL_ID_PREFIX = 'warden-incremental:v1:';
+const SCOPE_ID_PREFIX = 'warden-scope:v1:';
 /** Earlier PR commits searched for a baseline check, newest first. */
 const MAX_BASELINE_COMMITS = 10;
 function sha256(value) {
@@ -1358,16 +1369,16 @@ function planIncrementalReview(files, reviewed) {
     return { skipHunks, carriedRanges };
 }
 /**
- * Build the check run external_id for a skill run.
+ * Fingerprint a skill run's config.
  * Any change to the skill prompt, Warden version, or settings that affect
- * what gets analyzed or reported yields a new id, which forces a full review.
- * The base branch is included because baselines are rebuilt against the
- * current base: after a retarget, an old baseline would describe a diff that
- * was never reviewed.
+ * what gets analyzed or reported yields a new fingerprint, which forces a
+ * full review. The base branch is included because baselines are rebuilt
+ * against the current base: after a retarget, an old baseline would describe
+ * a diff that was never reviewed.
  */
-function incrementalExternalId(trigger, skill, policy, baseBranch) {
+function runFingerprint(trigger, skill, policy, baseBranch) {
     const payload = JSON.stringify({
-        warden: (0,_utils_version_js__WEBPACK_IMPORTED_MODULE_2__/* .getVersion */ .H)(),
+        warden: (0,_utils_version_js__WEBPACK_IMPORTED_MODULE_3__/* .getVersion */ .H)(),
         base: baseBranch,
         skill: skill.name,
         prompt: sha256(skill.prompt),
@@ -1392,7 +1403,19 @@ function incrementalExternalId(trigger, skill, policy, baseBranch) {
         requestChanges: policy.requestChanges ?? null,
         maxFindings: policy.maxFindings ?? null,
     });
-    return `${EXTERNAL_ID_PREFIX}${sha256(payload).slice(0, 32)}`;
+    return sha256(payload).slice(0, 32);
+}
+/** Build the check run external_id that marks a run as an incremental baseline. */
+function incrementalExternalId(trigger, skill, policy, baseBranch) {
+    return `${EXTERNAL_ID_PREFIX}${runFingerprint(trigger, skill, policy, baseBranch)}`;
+}
+/**
+ * Build the check run external_id that marks a run as covering the PR for a
+ * push-scoped gate. It shares the fingerprint with the incremental id, so a
+ * complete incremental baseline also counts as covered.
+ */
+function gateScopeMarker(trigger, skill, policy, baseBranch) {
+    return `${SCOPE_ID_PREFIX}${runFingerprint(trigger, skill, policy, baseBranch)}`;
 }
 /**
  * Skip reasons decided by path alone. Paths are part of the hunk fingerprint
@@ -1401,29 +1424,38 @@ function incrementalExternalId(trigger, skill, policy, baseBranch) {
  */
 const PATH_ONLY_SKIPS = new Set(['ignored:builtin', 'ignored:user']);
 /**
- * Whether a run reviewed every hunk it was given. Failed hunks and files
- * dropped by scan limits were never reviewed, so the run cannot be a baseline.
- * Content-based skips such as generated files also disqualify it: the baseline
- * diff includes those hunks, and the file can stop looking generated later.
- * Hunks a skill gate skipped were never read either, and the gate can pass
- * them later when PR-wide context (title, body, manifests) changes.
+ * Whether a run analyzed every hunk its gate passed. Failed hunks and files
+ * dropped by scan limits were never reviewed. Content-based skips such as
+ * generated files also disqualify it: the file can stop looking generated
+ * later, and nothing would bring its earlier hunks back.
  */
-function reviewedEverything(report) {
+function gateCoveredEverything(report) {
     if (report.error)
         return false;
     if ((report.failedHunks ?? 0) > 0 || (report.failedExtractions ?? 0) > 0)
         return false;
-    if ((report.hunkGate?.skippedHunks ?? 0) > 0)
-        return false;
     return !report.skippedFiles?.some((file) => !PATH_ONLY_SKIPS.has(file.reason));
 }
 /**
+ * Whether a run reviewed every hunk it was given, so it can be a baseline.
+ * On top of `gateCoveredEverything`, hunks a skill gate skipped disqualify it:
+ * they were never read, and the gate can pass them later when PR-wide context
+ * (title, body, manifests) changes.
+ */
+function reviewedEverything(report) {
+    return gateCoveredEverything(report) && (report.hunkGate?.skippedHunks ?? 0) === 0;
+}
+/**
  * Return the external_id to record on a skill check, or undefined when the
- * run must not become a baseline. Report mode only sees the replayed report,
- * so completeness is decided in analyze mode and stored on `incremental`.
+ * run must not be reused. A complete incremental baseline wins, since it also
+ * counts as gate coverage; otherwise a complete gate scope is recorded.
+ * Report mode only sees the replayed report, so completeness is decided in
+ * analyze mode and stored on `incremental` and `gateScope`.
  */
 function baselineExternalId(report) {
-    return report.incremental?.complete ? report.incremental.externalId : undefined;
+    if (report.incremental?.complete)
+        return report.incremental.externalId;
+    return report.gateScope?.complete ? report.gateScope.marker : undefined;
 }
 /** Skip reasons that leave a finding on the check only, never on the PR. */
 const UNDELIVERED_SKIPS = new Set([
@@ -1479,8 +1511,8 @@ function baselineKey(externalId, app) {
     return `${app}\n${externalId}`;
 }
 /**
- * Create a baseline source for one pull request. Commit and check lookups run
- * once per action run and are shared across skills.
+ * Create a check history source for one pull request. Commit and check
+ * lookups run once per action run and are shared across skills.
  * Requires `pull-requests: read`, `checks: read`, and `contents: read`.
  */
 function createIncrementalBaselineSource(octokit, options) {
@@ -1501,7 +1533,7 @@ function createIncrementalBaselineSource(octokit, options) {
                 .filter((sha) => sha !== options.headSha)
                 .reverse()
                 .slice(0, MAX_BASELINE_COMMITS);
-            for (const sha of candidates) {
+            for (const [rank, sha] of candidates.entries()) {
                 const { data } = await octokit.checks.listForRef({
                     owner: options.owner,
                     repo: options.repo,
@@ -1512,7 +1544,7 @@ function createIncrementalBaselineSource(octokit, options) {
                 for (const check of data.check_runs) {
                     const id = check.external_id;
                     const app = check.app?.slug;
-                    if (!id?.startsWith(EXTERNAL_ID_PREFIX) || !app)
+                    if (!(id?.startsWith(EXTERNAL_ID_PREFIX) || id?.startsWith(SCOPE_ID_PREFIX)) || !app)
                         continue;
                     const key = baselineKey(id, app);
                     if (found.has(key))
@@ -1521,7 +1553,7 @@ function createIncrementalBaselineSource(octokit, options) {
                         continue;
                     if (check.conclusion !== 'success' && check.conclusion !== 'neutral')
                         continue;
-                    found.set(key, sha);
+                    found.set(key, { sha, rank });
                 }
             }
         }
@@ -1550,7 +1582,7 @@ function createIncrementalBaselineSource(octokit, options) {
     return {
         async baselineFor(externalId, trustedApp) {
             baselineShas ??= findBaselineShas();
-            const sha = (await baselineShas).get(baselineKey(externalId, trustedApp));
+            const sha = (await baselineShas).get(baselineKey(externalId, trustedApp))?.sha;
             if (!sha)
                 return undefined;
             let index = indexes.get(sha);
@@ -1560,6 +1592,21 @@ function createIncrementalBaselineSource(octokit, options) {
             }
             const reviewed = await index;
             return reviewed ? { sha, reviewed } : undefined;
+        },
+        async lastCoveredSha(marker, trustedApp) {
+            if (!marker.startsWith(SCOPE_ID_PREFIX))
+                return undefined;
+            baselineShas ??= findBaselineShas();
+            const found = await baselineShas;
+            const fingerprint = marker.slice(SCOPE_ID_PREFIX.length);
+            const matches = [SCOPE_ID_PREFIX, EXTERNAL_ID_PREFIX]
+                .map((prefix) => found.get(baselineKey(`${prefix}${fingerprint}`, trustedApp)))
+                .filter((match) => match !== undefined);
+            matches.sort((a, b) => a.rank - b.rank);
+            return matches[0]?.sha;
+        },
+        changesSince(sha) {
+            return (0,_event_context_js__WEBPACK_IMPORTED_MODULE_2__/* .fetchPushChanges */ .M$)(octokit, options.owner, options.repo, sha, options.headSha);
         },
     };
 }
@@ -2576,9 +2623,10 @@ __webpack_require__.a(module, async (__webpack_handle_async_dependencies__, __we
 /* harmony import */ var _sdk_errors_js__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(98229);
 /* harmony import */ var _cli_output_verbosity_js__WEBPACK_IMPORTED_MODULE_7__ = __webpack_require__(21307);
 /* harmony import */ var _sdk_runtimes_model_selectors_js__WEBPACK_IMPORTED_MODULE_8__ = __webpack_require__(85286);
-/* harmony import */ var _sdk_offline_js__WEBPACK_IMPORTED_MODULE_11__ = __webpack_require__(8695);
+/* harmony import */ var _sdk_offline_js__WEBPACK_IMPORTED_MODULE_12__ = __webpack_require__(8695);
 /* harmony import */ var _error_reporting_js__WEBPACK_IMPORTED_MODULE_9__ = __webpack_require__(29547);
-/* harmony import */ var _incremental_js__WEBPACK_IMPORTED_MODULE_10__ = __webpack_require__(13778);
+/* harmony import */ var _sdk_integrity_gate_js__WEBPACK_IMPORTED_MODULE_10__ = __webpack_require__(46967);
+/* harmony import */ var _incremental_js__WEBPACK_IMPORTED_MODULE_11__ = __webpack_require__(13778);
 var __webpack_async_dependencies__ = __webpack_handle_async_dependencies__([_cli_output_tasks_js__WEBPACK_IMPORTED_MODULE_4__]);
 _cli_output_tasks_js__WEBPACK_IMPORTED_MODULE_4__ = (__webpack_async_dependencies__.then ? (await __webpack_async_dependencies__)() : __webpack_async_dependencies__)[0];
 /**
@@ -2588,6 +2636,7 @@ _cli_output_tasks_js__WEBPACK_IMPORTED_MODULE_4__ = (__webpack_async_dependencie
  * injected by legacy run mode; split analyze mode omits that capability.
  * Extracted from main.ts to enable isolated testing and clearer dependencies.
  */
+
 
 
 
@@ -2656,30 +2705,30 @@ async function executeTrigger(trigger, deps) {
         const failCheck = trigger.failCheck ?? deps.globalFailCheck;
         const maxFindings = trigger.maxFindings ?? deps.globalMaxFindings;
         const skillRoot = trigger.useBuiltinSkill ? undefined : (trigger.skillRoot ?? context.repoPath);
-        const resolveSkill = () => (0,_skills_loader_js__WEBPACK_IMPORTED_MODULE_2__/* .resolveSkillAsync */ .Cy)(trigger.skill, skillRoot, {
+        // Resolved at most once: incremental review and gate scoping both need the
+        // skill before the run, and a resolution error must surface from the run.
+        let resolvedSkill;
+        const resolveSkill = () => (resolvedSkill ??= (0,_skills_loader_js__WEBPACK_IMPORTED_MODULE_2__/* .resolveSkillAsync */ .Cy)(trigger.skill, skillRoot, {
             remote: trigger.remote,
-            offline: (0,_sdk_offline_js__WEBPACK_IMPORTED_MODULE_11__/* .isWardenOffline */ .XK)(),
-        });
+            offline: (0,_sdk_offline_js__WEBPACK_IMPORTED_MODULE_12__/* .isWardenOffline */ .XK)(),
+        }));
         const triggerContext = (0,_triggers_matcher_js__WEBPACK_IMPORTED_MODULE_3__/* .filterContextByPaths */ .Lb)(context, trigger.filters);
+        const policy = { failOn, reportOn, minConfidence, failCheck, requestChanges, maxFindings };
         try {
             (0,_sdk_runtimes_model_selectors_js__WEBPACK_IMPORTED_MODULE_8__/* .assertValidPiModelSelectors */ .lG)([trigger]);
             const incremental = deps.incremental && trigger.incremental
-                ? await prepareIncrementalReview(deps.incremental, trigger, triggerContext, resolveSkill, {
-                    failOn,
-                    reportOn,
-                    minConfidence,
-                    failCheck,
-                    requestChanges,
-                    maxFindings,
-                })
+                ? await prepareIncrementalReview(deps.incremental, trigger, triggerContext, resolveSkill, policy)
+                : undefined;
+            const gateScope = deps.gateScope
+                ? await prepareGateScope(deps.gateScope, trigger, triggerContext, resolveSkill, policy)
                 : undefined;
             const taskOptions = {
                 name: trigger.name,
                 displayName: trigger.skill,
                 triggerName: trigger.name,
                 failOn,
-                resolveSkill: incremental ? () => Promise.resolve(incremental.skill) : resolveSkill,
-                context: triggerContext,
+                resolveSkill,
+                context: gateScope?.context ?? triggerContext,
                 runnerOptions: {
                     apiKey: anthropicApiKey,
                     model: trigger.model,
@@ -2729,11 +2778,17 @@ async function executeTrigger(trigger, deps) {
                         hunkFailures: report.hunkFailures,
                     }));
             }
+            // A shared abort (circuit breaker or sibling failure) drops queued hunks
+            // without recording them as failed, so an aborted run is never a baseline.
+            const aborted = deps.abortController?.signal.aborted ?? false;
             if (incremental) {
-                // A shared abort (circuit breaker or sibling failure) drops queued hunks
-                // without recording them as failed, so an aborted run is never a baseline.
-                const aborted = deps.abortController?.signal.aborted ?? false;
-                report.incremental = { ...incremental.review, complete: !aborted && (0,_incremental_js__WEBPACK_IMPORTED_MODULE_10__/* .reviewedEverything */ .lO)(report) };
+                report.incremental = { ...incremental.review, complete: !aborted && (0,_incremental_js__WEBPACK_IMPORTED_MODULE_11__/* .reviewedEverything */ .lO)(report) };
+            }
+            if (gateScope) {
+                report.gateScope = { marker: gateScope.marker, complete: !aborted && (0,_incremental_js__WEBPACK_IMPORTED_MODULE_11__/* .gateCoveredEverything */ .VI)(report) };
+            }
+            else if (!trigger.incrementalApp && report.hunkGate?.pushScoped) {
+                console.error(`::notice::${trigger.name} only checked hunks from this push. Set defaults.incrementalApp so it also covers pushes whose runs were skipped, cancelled, or failed`);
             }
             console.log(`Found ${report.findings.length} findings`);
             // Update skill check with results
@@ -2811,6 +2866,47 @@ async function executeTrigger(trigger, deps) {
         }
     });
 }
+function withPush(context, push) {
+    return context.pullRequest ? { ...context, pullRequest: { ...context.pullRequest, push } } : context;
+}
+/**
+ * Scope a push-scoped gate to every change since the last run that covered the
+ * PR, so pushes whose runs were skipped, cancelled, or failed still reach the
+ * gate. Only checks from `incrementalApp` count. With no trusted app, no
+ * matching gate, or an unresolvable skill, returns undefined and the gate
+ * keeps the triggering push. With no covered run, or changes that cannot be
+ * compared, the gate sees the full PR.
+ */
+async function prepareGateScope(source, trigger, context, resolveSkill, policy) {
+    const pr = context.pullRequest;
+    if (!pr || !trigger.incrementalApp)
+        return undefined;
+    let skill;
+    try {
+        skill = await resolveSkill();
+    }
+    catch {
+        return undefined;
+    }
+    if (!(0,_sdk_integrity_gate_js__WEBPACK_IMPORTED_MODULE_10__/* .hasPushScopedGate */ .QZ)(skill))
+        return undefined;
+    const marker = (0,_incremental_js__WEBPACK_IMPORTED_MODULE_11__/* .gateScopeMarker */ ._W)(trigger, skill, policy, pr.baseBranch);
+    // Other actions already gate the full PR.
+    if (context.action !== 'synchronize')
+        return { marker, context };
+    const coveredSha = await source.lastCoveredSha(marker, trigger.incrementalApp);
+    if (!coveredSha) {
+        console.log(`${trigger.name}: no earlier run covered this PR, gating the full PR`);
+        return { marker, context: withPush(context, undefined) };
+    }
+    if (coveredSha === pr.push?.beforeSha)
+        return { marker, context };
+    const push = await source.changesSince(coveredSha);
+    console.log(push
+        ? `${trigger.name}: gating changes since ${coveredSha.slice(0, 7)}, the last run that covered this PR`
+        : `${trigger.name}: could not compare against ${coveredSha.slice(0, 7)}, gating the full PR`);
+    return { marker, context: withPush(context, push) };
+}
 /**
  * Resolve the skill early to fingerprint it, then match the PR diff against
  * the newest baseline. Returns undefined when the skill cannot be resolved so
@@ -2830,16 +2926,15 @@ async function prepareIncrementalReview(source, trigger, context, resolveSkill, 
     catch {
         return undefined;
     }
-    const externalId = (0,_incremental_js__WEBPACK_IMPORTED_MODULE_10__/* .incrementalExternalId */ .Bc)(trigger, skill, policy, context.pullRequest.baseBranch);
+    const externalId = (0,_incremental_js__WEBPACK_IMPORTED_MODULE_11__/* .incrementalExternalId */ .Bc)(trigger, skill, policy, context.pullRequest.baseBranch);
     const baseline = await source.baselineFor(externalId, trigger.incrementalApp);
     if (!baseline) {
         console.log('Incremental review: no earlier baseline for this skill config, reviewing the full PR');
-        return { skill, skipHunks: new Map(), review: { externalId, carriedRanges: [] } };
+        return { skipHunks: new Map(), review: { externalId, carriedRanges: [] } };
     }
-    const plan = (0,_incremental_js__WEBPACK_IMPORTED_MODULE_10__/* .planIncrementalReview */ .Cv)(context.pullRequest.files, baseline.reviewed);
+    const plan = (0,_incremental_js__WEBPACK_IMPORTED_MODULE_11__/* .planIncrementalReview */ .Cv)(context.pullRequest.files, baseline.reviewed);
     console.log(`Incremental review: ${plan.carriedRanges.length} hunk(s) unchanged since ${baseline.sha.slice(0, 7)}`);
     return {
-        skill,
         skipHunks: plan.skipHunks,
         review: { externalId, baselineSha: baseline.sha, carriedRanges: plan.carriedRanges },
     };
@@ -3581,7 +3676,7 @@ async function initializeWorkflow(octokit, inputs, eventName, eventPath, repoPat
     (0,_base_js__WEBPACK_IMPORTED_MODULE_21__/* .logGroupEnd */ .TN)();
     let context;
     try {
-        context = await (0,_event_context_js__WEBPACK_IMPORTED_MODULE_4__/* .buildEventContext */ .e)(eventName, eventPayload, repoPath, octokit);
+        context = await (0,_event_context_js__WEBPACK_IMPORTED_MODULE_4__/* .buildEventContext */ .eU)(eventName, eventPayload, repoPath, octokit);
     }
     catch (error) {
         _sentry_js__WEBPACK_IMPORTED_MODULE_2__/* .Sentry.captureException */ .sQ.captureException(error, { tags: { operation: 'build_event_context' } });
@@ -3759,11 +3854,15 @@ function createTriggerCheckReporter(octokit, context, postChecks) {
         },
     };
 }
-/** Build the incremental baseline source when any matched trigger has `incremental` on. */
-function incrementalSourceFor(octokit, context, matchedTriggers) {
+/**
+ * Build the PR check history when any matched trigger can use it: triggers
+ * with `incremental` on, or with an `incrementalApp` to trust for gate
+ * scoping. Lookups are lazy, so skills that use neither make no API calls.
+ */
+function checkHistoryFor(octokit, context, matchedTriggers) {
     if (context.eventType !== 'pull_request' || !context.pullRequest)
         return undefined;
-    if (!matchedTriggers.some((trigger) => trigger.incremental))
+    if (!matchedTriggers.some((trigger) => trigger.incremental || trigger.incrementalApp))
         return undefined;
     return (0,_incremental_js__WEBPACK_IMPORTED_MODULE_15__/* .createIncrementalBaselineSource */ .P7)(octokit, {
         owner: context.repository.owner,
@@ -3797,7 +3896,8 @@ async function executeAllTriggers(matchedTriggers, context, runnerConcurrency, i
             circuitBreaker,
             checks: options.checks,
             historicalEvidence: options.memoryRecall?.historicalEvidence,
-            incremental: options.incremental,
+            incremental: options.checkHistory,
+            gateScope: options.checkHistory,
         });
         completedSoFar.push(result);
         options.onTriggerComplete?.([...completedSoFar]);
@@ -3835,10 +3935,10 @@ function requestsChanges(result) {
     return (0,_triggers_matcher_js__WEBPACK_IMPORTED_MODULE_5__/* .shouldFail */ .W9)(filtered, result.failOn);
 }
 /**
- * Mark a trigger's skill check as an incremental baseline once its findings
- * reached the PR. A run that requested changes is never a baseline: skipping
- * its hunks later would let the blocking review be dismissed without the
- * finding being checked again. A write failure leaves no baseline, so the
+ * Mark a trigger's skill check as an incremental baseline or gate scope once
+ * its findings reached the PR. A run that requested changes is never marked:
+ * skipping its hunks later would let the blocking review be dismissed without
+ * the finding being checked again. A write failure leaves no baseline, so the
  * next run is full.
  */
 async function recordIncrementalBaseline(octokit, context, result, observations) {
@@ -4830,7 +4930,7 @@ async function runAnalyzeMode(octokit, inputs, initResult, span) {
         attributes: { 'warden.trigger.count': matchedTriggers.length },
     }, () => executeAllTriggers(matchedTriggers, context, runnerConcurrency, inputs, {
         memoryRecall,
-        incremental: incrementalSourceFor(octokit, context, matchedTriggers),
+        checkHistory: checkHistoryFor(octokit, context, matchedTriggers),
         onTriggerComplete: (completedSoFar) => {
             const reportsSoFar = completedSoFar.flatMap((r) => (r.report ? [r.report] : []));
             (0,_base_js__WEBPACK_IMPORTED_MODULE_21__/* .writeFindingsOutputLive */ .ZU)(reportsSoFar, context, [], {
@@ -5078,7 +5178,7 @@ async function runPRWorkflow(octokit, inputs, eventName, eventPath, repoPath) {
             }, () => executeAllTriggers(matchedTriggers, context, runnerConcurrency, inputs, {
                 checks: createTriggerCheckReporter(octokit, context, postChecks),
                 memoryRecall,
-                incremental: incrementalSourceFor(octokit, context, matchedTriggers),
+                checkHistory: checkHistoryFor(octokit, context, matchedTriggers),
                 onTriggerComplete: (completedSoFar) => {
                     const reportsSoFar = completedSoFar.flatMap((r) => (r.report ? [r.report] : []));
                     (0,_base_js__WEBPACK_IMPORTED_MODULE_21__/* .writeFindingsOutputLive */ .ZU)(reportsSoFar, context, [], {
@@ -10384,7 +10484,9 @@ const DefaultsSchema = schemas/* object */.Ikc({
     incremental: schemas/* boolean */.zMY().optional(),
     /**
      * Slug of the GitHub App that writes Warden's check runs. Only its checks
-     * count as incremental baselines. Required for incremental review.
+     * count as incremental baselines or as runs that covered the PR for a
+     * push-scoped gate. Required for incremental review; without it,
+     * `integrity-review` scopes each push to that push alone.
      */
     incrementalApp: schemas/* string */.YjP().min(1).optional(),
     /** Create/update GitHub Check runs (core + per-skill). Default: true */
@@ -11150,7 +11252,8 @@ function splitLargeHunks(hunks, options = {}) {
 /***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
 
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
-/* harmony export */   e: () => (/* binding */ buildEventContext)
+/* harmony export */   M$: () => (/* binding */ fetchPushChanges),
+/* harmony export */   eU: () => (/* binding */ buildEventContext)
 /* harmony export */ });
 /* unused harmony export EventContextError */
 /* harmony import */ var zod__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(51737);
@@ -11254,10 +11357,11 @@ async function buildEventContext(eventName, eventPayload, repoPath, octokit) {
 /** GitHub's compare API returns at most this many files and omits the rest. */
 const COMPARE_FILE_LIMIT = 300;
 /**
- * Fetch the files changed by one push. Returns undefined when the push did
- * not fast-forward `before` (a force-push or rebase, which GitHub reports as
- * `diverged` or fails to compare), or the file list is truncated or missing,
- * so callers fall back to the full PR diff.
+ * Fetch the files changed between `beforeSha` and `headSha`: one push, or
+ * every push since an earlier reviewed commit. Returns undefined when `head`
+ * does not fast-forward `before` (a force-push or rebase, which GitHub reports
+ * as `diverged` or fails to compare), or the file list is truncated or
+ * missing, so callers fall back to the full PR diff.
  */
 async function fetchPushChanges(octokit, owner, repo, beforeSha, headSha) {
     try {
@@ -12982,6 +13086,7 @@ const ReplaySkillReportSchema = schemas/* object */.Ikc({
     /** Replayed so report mode keeps push-scoped skills out of stale-comment resolution. */
     hunkGate: types/* HunkGateSchema */.Xp.optional(),
     incremental: types/* IncrementalReviewSchema */.gD.optional(),
+    gateScope: types/* GateScopeSchema */.J.optional(),
 });
 const TriggerRunResultSchema = schemas/* discriminatedUnion */.gMt('status', [
     TriggerRunResultBaseSchema.extend({
@@ -13148,6 +13253,7 @@ function serializeReplayReport(report) {
         runtime: report.runtime,
         hunkGate: report.hunkGate,
         incremental: report.incremental,
+        gateScope: report.gateScope,
     };
 }
 function serializeTriggerResult(result) {
@@ -13352,7 +13458,7 @@ function buildFindingsOutput(reports, context, findingObservations = [], options
 /* harmony import */ var _report_files_js__WEBPACK_IMPORTED_MODULE_15__ = __webpack_require__(79418);
 /* harmony import */ var _runtimes_index_js__WEBPACK_IMPORTED_MODULE_9__ = __webpack_require__(23473);
 /* harmony import */ var _types_js__WEBPACK_IMPORTED_MODULE_14__ = __webpack_require__(88973);
-/* harmony import */ var _prepare_js__WEBPACK_IMPORTED_MODULE_10__ = __webpack_require__(6970);
+/* harmony import */ var _prepare_js__WEBPACK_IMPORTED_MODULE_10__ = __webpack_require__(15507);
 /* harmony import */ var _utils_index_js__WEBPACK_IMPORTED_MODULE_11__ = __webpack_require__(82272);
 /* harmony import */ var _sentry_trace_js__WEBPACK_IMPORTED_MODULE_12__ = __webpack_require__(68016);
 
@@ -15058,6 +15164,269 @@ Singletons should not appear. Return [] if no findings describe the same issue.`
 
 /***/ }),
 
+/***/ 46967:
+/***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
+
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   QZ: () => (/* binding */ hasPushScopedGate),
+/* harmony export */   UD: () => (/* binding */ integrityGateAlwaysScans),
+/* harmony export */   h0: () => (/* binding */ applyIntegrityGate)
+/* harmony export */ });
+/* unused harmony export matchIntegritySignals */
+/* harmony import */ var node_path__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(76760);
+/* harmony import */ var node_path__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(node_path__WEBPACK_IMPORTED_MODULE_0__);
+/* harmony import */ var _diff_index_js__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(96497);
+
+
+const INSTALL_HOOK_KEY = /"(?:pre|post)?install"\s*:|"prepare"\s*:|"prepublish(?:Only)?"\s*:|"(?:pre|post)pack"\s*:/;
+const GIT_HOOK_PATH = /(?:^|\/)(?:\.husky|\.githooks|\.git\/hooks)\/|(?:^|\/)(?:lefthook\.ya?ml|\.pre-commit-config\.ya?ml|setup\.py)$/;
+const GOVERNANCE_PATH = /(?:^|\/)CODEOWNERS$|^\.github\/(?:workflows|actions|rulesets)\/|^\.github\/settings\.ya?ml$|^\.gitlab-ci\.ya?ml$|^\.circleci\/|^\.buildkite\//;
+const REGISTRY_CONFIG_PATH = /(?:^|\/)(?:\.npmrc|\.yarnrc(?:\.yml)?|pip\.conf|\.pypirc|settings\.xml)$/;
+// Quoted sources (npm, Gemfile, Cargo), unquoted VCS URLs and PEP 508 direct references (`pkg @ git+https://...`), and pip index flags.
+const DEPENDENCY_SOURCE = /["'](?:git\+|github:|file:|https?:\/\/)[^"']*["']|\b(?:git|hg|svn|bzr)\+[a-z]+:\/\/|@\s*(?:https?|file):\/\/|--(?:extra-)?index-url|--find-links|--trusted-host|\bregistry\s*[=:]/;
+const DEPENDENCY_MANIFEST = /(?:^|\/)(?:package\.json|requirements[^/]*\.txt|pyproject\.toml|Pipfile|Gemfile|go\.mod|Cargo\.toml|composer\.json)$/;
+const LOCKFILE_PATH = /(?:^|\/)(?:package-lock\.json|npm-shrinkwrap\.json|pnpm-lock\.yaml|yarn\.lock|bun\.lock|poetry\.lock|Pipfile\.lock|uv\.lock|Cargo\.lock|go\.sum|Gemfile\.lock|composer\.lock)$/;
+const LOCK_PIN = /\b(?:resolved|integrity|tarball|checksum|resolution|source|remote)\b|\bsha(?:1|256|384|512)[-:]|\sh1:/;
+const LOCK_VERSION = /\bversion\b|@[\^~]?v?\d+\.\d|\sv\d+\.\d|\(\d+\.\d/;
+// Package sources: scheme URLs (userinfo skipped), scp-style git remotes, npm shorthands, and any `file:` path (`file:///abs` has no host).
+const SOURCE_REF = /\b([a-z][a-z0-9+.-]*):\/\/(?:[^@/\s"']*@)?([^/\s"'#:?]+)|\b[\w.-]+@([a-z0-9-]+(?:\.[a-z0-9-]+)*\.[a-z]{2,}):(?!\/)|\b((?:github|gitlab|bitbucket):(?!\/)|file:)/gi;
+const DECODE_CALL = /\batob\(|b64decode|base64\s+-d|Buffer\.from\([^)]*['"](?:base64|hex)['"]|zlib\.|fromCharCode\(|codecs\.decode|\\x[0-9a-fA-F]{2}(?:\\x[0-9a-fA-F]{2}){7,}/;
+const HIDDEN_UNICODE = /[\u200B-\u200D\u202A-\u202E\u2066-\u2069\uFEFF]/;
+const LONG_TOKEN = /[A-Za-z0-9+/]{40,}={0,2}/g;
+const HASH_PREFIX = /sha(?:1|256|384|512)(?:-|[:=]\s*)$/;
+const DATE_OR_CHANCE = /datetime\(|timedelta\(|Date\.now\(|new Date\(|time\.time\(|time\.Now\(|\.now\(|utcnow\(|getTime\(\)|\b1[6-9]\d{8}\b|\b20\d{2}-\d{2}-\d{2}\b|\b20\d{2}\s*,\s*\d{1,2}\s*,\s*\d{1,2}\b|random\(|Math\.random|gethostname|os\.hostname/;
+const DESTRUCTIVE_WORD = /\b(?:delete|remove|drop|truncate|purge|wipe|destroy|unlink|rmtree|rmdir|overwrite|disable)\w*/i;
+// SQL keywords are case-insensitive, so `delete from users` must match as well as `DELETE FROM users`.
+const DESTRUCTIVE_SQL = /\bDROP\s+(?:TABLE|DATABASE|SCHEMA)\b|\bTRUNCATE\s+(?:TABLE\s+)?\w|\bDELETE\s+FROM\b/i;
+const DESTRUCTIVE_OP = /\brm\s+-[a-zA-Z]*[rR][a-zA-Z]*\b|shutil\.rmtree|fs(?:\.promises)?\.(?:rm|rmdir)(?:Sync)?\(|push\s+(?:-f\b|--force)|reset\s+--hard|\.objects\.all\(\)\.delete\(/;
+const REVIEWER_DIRECTED = /\b(?:ai|llm|automated|bot|copilot|claude|gpt|chatgpt|gemini|warden|coderabbit)\b[^\n]{0,40}\b(?:review(?:er|ers)?|scanner|auditor)s?\b|ignore (?:all )?(?:previous|prior|above) instructions|\bdo not (?:flag|report|review)\b|\bdon'?t (?:flag|report|review)\b|\bskip (?:this|the) (?:file|block|check|review)\b|\bpre-?approved\b|\balready (?:been )?(?:approved|reviewed)\b|\bno need to (?:review|check)\b/i;
+const CONTROL_TERM = /\baudit|\bauthori[sz]|\bauthenticat|\bpermission|\bhas_access|write_access|\bis_admin|\bis_superuser|signature|\bcsrf|rate_?limit|ratelimit|\bvalidat|\bassert|captureException|capture_exception|\bdef test_|\b(?:it|test|describe)\(/i;
+const EARLY_ALLOW = /\breturn\s+(?:True|true)\b|\bnext\(\)|\ballow(?:ed)?\s*=\s*(?:True|true)\b/;
+const SUPPRESSION = /\bnosec\b|eslint-disable|#\s*noqa|semgrep|nolint|@skip|pytest\.mark\.(?:skip|xfail)|unittest\.skip|\bx(?:it|describe)\(|\.(?:only|skip)\(|t\.Skip\(|addFilter\(|logging\.Filter|\baudit|setLevel\(|except[^:\n]*:\s*pass\b|catch\s*(?:\([^)]*\))?\s*\{\s*\}/i;
+const INFRA_PATH = /\.(?:tf|tfvars|hcl|ya?ml|json)$|(?:^|\/)Dockerfile[^/]*$/;
+const PRIVILEGE = /["']\*["']|\bAdministratorAccess\b|\bcluster-admin\b|privileged:\s*true|0\.0\.0\.0\/0|::\/0|hostNetwork:\s*true|hostPath:|runAsUser:\s*0\b|deletion_protection\s*=\s*false|skip_final_snapshot\s*=\s*true|\bPrincipal\b|encrypted\s*=\s*false/;
+const MIN_DELETED_LINES = 10;
+const MIN_DELETED_RATIO = 0.8;
+const MIN_TOKEN_ENTROPY = 4.3;
+const MAX_LINE_LENGTH = 1000;
+function shannonEntropy(text) {
+    const counts = new Map();
+    for (const char of text) {
+        counts.set(char, (counts.get(char) ?? 0) + 1);
+    }
+    let entropy = 0;
+    for (const count of counts.values()) {
+        const p = count / text.length;
+        entropy -= p * Math.log2(p);
+    }
+    return entropy;
+}
+/** True for base64-like literals; skips hex digests and integrity hashes, which stay below the entropy floor or carry a hash prefix. Lockfile hashes go through `lockfile-drift` instead. */
+function hasEncodedLiteral(line) {
+    for (const match of line.matchAll(LONG_TOKEN)) {
+        const token = match[0];
+        if (HASH_PREFIX.test(line.slice(0, match.index)))
+            continue;
+        if (!/\d/.test(token))
+            continue;
+        if (shannonEntropy(token) >= MIN_TOKEN_ENTROPY)
+            return true;
+    }
+    return false;
+}
+const anyLine = (lines, pattern) => lines.some((line) => pattern.test(line));
+/** Collect `scheme://host` keys for every package source on the lines, so a move to a new host or transport shows up. */
+function sourceHosts(lines) {
+    const hosts = new Set();
+    for (const line of lines) {
+        for (const [, scheme, host, scpHost, shorthand] of line.matchAll(SOURCE_REF)) {
+            if (scheme && host)
+                hosts.add(`${scheme.toLowerCase()}://${host.toLowerCase()}`);
+            else if (scpHost)
+                hosts.add(`ssh://${scpHost.toLowerCase()}`);
+            else if (shorthand)
+                hosts.add(shorthand.toLowerCase());
+        }
+    }
+    return hosts;
+}
+/** True when the hunk adds a version line it did not remove, so a re-emitted unchanged version does not count. */
+function changesVersion(h) {
+    const removed = new Set(h.removed.filter((line) => LOCK_VERSION.test(line)).map((line) => line.trim()));
+    return h.added.some((line) => LOCK_VERSION.test(line) && !removed.has(line.trim()));
+}
+/** True when a hunk swaps a package source for a host or scheme its removed lines did not use. */
+function changesSourceHost(h) {
+    const before = sourceHosts(h.removed);
+    if (before.size === 0)
+        return false;
+    return [...sourceHosts(h.added)].some((host) => !before.has(host));
+}
+const SIGNALS = [
+    {
+        id: 'install-hook',
+        matches: (h) => GIT_HOOK_PATH.test(h.filename) ||
+            ((0,node_path__WEBPACK_IMPORTED_MODULE_0__.basename)(h.filename) === 'package.json' &&
+                (anyLine(h.added, INSTALL_HOOK_KEY) || anyLine(h.removed, INSTALL_HOOK_KEY))),
+    },
+    {
+        id: 'encoded-content',
+        matches: (h) => h.added.some((line) => line.length > MAX_LINE_LENGTH ||
+            HIDDEN_UNICODE.test(line) ||
+            DECODE_CALL.test(line) ||
+            hasEncodedLiteral(line)),
+    },
+    {
+        id: 'deletion-heavy',
+        matches: (h) => h.removed.length >= MIN_DELETED_LINES &&
+            h.removed.length / (h.removed.length + h.added.length) >= MIN_DELETED_RATIO,
+    },
+    {
+        id: 'governance-file',
+        matches: (h) => GOVERNANCE_PATH.test(h.filename),
+    },
+    {
+        id: 'dependency-source',
+        matches: (h) => REGISTRY_CONFIG_PATH.test(h.filename) ||
+            (DEPENDENCY_MANIFEST.test(h.filename) && anyLine(h.added, DEPENDENCY_SOURCE)),
+    },
+    {
+        // Pins that change with no manifest change in the PR, with no version change in the hunk, or toward a new source host.
+        id: 'lockfile-drift',
+        matches: (h) => LOCKFILE_PATH.test(h.filename) &&
+            anyLine(h.added, LOCK_PIN) &&
+            (!h.manifestChanged || !changesVersion(h) || changesSourceHost(h)),
+    },
+    {
+        id: 'conditional-destructive',
+        matches: (h) => anyLine(h.added, DATE_OR_CHANCE) &&
+            (anyLine(h.added, DESTRUCTIVE_WORD) || anyLine(h.context, DESTRUCTIVE_WORD)),
+    },
+    {
+        id: 'destructive-op',
+        matches: (h) => anyLine(h.added, DESTRUCTIVE_OP) || anyLine(h.added, DESTRUCTIVE_SQL),
+    },
+    {
+        id: 'reviewer-directed',
+        matches: (h) => anyLine(h.added, REVIEWER_DIRECTED),
+    },
+    {
+        id: 'control-removal',
+        matches: (h) => anyLine(h.removed, CONTROL_TERM),
+    },
+    {
+        id: 'control-bypass',
+        matches: (h) => anyLine(h.added, EARLY_ALLOW) && (anyLine(h.added, CONTROL_TERM) || anyLine(h.context, CONTROL_TERM)),
+    },
+    {
+        id: 'suppression',
+        matches: (h) => anyLine(h.added, SUPPRESSION),
+    },
+    {
+        id: 'privilege-grant',
+        // Lockfiles are YAML/JSON but hold package metadata (`'*'` peer ranges), not grants; lockfile-drift covers them.
+        matches: (h) => INFRA_PATH.test(h.filename) && !LOCKFILE_PATH.test(h.filename) && anyLine(h.added, PRIVILEGE),
+    },
+];
+function splitHunkLines(filename, hunk, manifestChanged) {
+    const lines = { filename, added: [], removed: [], context: [], manifestChanged };
+    for (const line of hunk.lines) {
+        if (line.startsWith('+'))
+            lines.added.push(line.slice(1));
+        else if (line.startsWith('-'))
+            lines.removed.push(line.slice(1));
+        else
+            lines.context.push(line.slice(1));
+    }
+    return lines;
+}
+/**
+ * Return the ids of every gate signal that matches a hunk. Pass `manifestChanged`
+ * when the reviewed changes touch a dependency manifest, so routine lockfile bumps skip the model.
+ */
+function matchIntegritySignals(hunk, manifestChanged = false) {
+    const lines = splitHunkLines(hunk.filename, hunk.hunk, manifestChanged);
+    lines.context.push(...hunk.contextBefore, ...hunk.contextAfter);
+    return SIGNALS.filter((signal) => signal.matches(lines)).map((signal) => signal.id);
+}
+/**
+ * Inclusive new-side span, widened by one trailing line. A deletion-only hunk
+ * (newCount 0) sits between newStart and newStart + 1, and coalesced hunks end
+ * on an exclusive bound, so the extra line keeps a push deletion next to an
+ * earlier edit inside the hunk it touched. A false overlap costs one model call.
+ */
+function newSideRange(hunk) {
+    return [hunk.newStart, hunk.newStart + hunk.newCount];
+}
+/** Map each pushed file to the new-side ranges it changed, or 'all' when GitHub omitted the patch. */
+function buildPushRanges(files) {
+    const ranges = new Map();
+    for (const file of files) {
+        ranges.set(file.filename, file.patch ? (0,_diff_index_js__WEBPACK_IMPORTED_MODULE_1__/* .parsePatch */ .iz)(file.patch).map(newSideRange) : 'all');
+    }
+    return ranges;
+}
+function overlapsPush(hunk, pushRanges) {
+    const ranges = pushRanges.get(hunk.filename);
+    if (ranges === undefined)
+        return false;
+    if (ranges === 'all')
+        return true;
+    const [start, end] = newSideRange(hunk.hunk);
+    return ranges.some(([pushStart, pushEnd]) => start <= pushEnd && pushStart <= end);
+}
+/** True when the skill is the package's own `integrity-review`, not a repo-local override with the same name. */
+function isBuiltinIntegrityReview(skill) {
+    return (skill.name === 'integrity-review' &&
+        skill.rootDir !== undefined &&
+        (0,node_path__WEBPACK_IMPORTED_MODULE_0__.basename)(skill.rootDir) === 'integrity-review' &&
+        (0,node_path__WEBPACK_IMPORTED_MODULE_0__.basename)((0,node_path__WEBPACK_IMPORTED_MODULE_0__.dirname)(skill.rootDir)) === 'builtin-skills');
+}
+/** Whether this skill's gate limits `synchronize` runs to recently pushed hunks. */
+function hasPushScopedGate(skill) {
+    return isBuiltinIntegrityReview(skill);
+}
+/**
+ * Files the built-in integrity-review skill reads even though the default scan
+ * policy ignores them. Lockfiles are where pin and source tampering hides, and
+ * the gate keeps routine lockfile churn away from the model.
+ */
+function integrityGateAlwaysScans(skill) {
+    return isBuiltinIntegrityReview(skill) ? (filename) => LOCKFILE_PATH.test(filename) : undefined;
+}
+/**
+ * Apply the integrity-review gate to prepared files. Returns undefined for
+ * every other skill. Text aimed at reviewers in the PR title or body sends
+ * every eligible hunk to the model, because that signal has no hunk of its own.
+ */
+function applyIntegrityGate(skill, context, files) {
+    if (!isBuiltinIntegrityReview(skill))
+        return undefined;
+    const pr = context.pullRequest;
+    const push = context.action === 'synchronize' ? pr?.push : undefined;
+    const pushRanges = push ? buildPushRanges(push.files) : undefined;
+    const prTextDirected = REVIEWER_DIRECTED.test(`${pr?.title ?? ''}\n${pr?.body ?? ''}`);
+    // Push-scoped runs only see the push, so an earlier manifest change in the PR does not explain its lockfile edits.
+    const manifestChanged = (push?.files ?? pr?.files ?? []).some((file) => DEPENDENCY_MANIFEST.test(file.filename));
+    let skippedHunks = 0;
+    const gated = [];
+    for (const file of files) {
+        const hunks = file.hunks.filter((hunk) => {
+            const keep = (!pushRanges || overlapsPush(hunk, pushRanges)) &&
+                (prTextDirected || matchIntegritySignals(hunk, manifestChanged).length > 0);
+            if (!keep)
+                skippedHunks++;
+            return keep;
+        });
+        if (hunks.length > 0)
+            gated.push({ filename: file.filename, hunks });
+    }
+    return { files: gated, skippedHunks, pushScoped: pushRanges !== undefined };
+}
+
+
+/***/ }),
+
 /***/ 81572:
 /***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
 
@@ -15373,275 +15742,22 @@ async function postProcessFindings(findings, options) {
 
 /***/ }),
 
-/***/ 6970:
+/***/ 15507:
 /***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
 
-
-// EXPORTS
-__webpack_require__.d(__webpack_exports__, {
-  xc: () => (/* binding */ emptyRunSummary),
-  kV: () => (/* binding */ prepareSkillFiles)
-});
-
-// UNUSED EXPORTS: groupHunksByFile, prepareFiles
-
-// EXTERNAL MODULE: ./src/diff/index.ts + 4 modules
-var src_diff = __webpack_require__(96497);
-// EXTERNAL MODULE: ./src/sdk/scan-policy.ts
-var scan_policy = __webpack_require__(47394);
-// EXTERNAL MODULE: external "node:path"
-var external_node_path_ = __webpack_require__(76760);
-;// CONCATENATED MODULE: ./src/sdk/integrity-gate.ts
-
-
-const INSTALL_HOOK_KEY = /"(?:pre|post)?install"\s*:|"prepare"\s*:|"prepublish(?:Only)?"\s*:|"(?:pre|post)pack"\s*:/;
-const GIT_HOOK_PATH = /(?:^|\/)(?:\.husky|\.githooks|\.git\/hooks)\/|(?:^|\/)(?:lefthook\.ya?ml|\.pre-commit-config\.ya?ml|setup\.py)$/;
-const GOVERNANCE_PATH = /(?:^|\/)CODEOWNERS$|^\.github\/(?:workflows|actions|rulesets)\/|^\.github\/settings\.ya?ml$|^\.gitlab-ci\.ya?ml$|^\.circleci\/|^\.buildkite\//;
-const REGISTRY_CONFIG_PATH = /(?:^|\/)(?:\.npmrc|\.yarnrc(?:\.yml)?|pip\.conf|\.pypirc|settings\.xml)$/;
-// Quoted sources (npm, Gemfile, Cargo), unquoted VCS URLs and PEP 508 direct references (`pkg @ git+https://...`), and pip index flags.
-const DEPENDENCY_SOURCE = /["'](?:git\+|github:|file:|https?:\/\/)[^"']*["']|\b(?:git|hg|svn|bzr)\+[a-z]+:\/\/|@\s*(?:https?|file):\/\/|--(?:extra-)?index-url|--find-links|--trusted-host|\bregistry\s*[=:]/;
-const DEPENDENCY_MANIFEST = /(?:^|\/)(?:package\.json|requirements[^/]*\.txt|pyproject\.toml|Pipfile|Gemfile|go\.mod|Cargo\.toml|composer\.json)$/;
-const LOCKFILE_PATH = /(?:^|\/)(?:package-lock\.json|npm-shrinkwrap\.json|pnpm-lock\.yaml|yarn\.lock|bun\.lock|poetry\.lock|Pipfile\.lock|uv\.lock|Cargo\.lock|go\.sum|Gemfile\.lock|composer\.lock)$/;
-const LOCK_PIN = /\b(?:resolved|integrity|tarball|checksum|resolution|source|remote)\b|\bsha(?:1|256|384|512)[-:]|\sh1:/;
-const LOCK_VERSION = /\bversion\b|@[\^~]?v?\d+\.\d|\sv\d+\.\d|\(\d+\.\d/;
-// Package sources: scheme URLs (userinfo skipped), scp-style git remotes, npm shorthands, and any `file:` path (`file:///abs` has no host).
-const SOURCE_REF = /\b([a-z][a-z0-9+.-]*):\/\/(?:[^@/\s"']*@)?([^/\s"'#:?]+)|\b[\w.-]+@([a-z0-9-]+(?:\.[a-z0-9-]+)*\.[a-z]{2,}):(?!\/)|\b((?:github|gitlab|bitbucket):(?!\/)|file:)/gi;
-const DECODE_CALL = /\batob\(|b64decode|base64\s+-d|Buffer\.from\([^)]*['"](?:base64|hex)['"]|zlib\.|fromCharCode\(|codecs\.decode|\\x[0-9a-fA-F]{2}(?:\\x[0-9a-fA-F]{2}){7,}/;
-const HIDDEN_UNICODE = /[\u200B-\u200D\u202A-\u202E\u2066-\u2069\uFEFF]/;
-const LONG_TOKEN = /[A-Za-z0-9+/]{40,}={0,2}/g;
-const HASH_PREFIX = /sha(?:1|256|384|512)(?:-|[:=]\s*)$/;
-const DATE_OR_CHANCE = /datetime\(|timedelta\(|Date\.now\(|new Date\(|time\.time\(|time\.Now\(|\.now\(|utcnow\(|getTime\(\)|\b1[6-9]\d{8}\b|\b20\d{2}-\d{2}-\d{2}\b|\b20\d{2}\s*,\s*\d{1,2}\s*,\s*\d{1,2}\b|random\(|Math\.random|gethostname|os\.hostname/;
-const DESTRUCTIVE_WORD = /\b(?:delete|remove|drop|truncate|purge|wipe|destroy|unlink|rmtree|rmdir|overwrite|disable)\w*/i;
-// SQL keywords are case-insensitive, so `delete from users` must match as well as `DELETE FROM users`.
-const DESTRUCTIVE_SQL = /\bDROP\s+(?:TABLE|DATABASE|SCHEMA)\b|\bTRUNCATE\s+(?:TABLE\s+)?\w|\bDELETE\s+FROM\b/i;
-const DESTRUCTIVE_OP = /\brm\s+-[a-zA-Z]*[rR][a-zA-Z]*\b|shutil\.rmtree|fs(?:\.promises)?\.(?:rm|rmdir)(?:Sync)?\(|push\s+(?:-f\b|--force)|reset\s+--hard|\.objects\.all\(\)\.delete\(/;
-const REVIEWER_DIRECTED = /\b(?:ai|llm|automated|bot|copilot|claude|gpt|chatgpt|gemini|warden|coderabbit)\b[^\n]{0,40}\b(?:review(?:er|ers)?|scanner|auditor)s?\b|ignore (?:all )?(?:previous|prior|above) instructions|\bdo not (?:flag|report|review)\b|\bdon'?t (?:flag|report|review)\b|\bskip (?:this|the) (?:file|block|check|review)\b|\bpre-?approved\b|\balready (?:been )?(?:approved|reviewed)\b|\bno need to (?:review|check)\b/i;
-const CONTROL_TERM = /\baudit|\bauthori[sz]|\bauthenticat|\bpermission|\bhas_access|write_access|\bis_admin|\bis_superuser|signature|\bcsrf|rate_?limit|ratelimit|\bvalidat|\bassert|captureException|capture_exception|\bdef test_|\b(?:it|test|describe)\(/i;
-const EARLY_ALLOW = /\breturn\s+(?:True|true)\b|\bnext\(\)|\ballow(?:ed)?\s*=\s*(?:True|true)\b/;
-const SUPPRESSION = /\bnosec\b|eslint-disable|#\s*noqa|semgrep|nolint|@skip|pytest\.mark\.(?:skip|xfail)|unittest\.skip|\bx(?:it|describe)\(|\.(?:only|skip)\(|t\.Skip\(|addFilter\(|logging\.Filter|\baudit|setLevel\(|except[^:\n]*:\s*pass\b|catch\s*(?:\([^)]*\))?\s*\{\s*\}/i;
-const INFRA_PATH = /\.(?:tf|tfvars|hcl|ya?ml|json)$|(?:^|\/)Dockerfile[^/]*$/;
-const PRIVILEGE = /["']\*["']|\bAdministratorAccess\b|\bcluster-admin\b|privileged:\s*true|0\.0\.0\.0\/0|::\/0|hostNetwork:\s*true|hostPath:|runAsUser:\s*0\b|deletion_protection\s*=\s*false|skip_final_snapshot\s*=\s*true|\bPrincipal\b|encrypted\s*=\s*false/;
-const MIN_DELETED_LINES = 10;
-const MIN_DELETED_RATIO = 0.8;
-const MIN_TOKEN_ENTROPY = 4.3;
-const MAX_LINE_LENGTH = 1000;
-function shannonEntropy(text) {
-    const counts = new Map();
-    for (const char of text) {
-        counts.set(char, (counts.get(char) ?? 0) + 1);
-    }
-    let entropy = 0;
-    for (const count of counts.values()) {
-        const p = count / text.length;
-        entropy -= p * Math.log2(p);
-    }
-    return entropy;
-}
-/** True for base64-like literals; skips hex digests and integrity hashes, which stay below the entropy floor or carry a hash prefix. Lockfile hashes go through `lockfile-drift` instead. */
-function hasEncodedLiteral(line) {
-    for (const match of line.matchAll(LONG_TOKEN)) {
-        const token = match[0];
-        if (HASH_PREFIX.test(line.slice(0, match.index)))
-            continue;
-        if (!/\d/.test(token))
-            continue;
-        if (shannonEntropy(token) >= MIN_TOKEN_ENTROPY)
-            return true;
-    }
-    return false;
-}
-const anyLine = (lines, pattern) => lines.some((line) => pattern.test(line));
-/** Collect `scheme://host` keys for every package source on the lines, so a move to a new host or transport shows up. */
-function sourceHosts(lines) {
-    const hosts = new Set();
-    for (const line of lines) {
-        for (const [, scheme, host, scpHost, shorthand] of line.matchAll(SOURCE_REF)) {
-            if (scheme && host)
-                hosts.add(`${scheme.toLowerCase()}://${host.toLowerCase()}`);
-            else if (scpHost)
-                hosts.add(`ssh://${scpHost.toLowerCase()}`);
-            else if (shorthand)
-                hosts.add(shorthand.toLowerCase());
-        }
-    }
-    return hosts;
-}
-/** True when the hunk adds a version line it did not remove, so a re-emitted unchanged version does not count. */
-function changesVersion(h) {
-    const removed = new Set(h.removed.filter((line) => LOCK_VERSION.test(line)).map((line) => line.trim()));
-    return h.added.some((line) => LOCK_VERSION.test(line) && !removed.has(line.trim()));
-}
-/** True when a hunk swaps a package source for a host or scheme its removed lines did not use. */
-function changesSourceHost(h) {
-    const before = sourceHosts(h.removed);
-    if (before.size === 0)
-        return false;
-    return [...sourceHosts(h.added)].some((host) => !before.has(host));
-}
-const SIGNALS = [
-    {
-        id: 'install-hook',
-        matches: (h) => GIT_HOOK_PATH.test(h.filename) ||
-            ((0,external_node_path_.basename)(h.filename) === 'package.json' &&
-                (anyLine(h.added, INSTALL_HOOK_KEY) || anyLine(h.removed, INSTALL_HOOK_KEY))),
-    },
-    {
-        id: 'encoded-content',
-        matches: (h) => h.added.some((line) => line.length > MAX_LINE_LENGTH ||
-            HIDDEN_UNICODE.test(line) ||
-            DECODE_CALL.test(line) ||
-            hasEncodedLiteral(line)),
-    },
-    {
-        id: 'deletion-heavy',
-        matches: (h) => h.removed.length >= MIN_DELETED_LINES &&
-            h.removed.length / (h.removed.length + h.added.length) >= MIN_DELETED_RATIO,
-    },
-    {
-        id: 'governance-file',
-        matches: (h) => GOVERNANCE_PATH.test(h.filename),
-    },
-    {
-        id: 'dependency-source',
-        matches: (h) => REGISTRY_CONFIG_PATH.test(h.filename) ||
-            (DEPENDENCY_MANIFEST.test(h.filename) && anyLine(h.added, DEPENDENCY_SOURCE)),
-    },
-    {
-        // Pins that change with no manifest change in the PR, with no version change in the hunk, or toward a new source host.
-        id: 'lockfile-drift',
-        matches: (h) => LOCKFILE_PATH.test(h.filename) &&
-            anyLine(h.added, LOCK_PIN) &&
-            (!h.manifestChanged || !changesVersion(h) || changesSourceHost(h)),
-    },
-    {
-        id: 'conditional-destructive',
-        matches: (h) => anyLine(h.added, DATE_OR_CHANCE) &&
-            (anyLine(h.added, DESTRUCTIVE_WORD) || anyLine(h.context, DESTRUCTIVE_WORD)),
-    },
-    {
-        id: 'destructive-op',
-        matches: (h) => anyLine(h.added, DESTRUCTIVE_OP) || anyLine(h.added, DESTRUCTIVE_SQL),
-    },
-    {
-        id: 'reviewer-directed',
-        matches: (h) => anyLine(h.added, REVIEWER_DIRECTED),
-    },
-    {
-        id: 'control-removal',
-        matches: (h) => anyLine(h.removed, CONTROL_TERM),
-    },
-    {
-        id: 'control-bypass',
-        matches: (h) => anyLine(h.added, EARLY_ALLOW) && (anyLine(h.added, CONTROL_TERM) || anyLine(h.context, CONTROL_TERM)),
-    },
-    {
-        id: 'suppression',
-        matches: (h) => anyLine(h.added, SUPPRESSION),
-    },
-    {
-        id: 'privilege-grant',
-        // Lockfiles are YAML/JSON but hold package metadata (`'*'` peer ranges), not grants; lockfile-drift covers them.
-        matches: (h) => INFRA_PATH.test(h.filename) && !LOCKFILE_PATH.test(h.filename) && anyLine(h.added, PRIVILEGE),
-    },
-];
-function splitHunkLines(filename, hunk, manifestChanged) {
-    const lines = { filename, added: [], removed: [], context: [], manifestChanged };
-    for (const line of hunk.lines) {
-        if (line.startsWith('+'))
-            lines.added.push(line.slice(1));
-        else if (line.startsWith('-'))
-            lines.removed.push(line.slice(1));
-        else
-            lines.context.push(line.slice(1));
-    }
-    return lines;
-}
-/**
- * Return the ids of every gate signal that matches a hunk. Pass `manifestChanged`
- * when the reviewed changes touch a dependency manifest, so routine lockfile bumps skip the model.
- */
-function matchIntegritySignals(hunk, manifestChanged = false) {
-    const lines = splitHunkLines(hunk.filename, hunk.hunk, manifestChanged);
-    lines.context.push(...hunk.contextBefore, ...hunk.contextAfter);
-    return SIGNALS.filter((signal) => signal.matches(lines)).map((signal) => signal.id);
-}
-/**
- * Inclusive new-side span, widened by one trailing line. A deletion-only hunk
- * (newCount 0) sits between newStart and newStart + 1, and coalesced hunks end
- * on an exclusive bound, so the extra line keeps a push deletion next to an
- * earlier edit inside the hunk it touched. A false overlap costs one model call.
- */
-function newSideRange(hunk) {
-    return [hunk.newStart, hunk.newStart + hunk.newCount];
-}
-/** Map each pushed file to the new-side ranges it changed, or 'all' when GitHub omitted the patch. */
-function buildPushRanges(files) {
-    const ranges = new Map();
-    for (const file of files) {
-        ranges.set(file.filename, file.patch ? (0,src_diff/* parsePatch */.iz)(file.patch).map(newSideRange) : 'all');
-    }
-    return ranges;
-}
-function overlapsPush(hunk, pushRanges) {
-    const ranges = pushRanges.get(hunk.filename);
-    if (ranges === undefined)
-        return false;
-    if (ranges === 'all')
-        return true;
-    const [start, end] = newSideRange(hunk.hunk);
-    return ranges.some(([pushStart, pushEnd]) => start <= pushEnd && pushStart <= end);
-}
-/** True when the skill is the package's own `integrity-review`, not a repo-local override with the same name. */
-function isBuiltinIntegrityReview(skill) {
-    return (skill.name === 'integrity-review' &&
-        skill.rootDir !== undefined &&
-        (0,external_node_path_.basename)(skill.rootDir) === 'integrity-review' &&
-        (0,external_node_path_.basename)((0,external_node_path_.dirname)(skill.rootDir)) === 'builtin-skills');
-}
-/**
- * Files the built-in integrity-review skill reads even though the default scan
- * policy ignores them. Lockfiles are where pin and source tampering hides, and
- * the gate keeps routine lockfile churn away from the model.
- */
-function integrityGateAlwaysScans(skill) {
-    return isBuiltinIntegrityReview(skill) ? (filename) => LOCKFILE_PATH.test(filename) : undefined;
-}
-/**
- * Apply the integrity-review gate to prepared files. Returns undefined for
- * every other skill. Text aimed at reviewers in the PR title or body sends
- * every eligible hunk to the model, because that signal has no hunk of its own.
- */
-function applyIntegrityGate(skill, context, files) {
-    if (!isBuiltinIntegrityReview(skill))
-        return undefined;
-    const pr = context.pullRequest;
-    const push = context.action === 'synchronize' ? pr?.push : undefined;
-    const pushRanges = push ? buildPushRanges(push.files) : undefined;
-    const prTextDirected = REVIEWER_DIRECTED.test(`${pr?.title ?? ''}\n${pr?.body ?? ''}`);
-    // Push-scoped runs only see the push, so an earlier manifest change in the PR does not explain its lockfile edits.
-    const manifestChanged = (push?.files ?? pr?.files ?? []).some((file) => DEPENDENCY_MANIFEST.test(file.filename));
-    let skippedHunks = 0;
-    const gated = [];
-    for (const file of files) {
-        const hunks = file.hunks.filter((hunk) => {
-            const keep = (!pushRanges || overlapsPush(hunk, pushRanges)) &&
-                (prTextDirected || matchIntegritySignals(hunk, manifestChanged).length > 0);
-            if (!keep)
-                skippedHunks++;
-            return keep;
-        });
-        if (hunks.length > 0)
-            gated.push({ filename: file.filename, hunks });
-    }
-    return { files: gated, skippedHunks, pushScoped: pushRanges !== undefined };
-}
-
-;// CONCATENATED MODULE: ./src/sdk/prepare.ts
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   kV: () => (/* binding */ prepareSkillFiles),
+/* harmony export */   xc: () => (/* binding */ emptyRunSummary)
+/* harmony export */ });
+/* unused harmony exports groupHunksByFile, prepareFiles */
+/* harmony import */ var _diff_index_js__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(96497);
+/* harmony import */ var _scan_policy_js__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(47394);
+/* harmony import */ var _integrity_gate_js__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(46967);
 
 
 
 function matchingChunkingSkipPattern(filename, patterns) {
-    return patterns?.find((pattern) => (0,src_diff/* classifyFile */.TX)(filename, [pattern]) === 'skip')?.pattern;
+    return patterns?.find((pattern) => (0,_diff_index_js__WEBPACK_IMPORTED_MODULE_0__/* .classifyFile */ .TX)(filename, [pattern]) === 'skip')?.pattern;
 }
 /**
  * Group hunks by filename into PreparedFile entries.
@@ -15671,7 +15787,7 @@ function prepareFiles(context, options = {}) {
     const pr = context.pullRequest;
     const allHunks = [];
     const skippedFiles = [];
-    const scanPolicy = (0,scan_policy/* applyScanPolicy */.oj)(pr.files, {
+    const scanPolicy = (0,_scan_policy_js__WEBPACK_IMPORTED_MODULE_1__/* .applyScanPolicy */ .oj)(pr.files, {
         repoPath: context.repoPath,
         ignore: options.ignore,
         scan: options.scan,
@@ -15682,7 +15798,7 @@ function prepareFiles(context, options = {}) {
     });
     skippedFiles.push(...scanPolicy.skippedFiles);
     for (const file of scanPolicy.files) {
-        const mode = (0,src_diff/* classifyFile */.TX)(file.filename, chunking?.filePatterns);
+        const mode = (0,_diff_index_js__WEBPACK_IMPORTED_MODULE_0__/* .classifyFile */ .TX)(file.filename, chunking?.filePatterns);
         if (mode === 'skip') {
             skippedFiles.push({
                 filename: file.filename,
@@ -15701,7 +15817,7 @@ function prepareFiles(context, options = {}) {
             unchanged: 'modified',
         };
         const status = statusMap[file.status] ?? 'modified';
-        const diff = (0,src_diff/* parseFileDiff */.jx)(file.filename, file.patch, status);
+        const diff = (0,_diff_index_js__WEBPACK_IMPORTED_MODULE_0__/* .parseFileDiff */ .jx)(file.filename, file.patch, status);
         // Skip files with no meaningful diff content (e.g., empty files)
         if (diff.hunks.length === 0 || diff.hunks.every((h) => h.newCount === 0 && h.oldCount === 0)) {
             skippedFiles.push({ filename: file.filename, reason: 'builtin' });
@@ -15718,18 +15834,18 @@ function prepareFiles(context, options = {}) {
             continue;
         }
         // Split large hunks first (handles large files becoming single hunks)
-        const splitHunks = (0,src_diff/* splitLargeHunks */.PQ)(rawHunks, {
+        const splitHunks = (0,_diff_index_js__WEBPACK_IMPORTED_MODULE_0__/* .splitLargeHunks */ .PQ)(rawHunks, {
             maxChunkSize: chunking?.coalesce?.maxChunkSize,
         });
         // Then coalesce nearby small ones if enabled (default: enabled)
         const coalesceEnabled = chunking?.coalesce?.enabled !== false;
         const hunks = coalesceEnabled
-            ? (0,src_diff/* coalesceHunks */.x$)(splitHunks, {
+            ? (0,_diff_index_js__WEBPACK_IMPORTED_MODULE_0__/* .coalesceHunks */ .x$)(splitHunks, {
                 maxGapLines: chunking?.coalesce?.maxGapLines,
                 maxChunkSize: chunking?.coalesce?.maxChunkSize,
             })
             : splitHunks;
-        const hunksWithContext = (0,src_diff/* expandDiffContext */.ZC)(context.repoPath, { ...diff, hunks }, {
+        const hunksWithContext = (0,_diff_index_js__WEBPACK_IMPORTED_MODULE_0__/* .expandDiffContext */ .ZC)(context.repoPath, { ...diff, hunks }, {
             contextLines,
             contentSource: context.diffContextSource,
         });
@@ -15745,8 +15861,8 @@ function prepareFiles(context, options = {}) {
  * deterministic hunk gate when it has one.
  */
 function prepareSkillFiles(skill, context, options = {}) {
-    const prepared = prepareFiles(context, { ...options, alwaysScan: integrityGateAlwaysScans(skill) });
-    const gate = applyIntegrityGate(skill, context, prepared.files);
+    const prepared = prepareFiles(context, { ...options, alwaysScan: (0,_integrity_gate_js__WEBPACK_IMPORTED_MODULE_2__/* .integrityGateAlwaysScans */ .UD)(skill) });
+    const gate = (0,_integrity_gate_js__WEBPACK_IMPORTED_MODULE_2__/* .applyIntegrityGate */ .h0)(skill, context, prepared.files);
     if (!gate)
         return prepared;
     return {
@@ -16124,7 +16240,7 @@ __webpack_require__.a(module, async (__webpack_handle_async_dependencies__, __we
 /* harmony import */ var _prompt_js__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(12204);
 /* harmony import */ var _extract_js__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(29709);
 /* harmony import */ var _json_output_js__WEBPACK_IMPORTED_MODULE_7__ = __webpack_require__(81572);
-/* harmony import */ var _prepare_js__WEBPACK_IMPORTED_MODULE_8__ = __webpack_require__(6970);
+/* harmony import */ var _prepare_js__WEBPACK_IMPORTED_MODULE_8__ = __webpack_require__(15507);
 /* harmony import */ var _verify_js__WEBPACK_IMPORTED_MODULE_9__ = __webpack_require__(69835);
 /* harmony import */ var _post_process_js__WEBPACK_IMPORTED_MODULE_10__ = __webpack_require__(10048);
 /* harmony import */ var _analyze_js__WEBPACK_IMPORTED_MODULE_11__ = __webpack_require__(97712);

@@ -2993,6 +2993,7 @@ const SKILL_RESOURCE_DIRECTORIES = ['scripts', 'references', 'assets'];
 /* harmony export */   B: () => (/* binding */ SEVERITY_ORDER),
 /* harmony export */   HA: () => (/* binding */ ConfidenceThresholdSchema),
 /* harmony export */   IH: () => (/* binding */ VerifierRejectionsSchema),
+/* harmony export */   J: () => (/* binding */ GateScopeSchema),
 /* harmony export */   J1: () => (/* binding */ SkillErrorSchema),
 /* harmony export */   Lx: () => (/* binding */ compareFindingPriority),
 /* harmony export */   Ne: () => (/* binding */ HunkTraceSchema),
@@ -3308,7 +3309,10 @@ const HunkTraceSchema = zod__WEBPACK_IMPORTED_MODULE_0__/* .object */ .Ikc({
 const HunkGateSchema = zod__WEBPACK_IMPORTED_MODULE_0__/* .object */ .Ikc({
     /** Hunks dropped because no gate signal matched. */
     skippedHunks: zod__WEBPACK_IMPORTED_MODULE_0__/* .number */ .aig().int().nonnegative(),
-    /** True when only the hunks touched by the triggering push were eligible. */
+    /**
+     * True when only hunks changed since an earlier commit were eligible: the
+     * triggering push, or every push since the last run that covered the PR.
+     */
     pushScoped: zod__WEBPACK_IMPORTED_MODULE_0__/* .boolean */ .zMY(),
 });
 /** New-side line range of a hunk that incremental review carried forward unchanged. */
@@ -3326,6 +3330,17 @@ const IncrementalReviewSchema = zod__WEBPACK_IMPORTED_MODULE_0__/* .object */ .I
     /** Hunks skipped because the baseline already reviewed identical content. */
     carriedRanges: zod__WEBPACK_IMPORTED_MODULE_0__/* .array */ .YOg(CarriedHunkRangeSchema),
     /** Whether every hunk given to the skill was reviewed, so this run can serve as a baseline. */
+    complete: zod__WEBPACK_IMPORTED_MODULE_0__/* .boolean */ .zMY(),
+});
+/**
+ * Gate coverage for one run of a skill whose hunk gate is scoped to recent
+ * pushes. A complete run marks its check so the next push can scope the gate
+ * from this commit instead of from the push's `before`.
+ */
+const GateScopeSchema = zod__WEBPACK_IMPORTED_MODULE_0__/* .object */ .Ikc({
+    /** Check run external_id that marks this run as covering the PR up to its head. */
+    marker: zod__WEBPACK_IMPORTED_MODULE_0__/* .string */ .YjP(),
+    /** Whether the gate saw every hunk changed since the last covered run, or the whole PR. */
     complete: zod__WEBPACK_IMPORTED_MODULE_0__/* .boolean */ .zMY(),
 });
 const SkillReportSchema = zod__WEBPACK_IMPORTED_MODULE_0__/* .object */ .Ikc({
@@ -3363,6 +3378,8 @@ const SkillReportSchema = zod__WEBPACK_IMPORTED_MODULE_0__/* .object */ .Ikc({
     runtime: zod__WEBPACK_IMPORTED_MODULE_0__/* .string */ .YjP().optional(),
     /** Present when the action ran with incremental review enabled. */
     incremental: IncrementalReviewSchema.optional(),
+    /** Present when the skill's gate can scope to pushes since the last covered run. */
+    gateScope: GateScopeSchema.optional(),
 });
 // GitHub event types
 const GitHubEventTypeSchema = zod__WEBPACK_IMPORTED_MODULE_0__/* ["enum"] */ .k5n([
