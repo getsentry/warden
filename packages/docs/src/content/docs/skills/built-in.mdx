@@ -59,8 +59,13 @@ Hunks that match none are skipped. Text addressed to reviewers in the PR title
 or body sends every hunk through.
 
 Run it when a PR opens, when it leaves draft, and on each push. On a push it
-reviews only the hunks that push touched; when GitHub cannot compare the push,
-such as after a force-push, it reviews the whole PR diff.
+reviews only the hunks changed since the last run that covered the PR, so
+pushes whose runs were skipped, cancelled, or failed are not lost. With no such
+run, or when GitHub cannot compare the changes, such as after a force-push, it
+reviews the whole PR diff. This needs `defaults.incrementalApp` to know which
+checks to trust (see [Incremental Review](/github/workflow/#incremental-review)),
+but not `incremental`. Without it, a push reviews only the hunks that push
+touched.
 
 ```toml title="warden.toml"
 [[skills]]

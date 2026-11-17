@@ -247,7 +247,9 @@ export const DefaultsSchema = z.object({
   incremental: z.boolean().optional(),
   /**
    * Slug of the GitHub App that writes Warden's check runs. Only its checks
-   * count as incremental baselines. Required for incremental review.
+   * count as incremental baselines or as runs that covered the PR for a
+   * push-scoped gate. Required for incremental review; without it,
+   * `integrity-review` scopes each push to that push alone.
    */
   incrementalApp: z.string().min(1).optional(),
   /** Create/update GitHub Check runs (core + per-skill). Default: true */

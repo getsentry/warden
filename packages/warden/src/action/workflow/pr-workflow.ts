@@ -56,7 +56,7 @@ import {
   feedbackDelivered,
   hasOpenCarriedComment,
   isOnCarriedHunk,
-  type IncrementalBaselineSource,
+  type PullRequestCheckHistory,
   type SkillCarriedRange,
 } from '../incremental.js';
 import type { TriggerCheckReporter, TriggerResult } from '../triggers/executor.js';
@@ -633,14 +633,18 @@ function createTriggerCheckReporter(
   };
 }
 
-/** Build the incremental baseline source when any matched trigger has `incremental` on. */
-function incrementalSourceFor(
+/**
+ * Build the PR check history when any matched trigger can use it: triggers
+ * with `incremental` on, or with an `incrementalApp` to trust for gate
+ * scoping. Lookups are lazy, so skills that use neither make no API calls.
+ */
+function checkHistoryFor(
   octokit: Octokit,
   context: EventContext,
   matchedTriggers: readonly ResolvedTrigger[]
-): IncrementalBaselineSource | undefined {
+): PullRequestCheckHistory | undefined {
   if (context.eventType !== 'pull_request' || !context.pullRequest) return undefined;
-  if (!matchedTriggers.some((trigger) => trigger.incremental)) return undefined;
+  if (!matchedTriggers.some((trigger) => trigger.incremental || trigger.incrementalApp)) return undefined;
   return createIncrementalBaselineSource(octokit, {
     owner: context.repository.owner,
     repo: context.repository.name,
@@ -659,7 +663,7 @@ async function executeAllTriggers(
   options: {
     checks?: TriggerCheckReporter;
     memoryRecall?: ActionMemoryRecall;
-    incremental?: IncrementalBaselineSource;
+    checkHistory?: PullRequestCheckHistory;
     /** Fired after each trigger settles, with every result settled so far (completion order, not input order). */
     onTriggerComplete?: (completedSoFar: TriggerResult[]) => void;
   } = {}
@@ -691,7 +695,8 @@ async function executeAllTriggers(
         circuitBreaker,
         checks: options.checks,
         historicalEvidence: options.memoryRecall?.historicalEvidence,
-        incremental: options.incremental,
+        incremental: options.checkHistory,
+        gateScope: options.checkHistory,
       });
       completedSoFar.push(result);
       options.onTriggerComplete?.([...completedSoFar]);
@@ -734,10 +739,10 @@ function requestsChanges(result: TriggerResult): boolean {
 }
 
 /**
- * Mark a trigger's skill check as an incremental baseline once its findings
- * reached the PR. A run that requested changes is never a baseline: skipping
- * its hunks later would let the blocking review be dismissed without the
- * finding being checked again. A write failure leaves no baseline, so the
+ * Mark a trigger's skill check as an incremental baseline or gate scope once
+ * its findings reached the PR. A run that requested changes is never marked:
+ * skipping its hunks later would let the blocking review be dismissed without
+ * the finding being checked again. A write failure leaves no baseline, so the
  * next run is full.
  */
 async function recordIncrementalBaseline(
@@ -2138,7 +2143,7 @@ async function runAnalyzeMode(
     },
     () => executeAllTriggers(matchedTriggers, context, runnerConcurrency, inputs, {
       memoryRecall,
-      incremental: incrementalSourceFor(octokit, context, matchedTriggers),
+      checkHistory: checkHistoryFor(octokit, context, matchedTriggers),
       onTriggerComplete: (completedSoFar) => {
         const reportsSoFar = completedSoFar.flatMap((r) => (r.report ? [r.report] : []));
         writeFindingsOutputLive(reportsSoFar, context, [], {
@@ -2519,7 +2524,7 @@ export async function runPRWorkflow(
           () => executeAllTriggers(matchedTriggers, context, runnerConcurrency, inputs, {
             checks: createTriggerCheckReporter(octokit, context, postChecks),
             memoryRecall,
-            incremental: incrementalSourceFor(octokit, context, matchedTriggers),
+            checkHistory: checkHistoryFor(octokit, context, matchedTriggers),
             onTriggerComplete: (completedSoFar) => {
               const reportsSoFar = completedSoFar.flatMap((r) => (r.report ? [r.report] : []));
               writeFindingsOutputLive(reportsSoFar, context, [], {

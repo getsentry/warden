@@ -9,7 +9,14 @@
 import { Sentry } from '../../sentry.js';
 import { ActionFailedError } from '../workflow/base.js';
 import type { ResolvedTrigger } from '../../config/loader.js';
-import type { EventContext, SkillReport, SeverityThreshold, ConfidenceThreshold, IncrementalReview } from '../../types/index.js';
+import type {
+  EventContext,
+  SkillReport,
+  SeverityThreshold,
+  ConfidenceThreshold,
+  IncrementalReview,
+  PullRequestContext,
+} from '../../types/index.js';
 import type { RenderResult } from '../../output/types.js';
 import type { OutputMode } from '../../cli/output/tty.js';
 import { resolveSkillAsync } from '../../skills/loader.js';
@@ -29,10 +36,14 @@ import { isWardenOffline } from '../../sdk/offline.js';
 import { captureActionTriggerError } from '../error-reporting.js';
 import type { SkillDefinition } from '../../config/schema.js';
 import type { SkipHunks } from '../../sdk/types.js';
+import { hasPushScopedGate } from '../../sdk/integrity-gate.js';
 import {
+  gateCoveredEverything,
+  gateScopeMarker,
   incrementalExternalId,
   planIncrementalReview,
   reviewedEverything,
+  type GateScopeSource,
   type IncrementalBaselineSource,
   type IncrementalPolicy,
 } from '../incremental.js';
@@ -121,6 +132,11 @@ export interface TriggerExecutorDeps {
   historicalEvidence?: string;
   /** Baseline lookup for triggers with `incremental` on. Omit to review the full PR. */
   incremental?: IncrementalBaselineSource;
+  /**
+   * Last-covered lookup for skills with a push-scoped gate. Omit to scope the
+   * gate to the triggering push only.
+   */
+  gateScope?: GateScopeSource;
 }
 
 /**
@@ -203,24 +219,24 @@ export async function executeTrigger(
       const failCheck = trigger.failCheck ?? deps.globalFailCheck;
       const maxFindings = trigger.maxFindings ?? deps.globalMaxFindings;
       const skillRoot = trigger.useBuiltinSkill ? undefined : (trigger.skillRoot ?? context.repoPath);
-      const resolveSkill = () => resolveSkillAsync(trigger.skill, skillRoot, {
+      // Resolved at most once: incremental review and gate scoping both need the
+      // skill before the run, and a resolution error must surface from the run.
+      let resolvedSkill: Promise<SkillDefinition> | undefined;
+      const resolveSkill = () => (resolvedSkill ??= resolveSkillAsync(trigger.skill, skillRoot, {
         remote: trigger.remote,
         offline: isWardenOffline(),
-      });
+      }));
       const triggerContext = filterContextByPaths(context, trigger.filters);
+      const policy: IncrementalPolicy = { failOn, reportOn, minConfidence, failCheck, requestChanges, maxFindings };
 
       try {
         assertValidPiModelSelectors([trigger]);
 
         const incremental = deps.incremental && trigger.incremental
-          ? await prepareIncrementalReview(deps.incremental, trigger, triggerContext, resolveSkill, {
-              failOn,
-              reportOn,
-              minConfidence,
-              failCheck,
-              requestChanges,
-              maxFindings,
-            })
+          ? await prepareIncrementalReview(deps.incremental, trigger, triggerContext, resolveSkill, policy)
+          : undefined;
+        const gateScope = deps.gateScope
+          ? await prepareGateScope(deps.gateScope, trigger, triggerContext, resolveSkill, policy)
           : undefined;
 
         const taskOptions: SkillTaskOptions = {
@@ -228,8 +244,8 @@ export async function executeTrigger(
           displayName: trigger.skill,
           triggerName: trigger.name,
           failOn,
-          resolveSkill: incremental ? () => Promise.resolve(incremental.skill) : resolveSkill,
-          context: triggerContext,
+          resolveSkill,
+          context: gateScope?.context ?? triggerContext,
           runnerOptions: {
             apiKey: anthropicApiKey,
             model: trigger.model,
@@ -284,11 +300,18 @@ export async function executeTrigger(
           );
         }
 
+        // A shared abort (circuit breaker or sibling failure) drops queued hunks
+        // without recording them as failed, so an aborted run is never a baseline.
+        const aborted = deps.abortController?.signal.aborted ?? false;
         if (incremental) {
-          // A shared abort (circuit breaker or sibling failure) drops queued hunks
-          // without recording them as failed, so an aborted run is never a baseline.
-          const aborted = deps.abortController?.signal.aborted ?? false;
           report.incremental = { ...incremental.review, complete: !aborted && reviewedEverything(report) };
+        }
+        if (gateScope) {
+          report.gateScope = { marker: gateScope.marker, complete: !aborted && gateCoveredEverything(report) };
+        } else if (!trigger.incrementalApp && report.hunkGate?.pushScoped) {
+          console.error(
+            `::notice::${trigger.name} only checked hunks from this push. Set defaults.incrementalApp so it also covers pushes whose runs were skipped, cancelled, or failed`
+          );
         }
 
         console.log(`Found ${report.findings.length} findings`);
@@ -372,9 +395,64 @@ export async function executeTrigger(
 }
 
 interface PreparedIncrementalReview {
-  skill: SkillDefinition;
   skipHunks: SkipHunks;
   review: Omit<IncrementalReview, 'complete'>;
+}
+
+interface PreparedGateScope {
+  marker: string;
+  /** Trigger context with `pullRequest.push` set to the changes since the last covered run. */
+  context: EventContext;
+}
+
+function withPush(context: EventContext, push: PullRequestContext['push']): EventContext {
+  return context.pullRequest ? { ...context, pullRequest: { ...context.pullRequest, push } } : context;
+}
+
+/**
+ * Scope a push-scoped gate to every change since the last run that covered the
+ * PR, so pushes whose runs were skipped, cancelled, or failed still reach the
+ * gate. Only checks from `incrementalApp` count. With no trusted app, no
+ * matching gate, or an unresolvable skill, returns undefined and the gate
+ * keeps the triggering push. With no covered run, or changes that cannot be
+ * compared, the gate sees the full PR.
+ */
+async function prepareGateScope(
+  source: GateScopeSource,
+  trigger: ResolvedTrigger,
+  context: EventContext,
+  resolveSkill: () => Promise<SkillDefinition>,
+  policy: IncrementalPolicy
+): Promise<PreparedGateScope | undefined> {
+  const pr = context.pullRequest;
+  if (!pr || !trigger.incrementalApp) return undefined;
+
+  let skill: SkillDefinition;
+  try {
+    skill = await resolveSkill();
+  } catch {
+    return undefined;
+  }
+  if (!hasPushScopedGate(skill)) return undefined;
+
+  const marker = gateScopeMarker(trigger, skill, policy, pr.baseBranch);
+  // Other actions already gate the full PR.
+  if (context.action !== 'synchronize') return { marker, context };
+
+  const coveredSha = await source.lastCoveredSha(marker, trigger.incrementalApp);
+  if (!coveredSha) {
+    console.log(`${trigger.name}: no earlier run covered this PR, gating the full PR`);
+    return { marker, context: withPush(context, undefined) };
+  }
+  if (coveredSha === pr.push?.beforeSha) return { marker, context };
+
+  const push = await source.changesSince(coveredSha);
+  console.log(
+    push
+      ? `${trigger.name}: gating changes since ${coveredSha.slice(0, 7)}, the last run that covered this PR`
+      : `${trigger.name}: could not compare against ${coveredSha.slice(0, 7)}, gating the full PR`
+  );
+  return { marker, context: withPush(context, push) };
 }
 
 /**
@@ -408,7 +486,7 @@ async function prepareIncrementalReview(
   const baseline = await source.baselineFor(externalId, trigger.incrementalApp);
   if (!baseline) {
     console.log('Incremental review: no earlier baseline for this skill config, reviewing the full PR');
-    return { skill, skipHunks: new Map(), review: { externalId, carriedRanges: [] } };
+    return { skipHunks: new Map(), review: { externalId, carriedRanges: [] } };
   }
 
   const plan = planIncrementalReview(context.pullRequest.files, baseline.reviewed);
@@ -416,7 +494,6 @@ async function prepareIncrementalReview(
     `Incremental review: ${plan.carriedRanges.length} hunk(s) unchanged since ${baseline.sha.slice(0, 7)}`
   );
   return {
-    skill,
     skipHunks: plan.skipHunks,
     review: { externalId, baselineSha: baseline.sha, carriedRanges: plan.carriedRanges },
   };

@@ -10,7 +10,9 @@ import type { PreparedFile } from './types.js';
  * The skill reads every hunk with no path filter and expects findings on a
  * low single-digit percent of PRs, so most model calls find nothing. This
  * gate sends a hunk to the model only when a cheap signal matches, and on
- * `synchronize` only when the hunk overlaps the push that triggered the run.
+ * `synchronize` only when the hunk overlaps `pullRequest.push`: the push that
+ * triggered the run, or every push since the last run that covered the PR
+ * when the action can find one (see `action/incremental.ts`).
  * Signals favor recall: a false match costs one model call, a miss is silent.
  */
 
@@ -247,6 +249,11 @@ function isBuiltinIntegrityReview(skill: SkillDefinition): boolean {
     basename(skill.rootDir) === 'integrity-review' &&
     basename(dirname(skill.rootDir)) === 'builtin-skills'
   );
+}
+
+/** Whether this skill's gate limits `synchronize` runs to recently pushed hunks. */
+export function hasPushScopedGate(skill: SkillDefinition): boolean {
+  return isBuiltinIntegrityReview(skill);
 }
 
 /**

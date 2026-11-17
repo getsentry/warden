@@ -348,7 +348,10 @@ export type HunkTrace = z.infer<typeof HunkTraceSchema>;
 export const HunkGateSchema = z.object({
   /** Hunks dropped because no gate signal matched. */
   skippedHunks: z.number().int().nonnegative(),
-  /** True when only the hunks touched by the triggering push were eligible. */
+  /**
+   * True when only hunks changed since an earlier commit were eligible: the
+   * triggering push, or every push since the last run that covered the PR.
+   */
   pushScoped: z.boolean(),
 });
 
@@ -372,6 +375,19 @@ export const IncrementalReviewSchema = z.object({
   complete: z.boolean(),
 });
 export type IncrementalReview = z.infer<typeof IncrementalReviewSchema>;
+
+/**
+ * Gate coverage for one run of a skill whose hunk gate is scoped to recent
+ * pushes. A complete run marks its check so the next push can scope the gate
+ * from this commit instead of from the push's `before`.
+ */
+export const GateScopeSchema = z.object({
+  /** Check run external_id that marks this run as covering the PR up to its head. */
+  marker: z.string(),
+  /** Whether the gate saw every hunk changed since the last covered run, or the whole PR. */
+  complete: z.boolean(),
+});
+export type GateScope = z.infer<typeof GateScopeSchema>;
 
 export const SkillReportSchema = z.object({
   skill: z.string(),
@@ -408,6 +424,8 @@ export const SkillReportSchema = z.object({
   runtime: z.string().optional(),
   /** Present when the action ran with incremental review enabled. */
   incremental: IncrementalReviewSchema.optional(),
+  /** Present when the skill's gate can scope to pushes since the last covered run. */
+  gateScope: GateScopeSchema.optional(),
 });
 export type SkillReport = Omit<z.infer<typeof SkillReportSchema>, 'findings'> & { findings: Finding[] };
 

@@ -1411,6 +1411,33 @@ describe('runPRWorkflow', () => {
       );
     });
 
+    it('report mode records the gate scope of a replayed push-scoped run', async () => {
+      // The gate skipped hunks, so this run is no incremental baseline, but the next push can start from it.
+      const report = createSkillReport({
+        hunkGate: { skippedHunks: 4, pushScoped: true },
+        gateScope: { marker: 'warden-scope:v1:abc', complete: true },
+      });
+      const findingsFile = writeFindingsArtifact([report], [
+        { triggerName: 'test-skill', skillName: 'test-skill', report },
+      ]);
+
+      try {
+        await runPRWorkflow(
+          mockOctokit,
+          createDefaultInputs({ mode: 'report', findingsFile }),
+          'pull_request',
+          EVENT_PAYLOAD_PATH,
+          FIXTURES_DIR
+        );
+      } finally {
+        rmSync(dirname(findingsFile), { recursive: true, force: true });
+      }
+
+      expect(mockOctokit.checks.update).toHaveBeenCalledWith(
+        expect.objectContaining({ external_id: 'warden-scope:v1:abc' })
+      );
+    });
+
     it('report mode records no baseline when review posting fails', async () => {
       const report = createSkillReport({
         findings: [createFinding()],
