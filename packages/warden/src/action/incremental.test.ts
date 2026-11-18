@@ -8,6 +8,8 @@ import {
   collectCarriedRanges,
   createIncrementalBaselineSource,
   feedbackDelivered,
+  gateCoveredEverything,
+  gateScopeMarker,
   hasOpenCarriedComment,
   hunkFingerprint,
   incrementalExternalId,
@@ -145,6 +147,32 @@ describe('incrementalExternalId', () => {
   });
 });
 
+describe('gateScopeMarker', () => {
+  const policy = { failOn: 'high', reportOn: 'medium' };
+
+  it('shares the fingerprint with the incremental id so a baseline also counts as covered', () => {
+    const marker = gateScopeMarker(trigger(), skill, policy, 'main');
+    expect(marker).toMatch(/^warden-scope:v1:[0-9a-f]{32}$/);
+    expect(marker.slice('warden-scope:v1:'.length)).toBe(
+      incrementalExternalId(trigger(), skill, policy, 'main').slice('warden-incremental:v1:'.length)
+    );
+  });
+});
+
+describe('gateCoveredEverything', () => {
+  it('accepts a run whose gate skipped hunks', () => {
+    // Gated-out hunks were seen by the gate; only hunks it passed must reach the model.
+    expect(gateCoveredEverything(report({ hunkGate: { skippedHunks: 9, pushScoped: true } }))).toBe(true);
+  });
+
+  it('rejects a run that failed hunks or hit scan limits', () => {
+    expect(gateCoveredEverything(report({ failedHunks: 1 }))).toBe(false);
+    expect(
+      gateCoveredEverything(report({ skippedFiles: [{ filename: 'big.ts', reason: 'limit:changed_lines' }] }))
+    ).toBe(false);
+  });
+});
+
 describe('reviewedEverything', () => {
   it('accepts a clean run', () => {
     expect(reviewedEverything(report())).toBe(true);
@@ -187,6 +215,18 @@ describe('reviewedEverything', () => {
 describe('baselineExternalId', () => {
   it('returns the id for a complete run', () => {
     expect(baselineExternalId(report())).toBe('warden-incremental:v1:abc');
+  });
+
+  it('falls back to the gate scope marker when the run is no incremental baseline', () => {
+    const gateScope = { marker: 'warden-scope:v1:abc', complete: true };
+    expect(baselineExternalId(report({ incremental: undefined, gateScope }))).toBe('warden-scope:v1:abc');
+    expect(
+      baselineExternalId(report({ incremental: { externalId: 'x', carriedRanges: [], complete: false }, gateScope }))
+    ).toBe('warden-scope:v1:abc');
+    expect(baselineExternalId(report({ gateScope }))).toBe('warden-incremental:v1:abc');
+    expect(
+      baselineExternalId(report({ incremental: undefined, gateScope: { ...gateScope, complete: false } }))
+    ).toBeUndefined();
   });
 
   it('withholds the id when incremental review is off or the run was incomplete', () => {
@@ -402,6 +442,52 @@ describe('createIncrementalBaselineSource', () => {
 
     expect(await source.baselineFor(externalId, trustedApp)).toBeUndefined();
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('reviewing the full PR'));
+  });
+
+  describe('lastCoveredSha', () => {
+    const marker = 'warden-scope:v1:match';
+
+    it('uses the newest commit marked with the scope marker or the matching baseline id', async () => {
+      const { octokit } = mockOctokit({
+        c3: [checkRun({ external_id: 'warden-scope:v1:other' })],
+        c2: [checkRun({ external_id: 'warden-incremental:v1:match' })],
+        c1: [checkRun({ external_id: marker })],
+      });
+      const source = createIncrementalBaselineSource(octokit as never, { ...options, warn: vi.fn() });
+
+      expect(await source.lastCoveredSha(marker, trustedApp)).toBe('c2');
+    });
+
+    it('ignores skipped checks and look-alike checks from another app', async () => {
+      const { octokit } = mockOctokit({
+        c3: [checkRun({ external_id: null, conclusion: 'neutral' })],
+        c2: [checkRun({ external_id: marker, app: { slug: 'some-other-app' } })],
+      });
+      const source = createIncrementalBaselineSource(octokit as never, { ...options, warn: vi.fn() });
+
+      expect(await source.lastCoveredSha(marker, trustedApp)).toBeUndefined();
+    });
+
+    it('never treats a scope marker as an incremental baseline', async () => {
+      // A scope marker can come from a run whose gate skipped hunks the model never read.
+      const { octokit } = mockOctokit({ c3: [checkRun({ external_id: marker })] });
+      const source = createIncrementalBaselineSource(octokit as never, { ...options, warn: vi.fn() });
+
+      expect(await source.baselineFor('warden-incremental:v1:match', trustedApp)).toBeUndefined();
+    });
+
+    it('compares the covered commit against the PR head', async () => {
+      const { octokit, compareCommitsWithBasehead } = mockOctokit({});
+      compareCommitsWithBasehead.mockResolvedValueOnce({
+        data: { status: 'ahead', files: [{ filename: 'src/auth.ts', status: 'modified', additions: 2, deletions: 0, patch: AUTH_PATCH }] },
+      } as never);
+      const source = createIncrementalBaselineSource(octokit as never, { ...options, warn: vi.fn() });
+
+      const changes = await source.changesSince('c1');
+
+      expect(compareCommitsWithBasehead).toHaveBeenCalledWith(expect.objectContaining({ basehead: 'c1...head' }));
+      expect(changes).toEqual(expect.objectContaining({ beforeSha: 'c1', files: [expect.objectContaining({ filename: 'src/auth.ts' })] }));
+    });
   });
 
   it('fails open when the baseline diff cannot be loaded', async () => {

@@ -236,6 +236,14 @@ re-checked against changes elsewhere in the pull request.
 Baselines come from per-skill check runs, so incremental review has no effect
 with `post-checks: false`. The CLI ignores `incremental`.
 
+`integrity-review` uses the same checks even with `incremental` off. Its gate
+only looks at hunks changed since the last run that covered the pull request,
+so it needs `incrementalApp` to know which checks to trust. A run counts once
+its check completes without failing and its findings reach the pull request,
+even when the gate skipped most hunks. Neutral checks for skipped triggers do
+not count. Without a covered run among the last 10 commits, the gate sees the
+full pull request. Without `incrementalApp`, it sees only the triggering push.
+
 ## Required Status Checks
 
 If Warden is a required status check, require the core `warden` check or a

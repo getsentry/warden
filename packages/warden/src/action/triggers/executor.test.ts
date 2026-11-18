@@ -284,6 +284,122 @@ describe('executeTrigger', () => {
     });
   });
 
+  describe('gate scope', () => {
+    const integritySkill = {
+      name: 'integrity-review',
+      description: 'Integrity review',
+      prompt: 'Find sabotage.',
+      rootDir: '/warden/builtin-skills/integrity-review',
+    };
+    const pushFiles = [{ filename: 'package.json', status: 'modified' as const, additions: 1, deletions: 0 }];
+    const syncContext: EventContext = {
+      ...mockContext,
+      action: 'synchronize',
+      pullRequest: { ...mockContext.pullRequest!, push: { beforeSha: 'before123', files: pushFiles } },
+    };
+    const integrityTrigger: ResolvedTrigger = {
+      ...mockTrigger,
+      name: 'integrity-review',
+      skill: 'integrity-review',
+      incrementalApp: 'sentry-warden',
+    };
+    const gatedReport = (overrides: Partial<SkillReport> = {}): SkillReport => ({
+      ...createReport(),
+      skill: 'integrity-review',
+      hunkGate: { skippedHunks: 7, pushScoped: true },
+      ...overrides,
+    });
+    const scopeSource = (coveredSha: string | undefined) => ({
+      lastCoveredSha: vi.fn(async (_marker: string, _trustedApp: string) => coveredSha),
+      changesSince: vi.fn(async (sha: string) => ({ beforeSha: sha, files: pushFiles })),
+    });
+    const runContext = () => vi.mocked(runSkillTask).mock.calls[0]?.[0].context;
+
+    beforeEach(() => {
+      vi.mocked(resolveSkillAsync).mockResolvedValue(integritySkill);
+      vi.mocked(runSkillTask).mockResolvedValue({ name: 'integrity-review', report: gatedReport() });
+      vi.mocked(createSkillCheck).mockResolvedValue({ checkRunId: 123, url: 'https://github.com/check/123' });
+      vi.mocked(updateSkillCheck).mockResolvedValue(undefined);
+    });
+
+    it('gates every change since the last covered run and records a marker despite gated-out hunks', async () => {
+      const source = scopeSource('covered123');
+
+      const result = await executeTrigger(integrityTrigger, { ...mockDeps, context: syncContext, gateScope: source });
+
+      expect(source.lastCoveredSha).toHaveBeenCalledWith(expect.stringMatching(/^warden-scope:v1:/), 'sentry-warden');
+      expect(source.changesSince).toHaveBeenCalledWith('covered123');
+      expect(runContext()?.pullRequest?.push?.beforeSha).toBe('covered123');
+      expect(result.report?.gateScope).toEqual({
+        marker: source.lastCoveredSha.mock.calls[0]?.[0],
+        complete: true,
+      });
+    });
+
+    it('gates the full PR when no earlier run covered it, such as after draft-only or cancelled runs', async () => {
+      const source = scopeSource(undefined);
+
+      await executeTrigger(integrityTrigger, { ...mockDeps, context: syncContext, gateScope: source });
+
+      expect(source.changesSince).not.toHaveBeenCalled();
+      expect(runContext()?.pullRequest?.push).toBeUndefined();
+    });
+
+    it('keeps the triggering push when the last covered run is its before commit', async () => {
+      const source = scopeSource('before123');
+
+      await executeTrigger(integrityTrigger, { ...mockDeps, context: syncContext, gateScope: source });
+
+      expect(source.changesSince).not.toHaveBeenCalled();
+      expect(runContext()?.pullRequest?.push?.beforeSha).toBe('before123');
+    });
+
+    it('records no marker when hunks failed', async () => {
+      vi.mocked(runSkillTask).mockResolvedValue({ name: 'integrity-review', report: gatedReport({ failedHunks: 1 }) });
+
+      const result = await executeTrigger(integrityTrigger, {
+        ...mockDeps,
+        context: syncContext,
+        gateScope: scopeSource('covered123'),
+      });
+
+      expect(result.report?.gateScope?.complete).toBe(false);
+    });
+
+    it('keeps the triggering push and logs a notice when incrementalApp is not set', async () => {
+      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      const source = scopeSource('covered123');
+
+      const result = await executeTrigger({ ...integrityTrigger, incrementalApp: undefined }, {
+        ...mockDeps,
+        context: syncContext,
+        gateScope: source,
+      });
+
+      expect(source.lastCoveredSha).not.toHaveBeenCalled();
+      expect(runContext()?.pullRequest?.push?.beforeSha).toBe('before123');
+      expect(result.report?.gateScope).toBeUndefined();
+      expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('defaults.incrementalApp'));
+      consoleErrorSpy.mockRestore();
+    });
+
+    it('leaves skills without a push-scoped gate alone', async () => {
+      vi.mocked(resolveSkillAsync).mockResolvedValue({ name: 'test-skill', description: 'Test', prompt: 'Review' });
+      vi.mocked(runSkillTask).mockResolvedValue({ name: 'test-trigger', report: createReport() });
+      const source = scopeSource('covered123');
+
+      const result = await executeTrigger({ ...mockTrigger, incrementalApp: 'sentry-warden' }, {
+        ...mockDeps,
+        context: syncContext,
+        gateScope: source,
+      });
+
+      expect(source.lastCoveredSha).not.toHaveBeenCalled();
+      expect(runContext()).toBe(syncContext);
+      expect(result.report?.gateScope).toBeUndefined();
+    });
+  });
+
   it('resolves local skills from trigger.skillRoot when provided', async () => {
     const mockReport = createReport();
 

@@ -814,6 +814,22 @@
           ],
           "additionalProperties": false
         },
+        "gateScope": {
+          "type": "object",
+          "properties": {
+            "marker": {
+              "type": "string"
+            },
+            "complete": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "marker",
+            "complete"
+          ],
+          "additionalProperties": false
+        },
         "run": {
           "$ref": "#/$defs/RunMetadata"
         },

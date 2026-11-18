@@ -12,6 +12,12 @@
  *
  * Every lookup fails open: if the baseline cannot be found or read, the skill
  * reviews the full PR as it would without incremental review.
+ *
+ * The same check history scopes push-scoped skill gates (the built-in
+ * `integrity-review`). A run whose gate saw every hunk changed since the last
+ * covered commit records a scope marker, so the next push gates everything
+ * since that commit rather than only its own push. Runs that were skipped,
+ * cancelled, or failed leave no marker, so their pushes are not lost.
  */
 
 import { createHash } from 'node:crypto';
@@ -21,11 +27,13 @@ import type { SkillDefinition } from '../config/schema.js';
 import { parsePatch } from '../diff/index.js';
 import type { ExistingComment } from '../output/dedup.js';
 import type { FindingObservation, SkippedReason } from '../reporting/outcomes.js';
-import type { CarriedHunkRange, FileChange, SkillReport } from '../types/index.js';
+import type { CarriedHunkRange, FileChange, PullRequestContext, SkillReport } from '../types/index.js';
 import type { SkipHunks } from '../sdk/types.js';
+import { fetchPushChanges } from '../event/context.js';
 import { getVersion } from '../utils/version.js';
 
 const EXTERNAL_ID_PREFIX = 'warden-incremental:v1:';
+const SCOPE_ID_PREFIX = 'warden-scope:v1:';
 
 /** Earlier PR commits searched for a baseline check, newest first. */
 const MAX_BASELINE_COMMITS = 10;
@@ -63,6 +71,21 @@ export interface IncrementalBaselineSource {
    */
   baselineFor(externalId: string, trustedApp: string): Promise<IncrementalBaseline | undefined>;
 }
+
+/** Looks up the last commit a push-scoped gate covered on the current pull request. */
+export interface GateScopeSource {
+  /**
+   * Newest earlier PR commit whose check carries this scope marker, or the
+   * incremental baseline id for the same skill config, written by
+   * `trustedApp`. Undefined when no such run exists or checks cannot be read.
+   */
+  lastCoveredSha(marker: string, trustedApp: string): Promise<string | undefined>;
+  /** Files changed from `sha` to the PR head, or undefined when they cannot be compared. */
+  changesSince(sha: string): Promise<PullRequestContext['push']>;
+}
+
+/** Check history for one pull request, shared by incremental review and gate scoping. */
+export type PullRequestCheckHistory = IncrementalBaselineSource & GateScopeSource;
 
 function sha256(value: string): string {
   return createHash('sha256').update(value).digest('hex');
@@ -128,14 +151,14 @@ export function planIncrementalReview(
 }
 
 /**
- * Build the check run external_id for a skill run.
+ * Fingerprint a skill run's config.
  * Any change to the skill prompt, Warden version, or settings that affect
- * what gets analyzed or reported yields a new id, which forces a full review.
- * The base branch is included because baselines are rebuilt against the
- * current base: after a retarget, an old baseline would describe a diff that
- * was never reviewed.
+ * what gets analyzed or reported yields a new fingerprint, which forces a
+ * full review. The base branch is included because baselines are rebuilt
+ * against the current base: after a retarget, an old baseline would describe
+ * a diff that was never reviewed.
  */
-export function incrementalExternalId(
+function runFingerprint(
   trigger: ResolvedTrigger,
   skill: Pick<SkillDefinition, 'name' | 'prompt'>,
   policy: IncrementalPolicy,
@@ -167,7 +190,31 @@ export function incrementalExternalId(
     requestChanges: policy.requestChanges ?? null,
     maxFindings: policy.maxFindings ?? null,
   });
-  return `${EXTERNAL_ID_PREFIX}${sha256(payload).slice(0, 32)}`;
+  return sha256(payload).slice(0, 32);
+}
+
+/** Build the check run external_id that marks a run as an incremental baseline. */
+export function incrementalExternalId(
+  trigger: ResolvedTrigger,
+  skill: Pick<SkillDefinition, 'name' | 'prompt'>,
+  policy: IncrementalPolicy,
+  baseBranch: string
+): string {
+  return `${EXTERNAL_ID_PREFIX}${runFingerprint(trigger, skill, policy, baseBranch)}`;
+}
+
+/**
+ * Build the check run external_id that marks a run as covering the PR for a
+ * push-scoped gate. It shares the fingerprint with the incremental id, so a
+ * complete incremental baseline also counts as covered.
+ */
+export function gateScopeMarker(
+  trigger: ResolvedTrigger,
+  skill: Pick<SkillDefinition, 'name' | 'prompt'>,
+  policy: IncrementalPolicy,
+  baseBranch: string
+): string {
+  return `${SCOPE_ID_PREFIX}${runFingerprint(trigger, skill, policy, baseBranch)}`;
 }
 
 /**
@@ -178,27 +225,37 @@ export function incrementalExternalId(
 const PATH_ONLY_SKIPS: ReadonlySet<string> = new Set(['ignored:builtin', 'ignored:user']);
 
 /**
- * Whether a run reviewed every hunk it was given. Failed hunks and files
- * dropped by scan limits were never reviewed, so the run cannot be a baseline.
- * Content-based skips such as generated files also disqualify it: the baseline
- * diff includes those hunks, and the file can stop looking generated later.
- * Hunks a skill gate skipped were never read either, and the gate can pass
- * them later when PR-wide context (title, body, manifests) changes.
+ * Whether a run analyzed every hunk its gate passed. Failed hunks and files
+ * dropped by scan limits were never reviewed. Content-based skips such as
+ * generated files also disqualify it: the file can stop looking generated
+ * later, and nothing would bring its earlier hunks back.
  */
-export function reviewedEverything(report: SkillReport): boolean {
+export function gateCoveredEverything(report: SkillReport): boolean {
   if (report.error) return false;
   if ((report.failedHunks ?? 0) > 0 || (report.failedExtractions ?? 0) > 0) return false;
-  if ((report.hunkGate?.skippedHunks ?? 0) > 0) return false;
   return !report.skippedFiles?.some((file) => !PATH_ONLY_SKIPS.has(file.reason));
 }
 
 /**
+ * Whether a run reviewed every hunk it was given, so it can be a baseline.
+ * On top of `gateCoveredEverything`, hunks a skill gate skipped disqualify it:
+ * they were never read, and the gate can pass them later when PR-wide context
+ * (title, body, manifests) changes.
+ */
+export function reviewedEverything(report: SkillReport): boolean {
+  return gateCoveredEverything(report) && (report.hunkGate?.skippedHunks ?? 0) === 0;
+}
+
+/**
  * Return the external_id to record on a skill check, or undefined when the
- * run must not become a baseline. Report mode only sees the replayed report,
- * so completeness is decided in analyze mode and stored on `incremental`.
+ * run must not be reused. A complete incremental baseline wins, since it also
+ * counts as gate coverage; otherwise a complete gate scope is recorded.
+ * Report mode only sees the replayed report, so completeness is decided in
+ * analyze mode and stored on `incremental` and `gateScope`.
  */
 export function baselineExternalId(report: SkillReport): string | undefined {
-  return report.incremental?.complete ? report.incremental.externalId : undefined;
+  if (report.incremental?.complete) return report.incremental.externalId;
+  return report.gateScope?.complete ? report.gateScope.marker : undefined;
 }
 
 /** Skip reasons that leave a finding on the check only, never on the PR. */
@@ -274,6 +331,12 @@ function baselineKey(externalId: string, app: string): string {
   return `${app}\n${externalId}`;
 }
 
+/** A marked check on an earlier PR commit; lower `rank` is newer. */
+interface MarkedCommit {
+  sha: string;
+  rank: number;
+}
+
 interface BaselineSourceOptions {
   owner: string;
   repo: string;
@@ -284,20 +347,20 @@ interface BaselineSourceOptions {
 }
 
 /**
- * Create a baseline source for one pull request. Commit and check lookups run
- * once per action run and are shared across skills.
+ * Create a check history source for one pull request. Commit and check
+ * lookups run once per action run and are shared across skills.
  * Requires `pull-requests: read`, `checks: read`, and `contents: read`.
  */
 export function createIncrementalBaselineSource(
   octokit: Octokit,
   options: BaselineSourceOptions
-): IncrementalBaselineSource {
+): PullRequestCheckHistory {
   const warn = options.warn ?? ((message: string) => console.warn(message));
-  let baselineShas: Promise<Map<string, string>> | undefined;
+  let baselineShas: Promise<Map<string, MarkedCommit>> | undefined;
   const indexes = new Map<string, Promise<ReviewedHunkIndex | undefined>>();
 
-  const findBaselineShas = async (): Promise<Map<string, string>> => {
-    const found = new Map<string, string>();
+  const findBaselineShas = async (): Promise<Map<string, MarkedCommit>> => {
+    const found = new Map<string, MarkedCommit>();
     try {
       const commits = await octokit.paginate(octokit.pulls.listCommits, {
         owner: options.owner,
@@ -311,7 +374,7 @@ export function createIncrementalBaselineSource(
         .reverse()
         .slice(0, MAX_BASELINE_COMMITS);
 
-      for (const sha of candidates) {
+      for (const [rank, sha] of candidates.entries()) {
         const { data } = await octokit.checks.listForRef({
           owner: options.owner,
           repo: options.repo,
@@ -322,12 +385,12 @@ export function createIncrementalBaselineSource(
         for (const check of data.check_runs) {
           const id = check.external_id;
           const app = check.app?.slug;
-          if (!id?.startsWith(EXTERNAL_ID_PREFIX) || !app) continue;
+          if (!(id?.startsWith(EXTERNAL_ID_PREFIX) || id?.startsWith(SCOPE_ID_PREFIX)) || !app) continue;
           const key = baselineKey(id, app);
           if (found.has(key)) continue;
           if (!check.name.startsWith('warden: ') || check.status !== 'completed') continue;
           if (check.conclusion !== 'success' && check.conclusion !== 'neutral') continue;
-          found.set(key, sha);
+          found.set(key, { sha, rank });
         }
       }
     } catch (error) {
@@ -356,7 +419,7 @@ export function createIncrementalBaselineSource(
   return {
     async baselineFor(externalId, trustedApp) {
       baselineShas ??= findBaselineShas();
-      const sha = (await baselineShas).get(baselineKey(externalId, trustedApp));
+      const sha = (await baselineShas).get(baselineKey(externalId, trustedApp))?.sha;
       if (!sha) return undefined;
 
       let index = indexes.get(sha);
@@ -366,6 +429,22 @@ export function createIncrementalBaselineSource(
       }
       const reviewed = await index;
       return reviewed ? { sha, reviewed } : undefined;
+    },
+
+    async lastCoveredSha(marker, trustedApp) {
+      if (!marker.startsWith(SCOPE_ID_PREFIX)) return undefined;
+      baselineShas ??= findBaselineShas();
+      const found = await baselineShas;
+      const fingerprint = marker.slice(SCOPE_ID_PREFIX.length);
+      const matches = [SCOPE_ID_PREFIX, EXTERNAL_ID_PREFIX]
+        .map((prefix) => found.get(baselineKey(`${prefix}${fingerprint}`, trustedApp)))
+        .filter((match): match is MarkedCommit => match !== undefined);
+      matches.sort((a, b) => a.rank - b.rank);
+      return matches[0]?.sha;
+    },
+
+    changesSince(sha) {
+      return fetchPushChanges(octokit, options.owner, options.repo, sha, options.headSha);
     },
   };
 }
