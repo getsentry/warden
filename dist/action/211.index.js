@@ -18588,7 +18588,7 @@ __webpack_require__.d(__webpack_exports__, {
   O: () => (/* reexport */ redactRunProjection)
 });
 
-// UNUSED EXPORTS: ApiErrorSchema, CodeFindingRecordSchema, CodeRunEnvelopeSchema, CostAggregateResponseSchema, CostBreakdownsResponseSchema, CostGroupSchema, DashboardSummaryResponseSchema, FindingCountsSchema, FindingDetailResponseSchema, FindingFeedItemSchema, FindingListResponseSchema, FindingLocationSchema, FindingObservationSchema, FindingOutcomeSchema, FindingProvenanceSchema, FindingRecordSchema, FindingShortIdSchema, FindingsRunEnvelopeSchema, HistoryDimensionsResponseSchema, IngestRunResponseSchema, MemoryDetailResponseSchema, MemoryKindSchema, MemoryLifecycleSchema, MemoryListResponseSchema, MemoryMutationResponseSchema, MemoryRecallRequestSchema, MemoryRecallResponseSchema, MemoryRecordSchema, MetricsRunEnvelopeSchema, OutcomeSummaryResponseSchema, RecalledMemoryReferenceSchema, RepositoryIdentitySchema, RepositoryListResponseSchema, RepositorySummarySchema, RunDetailResponseSchema, RunEnvelopeV1Schema, RunListResponseSchema, RunProjectionSchema, RunSummarySchema, SERVICE_PROTOCOL_VERSION, ServiceClientError, SkillExecutionSchema, SkillListResponseSchema, SkillSummarySchema, SourceEvidenceSchema, UsageLineItemSchema, canonicalJson, sha256Checksum
+// UNUSED EXPORTS: ApiErrorSchema, CodeFindingRecordSchema, CodeRunEnvelopeSchema, CostAggregateResponseSchema, CostBreakdownsResponseSchema, CostGroupSchema, DashboardSummaryResponseSchema, FindingCountsSchema, FindingDetailResponseSchema, FindingFeedItemSchema, FindingLinearIssueResponseSchema, FindingListResponseSchema, FindingLocationSchema, FindingObservationSchema, FindingOutcomeSchema, FindingProvenanceSchema, FindingRecordSchema, FindingShortIdSchema, FindingsRunEnvelopeSchema, HistoryDimensionsResponseSchema, IngestRunResponseSchema, LinearIssueSchema, MemoryDetailResponseSchema, MemoryKindSchema, MemoryLifecycleSchema, MemoryListResponseSchema, MemoryMutationResponseSchema, MemoryRecallRequestSchema, MemoryRecallResponseSchema, MemoryRecordSchema, MetricsRunEnvelopeSchema, OutcomeSummaryResponseSchema, RecalledMemoryReferenceSchema, RepositoryIdentitySchema, RepositoryListResponseSchema, RepositorySummarySchema, RunDetailResponseSchema, RunEnvelopeV1Schema, RunListResponseSchema, RunProjectionSchema, RunSummarySchema, SERVICE_PROTOCOL_VERSION, ServiceClientError, SkillExecutionSchema, SkillListResponseSchema, SkillSummarySchema, SourceEvidenceSchema, UsageLineItemSchema, canonicalJson, sha256Checksum
 
 // EXTERNAL MODULE: ../../node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/classic/schemas.js + 7 modules
 var schemas = __webpack_require__(51737);
@@ -18851,6 +18851,15 @@ const FindingDetailResponseSchema = schemas/* object */.Ikc({
     sourceUrl: schemas/* url */.OZ5().max(4_096).optional(),
     sourceEvidence: SourceEvidenceSchema.optional(),
     verification: schemas/* string */.YjP().trim().min(1).max(4_000).optional(),
+}).strict();
+const LinearIssueSchema = schemas/* object */.Ikc({
+    id: schemas/* uuid */.uRe(),
+    identifier: schemas/* string */.YjP().trim().min(1).max(128),
+    url: schemas/* url */.OZ5({ protocol: /^https$/, hostname: /^linear\.app$/ }).max(4_096),
+}).strict();
+const FindingLinearIssueResponseSchema = schemas/* object */.Ikc({
+    enabled: schemas/* boolean */.zMY(),
+    issue: LinearIssueSchema.nullable(),
 }).strict();
 const FindingListResponseSchema = schemas/* object */.Ikc({
     items: schemas/* array */.YOg(FindingFeedItemSchema),

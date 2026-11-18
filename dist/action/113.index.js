@@ -254566,10 +254566,11 @@ __webpack_require__.d(__webpack_exports__, {
   YjP: () => (/* binding */ string),
   KCZ: () => (/* binding */ union),
   L5J: () => (/* binding */ unknown),
-  OZ5: () => (/* binding */ url)
+  OZ5: () => (/* binding */ url),
+  uRe: () => (/* binding */ uuid)
 });
 
-// UNUSED EXPORTS: ZodAny, ZodArray, ZodBase64, ZodBase64URL, ZodBigInt, ZodBigIntFormat, ZodBoolean, ZodCIDRv4, ZodCIDRv6, ZodCUID, ZodCUID2, ZodCatch, ZodCodec, ZodCreditCard, ZodCustom, ZodCustomStringFormat, ZodDate, ZodDefault, ZodDiscriminatedUnion, ZodE164, ZodEmail, ZodEmoji, ZodEnum, ZodExactOptional, ZodFile, ZodFunction, ZodGUID, ZodIBAN, ZodIPv4, ZodIPv6, ZodISODate, ZodISODateTime, ZodISODuration, ZodISOTime, ZodInstanceOf, ZodIntersection, ZodJWT, ZodKSUID, ZodLazy, ZodLiteral, ZodMAC, ZodMap, ZodNaN, ZodNanoID, ZodNever, ZodNonOptional, ZodNull, ZodNullable, ZodNumber, ZodNumberFormat, ZodObject, ZodOptional, ZodPipe, ZodPrefault, ZodPreprocess, ZodPromise, ZodReadonly, ZodRecord, ZodSet, ZodString, ZodStringFormat, ZodSuccess, ZodSymbol, ZodTemplateLiteral, ZodTransform, ZodTuple, ZodType, ZodULID, ZodURL, ZodUUID, ZodUndefined, ZodUnion, ZodUnknown, ZodVoid, ZodXID, ZodXor, _ZodString, _default, _function, any, base64, base64url, bigint, catch, check, cidrv4, cidrv6, codec, creditCard, cuid, cuid2, currencyCode, custom, date, describe, e164, email, emoji, exactOptional, file, float32, float64, function, guid, hash, hex, hostname, httpUrl, iban, instanceof, int, int32, int64, intersection, invertCodec, ipv4, ipv6, json, jwt, keyof, ksuid, lazy, looseObject, looseRecord, mac, map, meta, nan, nanoid, nativeEnum, nonoptional, null, nullable, nullish, optional, partialRecord, pipe, prefault, promise, readonly, refine, set, strictObject, stringFormat, stringbool, success, superRefine, symbol, templateLiteral, transform, tuple, uint32, uint64, ulid, undefined, uuid, uuidv4, uuidv6, uuidv7, void, xid, xor
+// UNUSED EXPORTS: ZodAny, ZodArray, ZodBase64, ZodBase64URL, ZodBigInt, ZodBigIntFormat, ZodBoolean, ZodCIDRv4, ZodCIDRv6, ZodCUID, ZodCUID2, ZodCatch, ZodCodec, ZodCreditCard, ZodCustom, ZodCustomStringFormat, ZodDate, ZodDefault, ZodDiscriminatedUnion, ZodE164, ZodEmail, ZodEmoji, ZodEnum, ZodExactOptional, ZodFile, ZodFunction, ZodGUID, ZodIBAN, ZodIPv4, ZodIPv6, ZodISODate, ZodISODateTime, ZodISODuration, ZodISOTime, ZodInstanceOf, ZodIntersection, ZodJWT, ZodKSUID, ZodLazy, ZodLiteral, ZodMAC, ZodMap, ZodNaN, ZodNanoID, ZodNever, ZodNonOptional, ZodNull, ZodNullable, ZodNumber, ZodNumberFormat, ZodObject, ZodOptional, ZodPipe, ZodPrefault, ZodPreprocess, ZodPromise, ZodReadonly, ZodRecord, ZodSet, ZodString, ZodStringFormat, ZodSuccess, ZodSymbol, ZodTemplateLiteral, ZodTransform, ZodTuple, ZodType, ZodULID, ZodURL, ZodUUID, ZodUndefined, ZodUnion, ZodUnknown, ZodVoid, ZodXID, ZodXor, _ZodString, _default, _function, any, base64, base64url, bigint, catch, check, cidrv4, cidrv6, codec, creditCard, cuid, cuid2, currencyCode, custom, date, describe, e164, email, emoji, exactOptional, file, float32, float64, function, guid, hash, hex, hostname, httpUrl, iban, instanceof, int, int32, int64, intersection, invertCodec, ipv4, ipv6, json, jwt, keyof, ksuid, lazy, looseObject, looseRecord, mac, map, meta, nan, nanoid, nativeEnum, nonoptional, null, nullable, nullish, optional, partialRecord, pipe, prefault, promise, readonly, refine, set, strictObject, stringFormat, stringbool, success, superRefine, symbol, templateLiteral, transform, tuple, uint32, uint64, ulid, undefined, uuidv4, uuidv6, uuidv7, void, xid, xor
 
 // EXTERNAL MODULE: ../../node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/core.js
 var core_core = __webpack_require__(90649);
@@ -257033,7 +257034,7 @@ const ZodUUID = /*@__PURE__*/ core_core/* $constructor */.xI("ZodUUID", (inst, d
     ZodStringFormat.init(inst, def);
 });
 function uuid(params) {
-    return core._uuid(ZodUUID, params);
+    return _uuid(ZodUUID, params);
 }
 function uuidv4(params) {
     return core._uuidv4(ZodUUID, params);
