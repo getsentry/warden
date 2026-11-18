@@ -38,7 +38,7 @@ if git -C "$repo" diff --cached --quiet; then
 fi
 
 git -C "$repo" -c core.hooksPath=/dev/null \
-  -c user.name="sentry-release-bot[bot]" \
-  -c user.email="180476844+sentry-release-bot[bot]@users.noreply.github.com" \
+  -c user.name="getsantry[bot]" \
+  -c user.email="66042841+getsantry[bot]@users.noreply.github.com" \
   commit -q -m "build(action): Rebuild action bundle"
 echo "committed=true" >> "$GITHUB_OUTPUT"

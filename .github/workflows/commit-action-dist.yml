@@ -2,7 +2,7 @@ name: Commit Action Bundle
 
 # Commits the bundle that action-dist.yml built back to the PR branch.
 # workflow_run always runs this file from the default branch, so a PR cannot
-# change it to read the release bot key. The PR identity comes from the
+# change it to read the internal app key. The PR identity comes from the
 # workflow_run payload. The artifact is untrusted data: only regular files
 # are copied, and no code from the PR checkout runs.
 
@@ -67,8 +67,8 @@ jobs:
         id: token
         uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547 # v1
         with:
-          app-id: ${{ vars.SENTRY_RELEASE_BOT_CLIENT_ID }}
-          private-key: ${{ secrets.SENTRY_RELEASE_BOT_PRIVATE_KEY }}
+          app-id: ${{ vars.SENTRY_INTERNAL_APP_ID }}
+          private-key: ${{ secrets.SENTRY_INTERNAL_APP_PRIVATE_KEY }}
 
       - name: Push bundle
         if: steps.commit.outputs.committed == 'true'
