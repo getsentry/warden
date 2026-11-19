@@ -1,4 +1,18 @@
 # Changelog
+## 0.54.0
+
+### New Features ✨
+
+- (integrity-review) Scope the gate from the last covered run by @Jeffreyhung with @sentry-junior and @sentry-release-bot in [#574](https://github.com/getsentry/warden/pull/574)
+
+### Bug Fixes 🐛
+
+- (service) Count only filtered skill findings in outcome totals by @Jeffreyhung with @sentry-junior in [#572](https://github.com/getsentry/warden/pull/572)
+
+### Internal Changes 🔧
+
+- (action) Use internal app token to commit action bundle by @Jeffreyhung with @sentry-junior in [#575](https://github.com/getsentry/warden/pull/575)
+
 ## 0.53.0
 
 ### Internal Changes 🔧
