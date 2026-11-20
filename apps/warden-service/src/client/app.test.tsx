@@ -32,6 +32,11 @@ const detail: FindingDetailResponse = {
   finding,
   verification: 'Ownership is not checked before the resource is returned.',
 };
+const linearIssue = {
+  id: '00000000-0000-4000-8000-000000000001',
+  identifier: 'SEC-123',
+  url: 'https://linear.app/acme/issue/SEC-123/missing-authorization-check',
+};
 const token = {
   id: '00000000-0000-4000-8000-000000000001',
   name: 'Local agent',
@@ -114,6 +119,7 @@ function mockApi(
       case '/api/v1/personal-tokens':
         return json({ tokens: [token] });
       default:
+        if (url.pathname.endsWith('/linear-issue')) return json({ enabled: false, issue: null });
         throw new Error(`Unexpected request: ${url}`);
     }
   });
@@ -666,4 +672,71 @@ it('opens a repeated finding by its own short URL and keeps the selected occurre
   await screen.findByRole('heading', { level: 1, name: finding.title });
   expect(location.pathname).toBe('/findings/7MV-5V7-2');
   expect(screen.queryByText('Other occurrence')).toBeNull();
+});
+
+it('creates a Linear ticket from the inspector and shows it on the full finding page', async () => {
+  let issue: typeof linearIssue | null = null;
+  let release: (response: Response) => void = () => { throw new Error('Missing response'); };
+  const pending = new Promise<Response>((resolve) => { release = resolve; });
+  const api = workspace('/?view=findings&range=7', mockApi((url, options) => {
+    if (!url.pathname.endsWith('/linear-issue')) return undefined;
+    if (options?.method === 'POST') return pending;
+    return json({ enabled: true, issue });
+  }));
+  fireEvent.click(await screen.findByRole('button', { name: new RegExp(finding.title) }));
+  const create = await screen.findByRole<HTMLButtonElement>('button', { name: 'Create Linear issue' });
+  await waitFor(() => expect(create.disabled).toBe(false));
+  fireEvent.click(create);
+  fireEvent.click(create);
+  expect(create.disabled).toBe(true);
+  await waitFor(() => expect(api.fetcher.mock.calls.filter(([, options]) => options?.method === 'POST')).toHaveLength(1));
+  const submission = api.fetcher.mock.calls.find(([, options]) => options?.method === 'POST');
+  expect(submission?.[0]).toBe('/api/v1/findings/finding-1/linear-issue');
+  issue = linearIssue;
+  await act(async () => { release(json({ enabled: true, issue })); });
+  const link = await screen.findByRole<HTMLAnchorElement>('link', { name: 'View SEC-123 in Linear' });
+  expect(link.href).toBe(linearIssue.url);
+
+  fireEvent.click(screen.getByRole('link', { name: 'Open full page' }));
+  await screen.findByRole('heading', { level: 1, name: finding.title });
+  expect((await screen.findByRole<HTMLAnchorElement>('link', { name: 'View SEC-123 in Linear' })).href).toBe(linearIssue.url);
+  expect(screen.queryByRole('button', { name: 'Create Linear issue' })).toBeNull();
+});
+
+it('retries a failed Linear request', async () => {
+  let submissions = 0;
+  workspace('/findings/finding-1', mockApi((url, options) => {
+    if (!url.pathname.endsWith('/linear-issue')) return undefined;
+    if (options?.method !== 'POST') return json({ enabled: true, issue: null });
+    submissions += 1;
+    return submissions === 1
+      ? json({ error: { code: 'linear_error', message: 'Could not reach Linear. Try again.' } }, 502)
+      : json({ enabled: true, issue: linearIssue });
+  }));
+  const create = await screen.findByRole<HTMLButtonElement>('button', { name: 'Create Linear issue' });
+  await waitFor(() => expect(create.disabled).toBe(false));
+  fireEvent.click(create);
+  expect((await screen.findByRole('alert')).textContent).toBe('Could not reach Linear. Try again.');
+  fireEvent.click(create);
+  await screen.findByRole('link', { name: 'View SEC-123 in Linear' });
+  expect(submissions).toBe(2);
+  expect(screen.queryByRole('alert')).toBeNull();
+});
+
+it('waits for Linear to be enabled before showing the action', async () => {
+  let release: (response: Response) => void = () => { throw new Error('Missing response'); };
+  const status = new Promise<Response>((resolve) => { release = resolve; });
+  workspace('/findings/finding-1', mockApi((url) => (
+    url.pathname.endsWith('/linear-issue') ? status : undefined
+  )));
+  await screen.findByRole('heading', { level: 1, name: finding.title });
+  expect(screen.queryByRole('button', { name: 'Create Linear issue' })).toBeNull();
+  await act(async () => { release(json({ enabled: true, issue: null })); });
+  await screen.findByRole('button', { name: 'Create Linear issue' });
+});
+
+it('hides the Linear action when the service has no integration', async () => {
+  workspace('/findings/finding-1');
+  await screen.findByRole('heading', { level: 1, name: finding.title });
+  await waitFor(() => expect(screen.queryByRole('button', { name: 'Create Linear issue' })).toBeNull());
 });

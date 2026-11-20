@@ -230,7 +230,11 @@ button:disabled { opacity: .5; cursor: not-allowed; }
 .finding-page { display: grid; min-width: 0; max-width: 920px; gap: 16px; }
 .finding-page > .text-link { width: fit-content; font-size: 12px; }
 .finding-page-card { min-width: 0; padding: 24px; border: 1px solid var(--border); border-radius: 4px; background: var(--surface); }
-.finding-page-heading { display: flex; align-items: center; gap: 16px; margin-bottom: 22px; }
+.finding-page-heading { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; margin-bottom: 22px; }
+.finding-linear-actions, .finding-linear-link { margin-left: auto; }
+.finding-linear-actions { display: grid; justify-items: end; gap: 8px; }
+.finding-linear-actions .form-error { max-width: 320px; margin: 0; }
+.finding-linear-link { border: 1px solid var(--border-strong); border-radius: 4px; padding: 8px 13px; font-size: 12px; font-weight: 550; text-decoration: none; }
 .finding-reporting-note { margin: -8px 0 22px; padding: 12px 14px; border-left: 2px solid var(--medium); background: var(--warning-surface); color: var(--muted-strong); font-size: 13px; line-height: 1.5; }
 .finding-page-section { min-width: 0; padding-top: 22px; border-top: 1px solid var(--border); }
 .finding-page-heading + .finding-page-section { padding-top: 0; border-top: 0; }

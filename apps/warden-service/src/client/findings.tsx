@@ -16,6 +16,7 @@ import {
   outcomeLabel,
 } from './format.js';
 import { useFilterNavigation } from './filters.js';
+import { LinearIssueAction } from './linear-issue.js';
 
 interface FindingArticleProps {
   detail: FindingDetailResponse;
@@ -46,6 +47,7 @@ export function FindingArticle({ detail }: FindingArticleProps): JSX.Element {
       <div className="finding-page-heading">
         <span className={`severity ${finding.severity}`}>{finding.severity}</span>
         <span className={`finding-status ${finding.outcome ?? ''}`}>{outcomeLabel(finding)}</span>
+        <LinearIssueAction key={finding.id} findingId={finding.id} />
       </div>
       {description !== outcomeLabel(finding) && (
         <p className="finding-reporting-note">{description}</p>
