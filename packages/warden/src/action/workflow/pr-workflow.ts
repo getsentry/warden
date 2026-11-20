@@ -216,8 +216,9 @@ function checkOptionsForPullRequest(context: EventContext, postChecks: boolean):
 }
 
 /**
- * The only caller, `toSkippedTriggers`, is always fed a list pre-filtered by
- * `reportsPullRequestCheck` to `pull_request`/`'*'`-type triggers, so this
+ * Callers (`toSkippedTriggers`, `cleanupOrphanedComments`) always pass
+ * `skippedTriggers`, pre-filtered by `reportsPullRequestCheck` to
+ * `pull_request`/`'*'`-type triggers, so this
  * only ever needs to explain why a PR-scoped trigger didn't fire this run —
  * not schedule/local triggers, which never reach this function.
  */
@@ -2016,15 +2017,24 @@ async function finalizeReportWorkflow(
  * comments from earlier pushes get resolved even when the current push
  * only touches files outside all skills' paths filters.
  * Skips cleanup when this run is no longer analyzing the current PR head.
+ * Skips cleanup unless a trigger was skipped only by its path filters: an
+ * event no trigger reviews (for example `labeled` or `stacked`) proves
+ * nothing about existing comments.
  */
 async function cleanupOrphanedComments(
   octokit: Octokit,
   context: EventContext,
   inputs: ActionInputs,
   auxiliaryOptions: AuxiliaryWorkflowOptions,
+  skippedTriggers: ResolvedTrigger[],
   options: { failOnWriteError?: boolean } = {}
 ): Promise<FindingObservation[]> {
   if (!context.pullRequest) {
+    return [];
+  }
+
+  if (!skippedTriggers.some((t) => deriveSkippedReason(t, context) === 'path_filter')) {
+    logAction('No trigger reviews this event. Leaving existing Warden comments as-is.');
     return [];
   }
 
@@ -2262,6 +2272,7 @@ async function runReportMode(
         context,
         inputs,
         auxiliaryOptions,
+        skippedTriggers,
         { failOnWriteError: true }
       );
       const outputs = { findingsCount: 0, highCount: 0, summary: 'No triggers matched' };
@@ -2487,7 +2498,8 @@ export async function runPRWorkflow(
             octokit,
             context,
             inputs,
-            auxiliaryOptions
+            auxiliaryOptions,
+            skippedTriggers
           );
           setOutput('findings-count', 0);
           setOutput('high-count', 0);

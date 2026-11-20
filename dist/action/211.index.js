@@ -3505,8 +3505,9 @@ function checkOptionsForPullRequest(context, postChecks) {
     };
 }
 /**
- * The only caller, `toSkippedTriggers`, is always fed a list pre-filtered by
- * `reportsPullRequestCheck` to `pull_request`/`'*'`-type triggers, so this
+ * Callers (`toSkippedTriggers`, `cleanupOrphanedComments`) always pass
+ * `skippedTriggers`, pre-filtered by `reportsPullRequestCheck` to
+ * `pull_request`/`'*'`-type triggers, so this
  * only ever needs to explain why a PR-scoped trigger didn't fire this run —
  * not schedule/local triggers, which never reach this function.
  */
@@ -4842,9 +4843,16 @@ async function finalizeReportWorkflow(octokit, context, previousReviewInfo, resu
  * comments from earlier pushes get resolved even when the current push
  * only touches files outside all skills' paths filters.
  * Skips cleanup when this run is no longer analyzing the current PR head.
+ * Skips cleanup unless a trigger was skipped only by its path filters: an
+ * event no trigger reviews (for example `labeled` or `stacked`) proves
+ * nothing about existing comments.
  */
-async function cleanupOrphanedComments(octokit, context, inputs, auxiliaryOptions, options = {}) {
+async function cleanupOrphanedComments(octokit, context, inputs, auxiliaryOptions, skippedTriggers, options = {}) {
     if (!context.pullRequest) {
+        return [];
+    }
+    if (!skippedTriggers.some((t) => deriveSkippedReason(t, context) === 'path_filter')) {
+        (0,_cli_output_tty_js__WEBPACK_IMPORTED_MODULE_24__/* .logAction */ .d5)('No trigger reviews this event. Leaving existing Warden comments as-is.');
         return [];
     }
     const gate = new _review_review_feedback_gate_js__WEBPACK_IMPORTED_MODULE_17__/* .ReviewFeedbackGate */ .d(octokit, context);
@@ -5012,7 +5020,7 @@ async function runReportMode(octokit, inputs, initResult, repoPath, span) {
             return;
         }
         if (matchedTriggers.length === 0) {
-            const cleanupFindingObservations = await cleanupOrphanedComments(octokit, context, inputs, auxiliaryOptions, { failOnWriteError: true });
+            const cleanupFindingObservations = await cleanupOrphanedComments(octokit, context, inputs, auxiliaryOptions, skippedTriggers, { failOnWriteError: true });
             const outputs = { findingsCount: 0, highCount: 0, summary: 'No triggers matched' };
             (0,_base_js__WEBPACK_IMPORTED_MODULE_21__/* .setWorkflowOutputs */ .wZ)(outputs);
             const findingsOptions = {
@@ -5147,7 +5155,7 @@ async function runPRWorkflow(octokit, inputs, eventName, eventPath, repoPath) {
         }
         if (matchedTriggers.length === 0) {
             await runOrFailCore(octokit, context, coreCheckId, postChecks, async () => {
-                const cleanupFindingObservations = await cleanupOrphanedComments(octokit, context, inputs, auxiliaryOptions);
+                const cleanupFindingObservations = await cleanupOrphanedComments(octokit, context, inputs, auxiliaryOptions, skippedTriggers);
                 (0,_base_js__WEBPACK_IMPORTED_MODULE_21__/* .setOutput */ .uH)('findings-count', 0);
                 (0,_base_js__WEBPACK_IMPORTED_MODULE_21__/* .setOutput */ .uH)('high-count', 0);
                 (0,_base_js__WEBPACK_IMPORTED_MODULE_21__/* .setOutput */ .uH)('summary', 'No triggers matched');

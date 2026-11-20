@@ -191,13 +191,15 @@ When a push only changes files outside all skills' `paths` filters, no triggers 
 
 This prevents comments from going stale indefinitely when later pushes touch unrelated files.
 
+Cleanup runs only when at least one trigger would have reviewed the event but its `paths` filters excluded every file. When no trigger lists the event action (for example `labeled` or `stacked`), or label or draft state skipped every trigger, Warden leaves existing comments untouched: nothing was reviewed, so nothing is stale.
+
 ### Safety Guards
 
 | Guard | Purpose |
 |-------|---------|
 | Only Warden comments | Never touches human or external bot comments |
 | All triggers must succeed | Won't resolve if analysis incomplete |
-| Runs cleanup with zero matched triggers | Prevents orphaned comments from stale pushes |
+| Runs cleanup with zero matched triggers, only after a path filter skip | Prevents orphaned comments from stale pushes without resolving comments on events nothing reviewed |
 | Max 50 per run | Prevents runaway resolution |
 | Requires `contents:write` | Fails gracefully if permission missing |
 
