@@ -1,0 +1,10 @@
+{
+  "kind": "bug",
+  "summary": "SentryLangchainCallback.on_llm_end records the model's tool_calls, with their arguments, as gen_ai.response.tool_calls span data without checking should_send_default_pii or include_prompts, so apps that disabled prompt capture still send tool-call payloads built from user conversations to Sentry",
+  "repository": "getsentry/sentry-python",
+  "ref": "3f4e2a8497ae942b380ce4d2459cac7bb364506e",
+  "targets": [
+    "sentry_sdk/integrations/langchain.py"
+  ],
+  "source": "https://github.com/getsentry/sentry-python/commit/e52c3b117a404fb7755feced02680d29e421b0ee"
+}

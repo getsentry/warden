@@ -1,0 +1,11 @@
+{
+  "kind": "bug",
+  "summary": "getFormatterTargetFiles joins the changed and untracked file names from git status into one space-separated string, and the formatter step interpolates it into childProcess.exec command lines (npx prettier --write ${targetFiles}, npx @biomejs/biome ...), so a file in the target repo named with shell syntax such as $(touch${IFS}pwned).js runs arbitrary commands on the developer machine when they run the wizard",
+  "repository": "getsentry/sentry-wizard",
+  "ref": "0144d69f365c5812f927a692e8433eb20304ce9c",
+  "targets": [
+    "src/utils/clack/index.ts",
+    "src/utils/git.ts"
+  ],
+  "source": "https://github.com/getsentry/sentry-wizard/commit/9a4f3c9282d4cb47978e01d391b0ecc87f6f437a"
+}

@@ -1,0 +1,10 @@
+{
+  "kind": "clean",
+  "summary": "_resolve_boolean_conditions recurses once per boolean operator and parenthesis in the user search query with no maximum depth, so a query with many chained OR/AND conditions builds a filter that exceeds protobuf recursion limits and fails the request",
+  "repository": "getsentry/sentry",
+  "ref": "93b67135ae9cee140be76f43a8d4ba6bc58bf080",
+  "targets": [
+    "src/sentry/search/eap/resolver.py"
+  ],
+  "source": "https://github.com/getsentry/sentry/commit/93b67135ae9cee140be76f43a8d4ba6bc58bf080"
+}

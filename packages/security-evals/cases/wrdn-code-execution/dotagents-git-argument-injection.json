@@ -1,0 +1,11 @@
+{
+  "kind": "bug",
+  "summary": "sources/git.ts passes the skill source URL and ref from agents.toml to git clone and git fetch as positional arguments with no -- separator, and the config schema accepts any git:<url> string, so a source or ref starting with --upload-pack= (or another option) turns into a git option that runs an attacker-chosen command when someone installs skills in a repo carrying that agents.toml",
+  "repository": "getsentry/dotagents",
+  "ref": "f17bb9edbe132b67e1987c74d9991d167b16dcf9",
+  "targets": [
+    "src/sources/git.ts",
+    "src/config/schema.ts"
+  ],
+  "source": "https://github.com/getsentry/dotagents/commit/461da846ce520b49b17f66ce00c5859a1a04a644"
+}
