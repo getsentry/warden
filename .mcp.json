@@ -1,8 +1,9 @@
 {
   "mcpServers": {
     "sentry": {
-      "type": "http",
-      "url": "https://mcp.sentry.dev/mcp/sentry/warden"
+      "type": "stdio",
+      "command": "sentry",
+      "args": ["mcp", "sentry/warden"]
     }
   }
 }
