@@ -3269,6 +3269,51 @@ describe('runPRWorkflow', () => {
       expect(dismissReview).not.toHaveBeenCalled();
     });
 
+    it('keeps open comments when the event action matches no trigger', async () => {
+      // The trigger only fires on 'labeled'; this 'opened' event never reviewed
+      // src/test.ts, so the comment on it is not stale.
+      vi.mocked(mockOctokit.pulls.listReviews).mockResolvedValue({
+        data: [{ id: 42, state: 'CHANGES_REQUESTED', user: { login: 'warden[bot]' } }],
+      } as ListReviewsResponse);
+      mockFetchExistingComments.mockResolvedValue([createExistingWardenComment()]);
+
+      await runPRWorkflow(
+        mockOctokit, createDefaultInputs(), 'pull_request',
+        EVENT_PAYLOAD_PATH, ACTION_MISMATCH_FIXTURES_DIR
+      );
+
+      expect(mockRunSkillTask).not.toHaveBeenCalled();
+      expect(mockEvaluateFixAttempts).not.toHaveBeenCalled();
+      expect(mockOctokit.graphql).not.toHaveBeenCalledWith(
+        expect.stringContaining('resolveReviewThread'),
+        expect.anything()
+      );
+      expect(mockOctokit.pulls.dismissReview).not.toHaveBeenCalled();
+    });
+
+    it('report mode keeps open comments when the event action matches no trigger', async () => {
+      const findingsFile = writeFindingsArtifact([], []);
+      mockFetchExistingComments.mockResolvedValue([createExistingWardenComment()]);
+
+      try {
+        await runPRWorkflow(
+          mockOctokit,
+          createDefaultInputs({ mode: 'report', findingsFile }),
+          'pull_request',
+          EVENT_PAYLOAD_PATH,
+          ACTION_MISMATCH_FIXTURES_DIR
+        );
+      } finally {
+        rmSync(dirname(findingsFile), { recursive: true, force: true });
+      }
+
+      expect(mockEvaluateFixAttempts).not.toHaveBeenCalled();
+      expect(mockOctokit.graphql).not.toHaveBeenCalledWith(
+        expect.stringContaining('resolveReviewThread'),
+        expect.anything()
+      );
+    });
+
     it('skips cleanup when no existing Warden comments', async () => {
       mockFetchExistingComments.mockResolvedValue([]);
 
