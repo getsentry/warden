@@ -13,13 +13,13 @@ In scope:
 - Authentication, authorization, tenant isolation, identity, and service-boundary bugs.
 - Injection, RCE, unsafe deserialization, XSS, SSRF, path traversal, unsafe redirects, webhook verification, secrets exposure, weak crypto, sensitive data exposure, and meaningful abuse-control gaps.
 - General guidance that applies across web services and application code.
-- Focused notes for JavaScript/TypeScript, Python, and GitHub Actions workflows.
+- Focused notes for JavaScript/TypeScript, Python, Swift/Objective-C and GitHub Actions workflows.
 
 Out of scope:
 
 - Full dependency CVE triage without reachable changed code.
 - Compliance checklists, infrastructure-only policy review, or exhaustive cloud IAM audits.
-- Style, maintainability, performance, or non-security correctness bugs.
+- Style, maintainability, performance, hygiene, or non-security correctness bugs.
 - Benchmark-specific prompt compatibility.
 - Large language-specific catalogs in `SKILL.md`.
 
@@ -55,6 +55,9 @@ Out of scope:
 - `references/javascript-typescript.md` contains JS/TS/Node/React/Next-specific examples and false-positive controls.
 - `references/python.md` contains Python/Django/Flask/FastAPI-specific examples and false-positive controls.
 - `references/github-workflows.md` contains GitHub Actions workflow examples and false-positive controls.
+- `references/apple.md` contains Apple native entry points, high-signal patterns, false-positive controls, and examples, plus mappings to topic files under `references/apple/`.
+- `references/apple/ipc.md`, `storage.md`, `auth.md`, `network.md`, `webview.md`, and `crypto.md` are lookup leaves loaded only through that mapping.
+- `references/apple/CONTEXT.md` and `references/apple/SOURCES.md` are authoring files, not runtime references.
 - `scripts/`, `assets/`, and `references/evidence/` are unused until repeated evidence warrants them.
 
 ## Evaluation
@@ -65,13 +68,19 @@ Out of scope:
   - Run init command tests that install bundled skills.
 - Deeper evaluation:
   - Add eval cases for SQL injection, XSS, SSRF, authz bypass, secrets, and safe counterexamples.
+  - Add Apple eval cases later for scheme-applied tokens, `UserDefaults` refresh tokens, `LAContext` gates, WebView bridges, and accept-any-cert handlers, plus safe counterexamples.
   - Compare false positives against sanitized real Warden runs.
 - Acceptance gates:
   - `SKILL.md` stays concise enough to scan.
   - Language-specific examples stay in references.
   - Findings require exploitability evidence, not keyword matches.
+  - Apple reviews load `references/apple.md`, then only the mapped topic files.
 
 ## Maintenance Notes
 
 - Add a new language reference only when recurring findings need language-specific calibration.
+- Keep Apple platforms as one system. Carve out a finding only when the API cannot run on that OS.
+- Do not add pinning, resilience, or cross-platform framework catalogs to the Apple folder.
+- Update `references/apple.md` when a new Apple topic is added. Do not add Apple topic rows to `SKILL.md`.
+- Update `references/apple/CONTEXT.md` and `references/apple/SOURCES.md` when the Apple contract or source map changes. Do not route those files from `SKILL.md`.
 - Keep examples minimal and transformed; do not store proprietary code.

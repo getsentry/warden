@@ -16,12 +16,13 @@ Load only matching references:
 | `references/javascript-typescript.md` | Reviewing JavaScript, TypeScript, Node, React, Next.js, or browser code |
 | `references/python.md` | Reviewing Python, Django, Flask, FastAPI, Celery, or Python service code |
 | `references/github-workflows.md` | Reviewing GitHub Actions workflows, local actions, reusable workflows, or workflow-loaded scripts/config |
+| `references/apple.md` | Reviewing Swift or Objective-C code on Apple Platforms |
 
 ## Finding Requirements
 
 - Report a finding only when you can show attacker-controlled input, the vulnerable sink or missing guard, the security boundary, and concrete impact.
-- Identify attacker-controlled input: request bodies, query strings, path params, cookies, headers, uploads, webhooks, OAuth callbacks, third-party callbacks, user-written database values, and caller-controlled service inputs.
-- Identify the security boundary: login state, session, tenant, org, team, account, project, role, webhook signature, internal network, filesystem root, cache namespace, or paid quota.
+- Identify attacker-controlled input: request bodies, query strings, path params, cookies, headers, uploads, webhooks, OAuth callbacks, third-party callbacks, user-written database values, caller-controlled service inputs, deep links, inter-app messages, same-device callers, untrusted embedded web content, extension payloads, and backup-restored secrets.
+- Identify the security boundary: login state, session, tenant, org, team, account, project, role, webhook signature, internal network, filesystem root, cache namespace, paid quota, platform secret-store access control, shared-container membership, embedded-web origin, or transport trust.
 - Follow imports, wrappers, middleware, validators, serializers, auth helpers, route definitions, shared utilities, sibling handlers, and framework conventions before reporting.
 - Verify mitigations in the effective path. Parameterized queries, exact allowlists, safe URL fetchers, escaping, signature checks, handler-level auth, ownership checks, realpath containment, and quota controls can close the path.
 - Treat pattern matches as leads. A dangerous API is not a vulnerability unless untrusted data can reach it without an effective mitigation.
@@ -31,7 +32,7 @@ Load only matching references:
 
 1. Read the changed hunk and target file enough to understand the effective execution path.
 2. Confirm the code is production-reachable. Return no findings for generated, vendored, test-only, fixture, example, migration, or build-output code unless it is actually shipped or invoked.
-3. Find security entry points: routes, server actions, RPC handlers, webhooks, service handlers, background jobs, serializers, clients, file operations, and network operations.
+3. Find security entry points: routes, server actions, RPC handlers, webhooks, service handlers, background jobs, serializers, clients, file operations, network operations, deep links, inter-app entry points, embedded-web bridges, and local secret or preference storage.
 4. Trace suspicious values from source to sink or missing guard.
 5. Read imported guards, validators, auth wrappers, schemas, middleware, shared utilities, and sibling handlers when they decide exploitability.
 6. Check whether mitigations block the real path, not just a nearby path.
@@ -56,8 +57,8 @@ Load only matching references:
 
 | Level | Use For |
 |-------|---------|
-| high | Broad auth bypass, privilege escalation, cross-tenant sensitive data access, RCE, SQL/NoSQL injection over sensitive data, SSRF to internal services or cloud metadata, unsafe deserialization, production credential exposure, privileged CI execution, or destructive unauthorized actions. |
-| medium | XSS with script execution, bounded path traversal, sensitive information disclosure, webhook side effects without verification, open redirects in auth/token flows, weak token validation, meaningful abuse of expensive or sensitive operations, or limited unauthorized data mutation. |
+| high | Broad auth bypass, privilege escalation, cross-tenant sensitive data access, RCE, SQL/NoSQL injection over sensitive data, SSRF to internal services or cloud metadata, unsafe deserialization, production credential exposure, privileged CI execution, destructive unauthorized actions, an inter-app or embedded-web entry point that applies a session or performs a privileged action, a TLS trust kill-switch on an auth or data API, or a refresh token or private key written to unencrypted storage, logs, or a shared clipboard. |
+| medium | XSS with script execution, bounded path traversal, sensitive information disclosure, webhook side effects without verification, open redirects in auth/token flows, weak token validation, meaningful abuse of expensive or sensitive operations, limited unauthorized data mutation, or a local biometric or passcode prompt as the only gate in front of an otherwise readable secret. |
 | low | Concrete defense-in-depth flaw with a plausible exploit path and limited impact. Do not use low for vague best-practice advice. |
 
 - Tie-breaker: choose the lower severity when impact depends on unproven preconditions.
@@ -72,6 +73,7 @@ Load only matching references:
 - Workflow style, actionlint issues, broad permissions, or mutable action refs without a traced path to execution, credential exposure, trusted artifacts, or privileged side effects.
 - Secret-looking placeholders such as `example`, `test`, `dummy`, documented fake keys, or values confined to tests.
 - Framework defaults that already escape, parameterize, validate, or authorize unless the code uses an unsafe escape hatch.
+- Missing certificate pinning, jailbreak or debugger detection, obfuscation, screenshot hiding, keyboard-cache flags, or other mobile hygiene without a proven exploit path.
 
 ## Finding Format
 
