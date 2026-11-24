@@ -252,6 +252,12 @@ function inheritRepoLayerDefaults(base?: Defaults, repo?: Defaults): Defaults | 
     inherited.incrementalApp = base.incrementalApp;
   }
 
+  // Repo skills follow the org's incremental default unless the repo sets its
+  // own default, or a repo skill or trigger sets `incremental`.
+  if (base?.incremental !== undefined && inherited.incremental === undefined) {
+    inherited.incremental = base.incremental;
+  }
+
   // Offline is sticky across layers: either layer can force offline for the run.
   if (base?.offline === true || repo?.offline === true) {
     inherited.offline = true;

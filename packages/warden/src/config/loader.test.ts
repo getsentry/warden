@@ -1009,6 +1009,52 @@ describe('resolveLayeredSkillConfigs', () => {
     ]);
   });
 
+  it('lets repo skills inherit the base incremental default unless the repo overrides it', () => {
+    const baseConfig: WardenConfig = {
+      version: 1,
+      defaults: { incremental: true, incrementalApp: 'sentry-warden' },
+      skills: [{ name: 'org-skill' }],
+    };
+    const repoConfig: WardenConfig = {
+      version: 1,
+      skills: [
+        { name: 'repo-skill' },
+        { name: 'repo-full-review', incremental: false },
+        {
+          name: 'repo-trigger-full-review',
+          triggers: [{ type: 'pull_request', actions: ['opened'], incremental: false }],
+        },
+      ],
+    };
+
+    const inherited = resolveLayeredSkillConfigs({
+      config: mergeWardenConfigs(baseConfig, repoConfig),
+      baseConfig,
+      repoConfig,
+    });
+
+    expect(inherited.map((t) => [t.name, t.incremental])).toEqual([
+      ['org-skill', true],
+      ['repo-skill', true],
+      ['repo-full-review', false],
+      ['repo-trigger-full-review', false],
+    ]);
+
+    const repoOptOut: WardenConfig = { ...repoConfig, defaults: { incremental: false } };
+    const optedOut = resolveLayeredSkillConfigs({
+      config: mergeWardenConfigs(baseConfig, repoOptOut),
+      baseConfig,
+      repoConfig: repoOptOut,
+    });
+
+    expect(optedOut.map((t) => [t.name, t.incremental])).toEqual([
+      ['org-skill', true],
+      ['repo-skill', false],
+      ['repo-full-review', false],
+      ['repo-trigger-full-review', false],
+    ]);
+  });
+
   it('lets repo-defined skills inherit the base runtime when repo defaults omit it', () => {
     const baseConfig = {
       version: 1,

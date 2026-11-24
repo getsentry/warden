@@ -189,8 +189,10 @@ checks: `github-actions` when the report or run step uses the default
 `GITHUB_TOKEN`, or your app's slug when it uses a GitHub App token. Warden only
 trusts baselines from that app, so look-alike checks from other apps cannot
 make it skip hunks. Without `incrementalApp`, Warden warns and reviews the full
-PR. With a base config, repo-defined skills inherit the base `incrementalApp`,
-and the repo config cannot change the mode of skills the base config defines.
+PR. With a base config, repo-defined skills inherit the base `incremental` and
+`incrementalApp` defaults. A repo can set `incremental = false` in its own
+`[defaults]`, skill, or trigger to opt its skills out, but it cannot change the
+mode of skills the base config defines.
 
 The analysis step needs `checks: read`:
 
