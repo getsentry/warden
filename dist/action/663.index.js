@@ -2612,8 +2612,6 @@ function startTraceRecorder(parentSpan) {
 
 
 let initialized = false;
-/** Header and query keys that carry client network identity; the SDK v10 default denylist. */
-const NETWORK_IDENTITY_KEYS = ['forwarded', '-ip', 'remote-', 'via', '-user'];
 function getGitHubServerUrl() {
     const serverUrl = process.env['GITHUB_SERVER_URL'] || 'https://github.com';
     return serverUrl.replace(/\/+$/, '');
@@ -2645,22 +2643,6 @@ function initSentry(context, options = {}) {
         release: `warden@${(0,_utils_index_js__WEBPACK_IMPORTED_MODULE_1__/* .getVersion */ .HF)()}`,
         environment: context === 'action' ? 'github-action' : 'cli',
         tracesSampleRate: 1.0,
-        // SDK v11 collects HTTP bodies, unscrubbed headers, and user info by
-        // default. Warden handles tokens and private code, so keep the v10 baseline.
-        dataCollection: {
-            userInfo: false,
-            cookies: false,
-            httpHeaders: {
-                request: { deny: NETWORK_IDENTITY_KEYS },
-                response: { deny: NETWORK_IDENTITY_KEYS },
-            },
-            httpBodies: [],
-            urlQueryParams: { deny: NETWORK_IDENTITY_KEYS },
-            genAI: { inputs: false, outputs: false },
-            databaseQueryData: false,
-            queues: false,
-            graphQL: { document: false, variables: false },
-        },
         ...options,
         integrations: [
             _sentry_node__WEBPACK_IMPORTED_MODULE_5__/* .consoleLoggingIntegration */ .d({ levels: ['warn', 'error'] }),
