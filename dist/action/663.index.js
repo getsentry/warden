@@ -1196,6 +1196,8 @@ var usage = __webpack_require__(44759);
 var model_selectors = __webpack_require__(85286);
 // EXTERNAL MODULE: ./src/sdk/offline.ts
 var offline = __webpack_require__(8695);
+// EXTERNAL MODULE: external "node:crypto"
+var external_node_crypto_ = __webpack_require__(77598);
 // EXTERNAL MODULE: external "node:fs/promises"
 var promises_ = __webpack_require__(51455);
 // EXTERNAL MODULE: external "node:path"
@@ -1205,6 +1207,7 @@ var external_node_url_ = __webpack_require__(73136);
 // EXTERNAL MODULE: ./src/skills/resources.ts
 var resources = __webpack_require__(18771);
 ;// CONCATENATED MODULE: ./src/sdk/runtimes/pi-file-tools.ts
+
 
 
 
@@ -1275,7 +1278,17 @@ async function resolveAllowedPath(checkoutPath, requestedPath, skillRoot) {
     }
     throw checkoutPathError(requestedPath, checkout);
 }
-function confineTool(tool, checkoutPath, skillRoot) {
+/** Hash a tool result. Search and listing output order is not stable, so its lines are sorted first. */
+function hashToolOutput(toolName, result) {
+    const content = result?.content ?? [];
+    const text = content.map((part) => (part.type === 'text' ? part.text ?? '' : `[${part.type}]`)).join('\n');
+    const canonical = toolName === 'read' ? text : text.split('\n').sort().join('\n');
+    return (0,external_node_crypto_.createHash)('sha256').update(canonical).digest('hex');
+}
+function hashToolError(error) {
+    return (0,external_node_crypto_.createHash)('sha256').update(error instanceof Error ? error.message : String(error)).digest('hex');
+}
+function confineTool(tool, checkoutPath, skillRoot, onEvidence) {
     const guidance = skillRoot
         ? `${CHECKOUT_GUIDANCE} Read may also access scripts/, references/, and assets/ under the resolved skill at ${skillRoot}.`
         : CHECKOUT_GUIDANCE;
@@ -1289,32 +1302,73 @@ function confineTool(tool, checkoutPath, skillRoot) {
         async execute(toolCallId, params, signal, onUpdate, context) {
             const input = params;
             const requestedPath = typeof input.path === 'string' ? input.path : '.';
-            const confinedPath = await resolveAllowedPath(checkoutPath, requestedPath, skillRoot);
-            const confinedParams = {
-                ...params,
-                path: (0,external_node_url_.pathToFileURL)(confinedPath).href,
+            const record = (outputHash, isError) => {
+                onEvidence?.({ tool: tool.name, params: { ...params }, outputHash, isError });
             };
-            return tool.execute(toolCallId, confinedParams, signal, onUpdate, context);
+            try {
+                const confinedPath = await resolveAllowedPath(checkoutPath, requestedPath, skillRoot);
+                const confinedParams = {
+                    ...params,
+                    path: (0,external_node_url_.pathToFileURL)(confinedPath).href,
+                };
+                const result = await tool.execute(toolCallId, confinedParams, signal, onUpdate, context);
+                record(hashToolOutput(tool.name, result), false);
+                return result;
+            }
+            catch (error) {
+                record(hashToolError(error), true);
+                throw error;
+            }
         },
     });
 }
 /** Confine Pi tools to the checkout, with read-only access to resolved skill resources. */
-function createCheckoutFileTools(checkoutPath, toolNames, skillRoot) {
+function createCheckoutFileTools(checkoutPath, toolNames, skillRoot, onEvidence) {
     const requestedTools = new Set(toolNames);
     const tools = [];
     if (requestedTools.has('read')) {
-        tools.push(confineTool((0,dist.createReadToolDefinition)(checkoutPath), checkoutPath, skillRoot));
+        tools.push(confineTool((0,dist.createReadToolDefinition)(checkoutPath), checkoutPath, skillRoot, onEvidence));
     }
     if (requestedTools.has('grep')) {
-        tools.push(confineTool((0,dist.createGrepToolDefinition)(checkoutPath), checkoutPath));
+        tools.push(confineTool((0,dist.createGrepToolDefinition)(checkoutPath), checkoutPath, undefined, onEvidence));
     }
     if (requestedTools.has('find')) {
-        tools.push(confineTool((0,dist.createFindToolDefinition)(checkoutPath), checkoutPath));
+        tools.push(confineTool((0,dist.createFindToolDefinition)(checkoutPath), checkoutPath, undefined, onEvidence));
     }
     if (requestedTools.has('ls')) {
-        tools.push(confineTool((0,dist.createLsToolDefinition)(checkoutPath), checkoutPath));
+        tools.push(confineTool((0,dist.createLsToolDefinition)(checkoutPath), checkoutPath, undefined, onEvidence));
     }
     return tools;
+}
+/**
+ * Re-run recorded tool calls against a checkout and return the calls whose output changed.
+ * An empty result means the agent would see the same evidence it saw when the calls were recorded.
+ */
+async function changedToolEvidence(checkoutPath, evidence, skillRoot) {
+    const tools = new Map(createCheckoutFileTools(checkoutPath, [...new Set(evidence.map((entry) => entry.tool))], skillRoot)
+        .map((tool) => [tool.name, tool]));
+    const changed = [];
+    for (const entry of evidence) {
+        const tool = tools.get(entry.tool);
+        if (!tool) {
+            changed.push(entry);
+            continue;
+        }
+        let outputHash;
+        let isError = false;
+        try {
+            const result = await tool.execute('replay', entry.params, undefined, undefined, undefined);
+            outputHash = hashToolOutput(entry.tool, result);
+        }
+        catch (error) {
+            isError = true;
+            outputHash = hashToolError(error);
+        }
+        if (outputHash !== entry.outputHash || isError !== entry.isError) {
+            changed.push(entry);
+        }
+    }
+    return changed;
 }
 
 ;// CONCATENATED MODULE: ./src/sdk/runtimes/pi.ts
