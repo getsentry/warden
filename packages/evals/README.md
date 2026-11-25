@@ -238,6 +238,12 @@ To run against any other provider, set:
   scenario's model, including Warden's auxiliary calls (extraction repair,
   verification, merge), and forces the Pi runtime. Evals run whenever it is
   set.
+- `WARDEN_EVAL_AUXILIARY_MODEL`: optional model for Warden's auxiliary calls
+  and the verifier-only evals, like `[defaults.auxiliary] model`. Defaults to
+  `WARDEN_EVAL_MODEL`.
+- `WARDEN_EVAL_EFFORT` and `WARDEN_EVAL_AUXILIARY_EFFORT`: optional effort
+  levels for the skill agent and auxiliary calls, like `[defaults.agent]` and
+  `[defaults.auxiliary]` `effort`. Runtime default when unset.
 - `WARDEN_EVAL_JUDGE_MODEL`: optional judge model. Defaults to
   `WARDEN_EVAL_MODEL`.
 - The provider's Warden-prefixed key, e.g. `WARDEN_OPENROUTER_API_KEY`. Eval

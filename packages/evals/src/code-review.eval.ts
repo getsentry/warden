@@ -27,6 +27,8 @@ describeEval(
       model: provider.model,
       runtime: provider.runtime,
       auxiliaryModel: provider.auxiliaryModel,
+      effort: provider.effort,
+      auxiliaryEffort: provider.auxiliaryEffort,
       maxTurns: 8,
       timeoutMs: CODE_REVIEW_RUN_TIMEOUT_MS,
       postProcessFindings: false,
