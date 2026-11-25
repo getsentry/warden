@@ -121,7 +121,7 @@ module.exports = {
 /* istanbul ignore else  */
 if (!process.env.WS_NO_BUFFER_UTIL) {
   try {
-    const bufferUtil = __webpack_require__(48812);
+    const bufferUtil = __webpack_require__(26431);
 
     module.exports.mask = function (source, mask, output, offset, length) {
       if (length < 48) _mask(source, mask, output, offset, length);
@@ -5032,7 +5032,7 @@ function socketOnError() {
 
 /***/ }),
 
-/***/ 48812:
+/***/ 26431:
 /***/ ((module) => {
 
 module.exports = eval("require")("bufferutil");

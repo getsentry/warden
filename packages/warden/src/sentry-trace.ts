@@ -6,7 +6,7 @@ import type { TraceSpan, TraceSpanAttributeValue } from './types/index.js';
 type SentryStartSpanOptions = Parameters<typeof Sentry.startSpan>[0];
 type SentrySpanContext = ReturnType<Span['spanContext']>;
 type SentrySpanJson = ReturnType<typeof Sentry.spanToJSON>;
-type SentrySpanAttributeValue = SentrySpanJson['data'][string];
+type SentrySpanAttributeValue = SentrySpanJson['attributes'][string];
 
 export interface TraceRecorder {
   record(span: Span | undefined): void;
@@ -74,23 +74,24 @@ function snapshotSpan(span: Span | undefined): TraceSpan | undefined {
   const spanId = stringValue(spanJson?.span_id);
   if (!traceId || !spanId) return undefined;
 
+  const attributes = spanJson?.attributes;
   const startTimeUnixMs = timestampMs(spanJson?.start_timestamp);
-  const endTimeUnixMs = timestampMs(spanJson?.timestamp);
+  const endTimeUnixMs = timestampMs(spanJson?.end_timestamp);
 
   return {
     traceId,
     spanId,
     parentSpanId: stringValue(spanJson?.parent_span_id),
-    op: stringValue(spanJson?.op),
-    name: stringValue(spanJson?.description),
+    op: stringValue(attributes?.['sentry.op']),
+    name: stringValue(spanJson?.name),
     startTimeUnixMs,
     endTimeUnixMs,
     durationMs: startTimeUnixMs !== undefined && endTimeUnixMs !== undefined
       ? Math.max(0, endTimeUnixMs - startTimeUnixMs)
       : undefined,
     status: stringValue(spanJson?.status),
-    origin: stringValue(spanJson?.origin),
-    attributes: compactAttributes(spanJson?.data),
+    origin: stringValue(attributes?.['sentry.origin']),
+    attributes: compactAttributes(attributes),
   };
 }
 

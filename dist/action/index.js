@@ -8,7 +8,7 @@ __nccwpck_require__.a(module, async (__webpack_handle_async_dependencies__, __we
 /* harmony import */ var _pi_ncc_compat_js__WEBPACK_IMPORTED_MODULE_0__ = __nccwpck_require__(54144);
 
 await (0,_pi_ncc_compat_js__WEBPACK_IMPORTED_MODULE_0__/* .preloadPiRuntimeForActionBundle */ .A)();
-await Promise.all(/* import() */[__nccwpck_require__.e(942), __nccwpck_require__.e(666), __nccwpck_require__.e(113), __nccwpck_require__.e(214), __nccwpck_require__.e(663), __nccwpck_require__.e(211)]).then(__nccwpck_require__.bind(__nccwpck_require__, 61211));
+await Promise.all(/* import() */[__nccwpck_require__.e(942), __nccwpck_require__.e(839), __nccwpck_require__.e(214), __nccwpck_require__.e(663), __nccwpck_require__.e(211)]).then(__nccwpck_require__.bind(__nccwpck_require__, 61211));
 
 __webpack_async_result__();
 } catch(e) { __webpack_async_result__(e); } }, 1);
@@ -42,7 +42,7 @@ function isNccPiBuiltinImportFailure(reason) {
 async function preloadPiProviderModulesForActionBundle() {
     const [{ setBedrockProviderModule }, { bedrockProviderModule }] = await Promise.all([
         __nccwpck_require__.e(/* import() */ 627).then(__nccwpck_require__.bind(__nccwpck_require__, 81627)),
-        Promise.all(/* import() */[__nccwpck_require__.e(804), __nccwpck_require__.e(942), __nccwpck_require__.e(666), __nccwpck_require__.e(758), __nccwpck_require__.e(834)]).then(__nccwpck_require__.bind(__nccwpck_require__, 29758)),
+        Promise.all(/* import() */[__nccwpck_require__.e(804), __nccwpck_require__.e(942), __nccwpck_require__.e(675), __nccwpck_require__.e(557), __nccwpck_require__.e(834)]).then(__nccwpck_require__.bind(__nccwpck_require__, 29758)),
         __nccwpck_require__.e(/* import() */ 451).then(__nccwpck_require__.bind(__nccwpck_require__, 63451)),
     ]);
     setBedrockProviderModule(bedrockProviderModule);
@@ -51,7 +51,7 @@ async function preloadPiProviderModulesForActionBundle() {
  * Preload Pi before action initialization so ncc's dynamic-import rewrite for
  * Pi's env-key helper and node-only providers cannot terminate the bundled GitHub Action.
  */
-async function preloadPiRuntimeForActionBundle(importPiRuntime = () => Promise.all(/* import() */[__nccwpck_require__.e(942), __nccwpck_require__.e(666), __nccwpck_require__.e(113), __nccwpck_require__.e(663)]).then(__nccwpck_require__.bind(__nccwpck_require__, 60522)), unhandledRejections = process, preloadProviders = preloadPiProviderModulesForActionBundle) {
+async function preloadPiRuntimeForActionBundle(importPiRuntime = () => Promise.all(/* import() */[__nccwpck_require__.e(942), __nccwpck_require__.e(839), __nccwpck_require__.e(663)]).then(__nccwpck_require__.bind(__nccwpck_require__, 60522)), unhandledRejections = process, preloadProviders = preloadPiProviderModulesForActionBundle) {
     let unexpectedRejection;
     const onUnhandledRejection = (reason) => {
         if (isNccPiBuiltinImportFailure(reason)) {
@@ -118,13 +118,6 @@ module.exports = __WEBPACK_EXTERNAL_createRequire(import.meta.url)("constants");
 /***/ ((module) => {
 
 module.exports = __WEBPACK_EXTERNAL_createRequire(import.meta.url)("crypto");
-
-/***/ }),
-
-/***/ 31637:
-/***/ ((module) => {
-
-module.exports = __WEBPACK_EXTERNAL_createRequire(import.meta.url)("diagnostics_channel");
 
 /***/ }),
 

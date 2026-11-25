@@ -15,7 +15,7 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony import */ var _utils_error_body_js__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(20372);
 /* harmony import */ var _utils_event_stream_js__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(45174);
 /* harmony import */ var _utils_headers_js__WEBPACK_IMPORTED_MODULE_7__ = __webpack_require__(82003);
-/* harmony import */ var _utils_pi_user_agent_js__WEBPACK_IMPORTED_MODULE_8__ = __webpack_require__(55278);
+/* harmony import */ var _utils_pi_user_agent_js__WEBPACK_IMPORTED_MODULE_8__ = __webpack_require__(40);
 /* harmony import */ var _utils_sanitize_unicode_js__WEBPACK_IMPORTED_MODULE_10__ = __webpack_require__(43780);
 /* harmony import */ var _utils_text_js__WEBPACK_IMPORTED_MODULE_9__ = __webpack_require__(65678);
 /* harmony import */ var _utils_transcript_js__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(19883);

@@ -10,7 +10,7 @@ export type SentryContext = 'cli' | 'action';
 
 type SentryInitOptions = Pick<
   NodeOptions,
-  'beforeSend' | 'beforeSendTransaction' | 'transport'
+  'beforeSend' | 'transport'
 >;
 
 let initialized = false;
@@ -51,7 +51,6 @@ export function initSentry(context: SentryContext, options: SentryInitOptions = 
     release: `warden@${getVersion()}`,
     environment: context === 'action' ? 'github-action' : 'cli',
     tracesSampleRate: 1.0,
-    enableLogs: true,
     ...options,
     integrations: [
       Sentry.consoleLoggingIntegration({ levels: ['warn', 'error'] }),
@@ -80,7 +79,7 @@ export function ensureLocalTracing(): void {
 }
 
 export { Sentry };
-export const { logger } = Sentry;
+export const logger: typeof Sentry.logger = Sentry.logger;
 
 /**
  * Set attributes on the global Sentry scope.

@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ErrorEvent, TransactionEvent } from '@sentry/core';
+import type { ErrorEvent } from '@sentry/core';
 import type { ActionInputs } from './inputs.js';
 import { initSentry, Sentry } from '../sentry.js';
 
@@ -52,7 +52,6 @@ const baseInputs: ActionInputs = {
   parallel: 4,
 };
 
-const capturedTransactions: TransactionEvent[] = [];
 const capturedEvents: ErrorEvent[] = [];
 
 function spyOnClientEmit() {
@@ -92,10 +91,6 @@ describe('runAction', () => {
         send: async () => ({}),
         flush: async () => true,
       }),
-      beforeSendTransaction: (event) => {
-        capturedTransactions.push(event);
-        return event;
-      },
       beforeSend: (event) => {
         capturedEvents.push(event);
         return event;
@@ -106,10 +101,7 @@ describe('runAction', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     vi.clearAllMocks();
-    capturedTransactions.length = 0;
     capturedEvents.length = 0;
-    Sentry.getGlobalScope().clear();
-    Sentry.getIsolationScope().clear();
     process.env['GITHUB_EVENT_NAME'] = 'schedule';
     process.env['GITHUB_EVENT_PATH'] = '/tmp/event.json';
     process.env['GITHUB_WORKSPACE'] = '/tmp/workspace';
@@ -186,18 +178,6 @@ describe('runAction', () => {
         }),
       })
     );
-    expect(capturedTransactions).toContainEqual(
-      expect.objectContaining({
-        transaction: 'run Warden action',
-        contexts: expect.objectContaining({
-          trace: expect.objectContaining({
-            op: 'cicd.workflow',
-            status: 'ok',
-            data: expect.objectContaining({ 'warden.action.outcome': 'success' }),
-          }),
-        }),
-      })
-    );
   });
 
   it('attributes input parsing failures before capturing them', async () => {
@@ -227,32 +207,9 @@ describe('runAction', () => {
         }),
       })
     );
-    expect(capturedTransactions).toContainEqual(
-      expect.objectContaining({
-        transaction: 'run Warden action',
-        contexts: expect.objectContaining({
-          trace: expect.objectContaining({
-            op: 'cicd.workflow',
-            status: 'internal_error',
-            data: expect.objectContaining({
-              'warden.action.outcome': 'failure',
-              'warden.action.stage': 'input',
-              'warden.error.code': 'unknown',
-              'vcs.repository.name': 'warden',
-              'cicd.pipeline.run.id': '12345',
-            }),
-          }),
-        }),
-      })
-    );
-    const rootTraceId = capturedTransactions.find(
-      (event) => event.transaction === 'run Warden action'
-    )?.contexts?.trace?.trace_id;
-    expect(rootTraceId).toBeTruthy();
     expect(capturedEvents).toContainEqual(
       expect.objectContaining({
         contexts: expect.objectContaining({
-          trace: expect.objectContaining({ trace_id: rootTraceId }),
           github_actions: expect.objectContaining({
             repository: 'getsentry/warden',
             event: 'schedule',
@@ -292,24 +249,9 @@ describe('runAction', () => {
       })
     );
     expect(capturedEvents).toEqual([]);
-    expect(capturedTransactions).toContainEqual(
-      expect.objectContaining({
-        transaction: 'run Warden action',
-        contexts: expect.objectContaining({
-          trace: expect.objectContaining({
-            op: 'cicd.workflow',
-            status: 'internal_error',
-            data: expect.objectContaining({
-              'warden.action.outcome': 'failure',
-              'warden.action.stage': 'environment',
-            }),
-          }),
-        }),
-      })
-    );
   });
 
-  it('records classified dispatch failures on the span, metric, and issue', async () => {
+  it('records classified dispatch failures on the metric and issue', async () => {
     const error = new Error('Provider is unavailable');
     const emit = spyOnClientEmit();
     mocks.runScheduleWorkflow.mockRejectedValueOnce(error);
@@ -330,22 +272,6 @@ describe('runAction', () => {
           'warden.action.outcome': 'failure',
           'warden.action.stage': 'dispatch',
           'warden.error.code': 'provider_unavailable',
-        }),
-      })
-    );
-    expect(capturedTransactions).toContainEqual(
-      expect.objectContaining({
-        transaction: 'run Warden action',
-        contexts: expect.objectContaining({
-          trace: expect.objectContaining({
-            op: 'cicd.workflow',
-            status: 'internal_error',
-            data: expect.objectContaining({
-              'warden.action.outcome': 'failure',
-              'warden.action.stage': 'dispatch',
-              'warden.error.code': 'provider_unavailable',
-            }),
-          }),
         }),
       })
     );

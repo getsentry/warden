@@ -8,7 +8,7 @@ import type {
 
 type SentryInitOptions = Pick<
   NodeOptions,
-  'beforeSend' | 'beforeSendTransaction' | 'transport'
+  'beforeSend' | 'transport'
 >;
 
 interface RequestLike {
@@ -86,12 +86,10 @@ export function initServiceTelemetry(
     environment: environment['VERCEL_ENV'] ?? 'development',
     ...(commitSha ? { release: `warden-service@${commitSha}` } : {}),
     tracesSampleRate: 1.0,
-    enableLogs: true,
-    sendDefaultPii: false,
     beforeSendSpan(span) {
-      if (span.data?.['drizzle.query.params'] === undefined) return span;
-      const { ['drizzle.query.params']: _parameters, ...data } = span.data;
-      return { ...span, data };
+      if (span.attributes['drizzle.query.params'] === undefined) return span;
+      const { ['drizzle.query.params']: _parameters, ...attributes } = span.attributes;
+      return { ...span, attributes };
     },
     integrations(defaultIntegrations) {
       return [

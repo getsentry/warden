@@ -67,7 +67,7 @@ var utils_headers = __webpack_require__(82003);
 // EXTERNAL MODULE: ../../node_modules/.pnpm/@earendil-works+pi-ai@0.86.1_@modelcontextprotocol+sdk@1.32.1_zod@4.6.7__ws@8.22.0_zod@4.6.7/node_modules/@earendil-works/pi-ai/dist/utils/node-http-proxy.js
 var node_http_proxy = __webpack_require__(78191);
 // EXTERNAL MODULE: ../../node_modules/.pnpm/@earendil-works+pi-ai@0.86.1_@modelcontextprotocol+sdk@1.32.1_zod@4.6.7__ws@8.22.0_zod@4.6.7/node_modules/@earendil-works/pi-ai/dist/utils/pi-user-agent.js
-var pi_user_agent = __webpack_require__(55278);
+var pi_user_agent = __webpack_require__(40);
 // EXTERNAL MODULE: ../../node_modules/.pnpm/@earendil-works+pi-ai@0.86.1_@modelcontextprotocol+sdk@1.32.1_zod@4.6.7__ws@8.22.0_zod@4.6.7/node_modules/@earendil-works/pi-ai/dist/utils/text.js
 var utils_text = __webpack_require__(65678);
 // EXTERNAL MODULE: ../../node_modules/.pnpm/@earendil-works+pi-ai@0.86.1_@modelcontextprotocol+sdk@1.32.1_zod@4.6.7__ws@8.22.0_zod@4.6.7/node_modules/@earendil-works/pi-ai/dist/utils/transcript.js
