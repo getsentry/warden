@@ -25,6 +25,8 @@ describeEval(
       model: provider.model,
       runtime: provider.runtime,
       auxiliaryModel: provider.auxiliaryModel,
+      effort: provider.effort,
+      auxiliaryEffort: provider.auxiliaryEffort,
       verbose: true,
     }),
     judges: [createWardenEvalJudge({ apiKey: provider.apiKey, model: provider.judgeModel })],

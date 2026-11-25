@@ -29,6 +29,8 @@ describeEval(
       model: provider.model,
       runtime: provider.runtime,
       auxiliaryModel: provider.auxiliaryModel,
+      effort: provider.effort,
+      auxiliaryEffort: provider.auxiliaryEffort,
       timeoutMs: INTEGRITY_REVIEW_RUN_TIMEOUT_MS,
       verbose: true,
     }),

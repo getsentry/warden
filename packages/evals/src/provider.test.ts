@@ -55,6 +55,40 @@ describe('resolveEvalProvider', () => {
     expect(config.judgeModel).toBe('openrouter/anthropic/claude-sonnet-4.6');
   });
 
+  it('uses WARDEN_EVAL_AUXILIARY_MODEL for auxiliary calls when set', () => {
+    const config = resolveEvalProvider({
+      WARDEN_EVAL_MODEL: 'openrouter/x-ai/grok-4.5',
+      WARDEN_EVAL_AUXILIARY_MODEL: 'openrouter/openai/gpt-6-luna',
+    });
+
+    expect(config.model).toBe('openrouter/x-ai/grok-4.5');
+    expect(config.auxiliaryModel).toBe('openrouter/openai/gpt-6-luna');
+    expect(config.judgeModel).toBe('openrouter/x-ai/grok-4.5');
+  });
+
+  it('rejects an auxiliary model without an eval model', () => {
+    expect(() => resolveEvalProvider({ WARDEN_EVAL_AUXILIARY_MODEL: 'openrouter/openai/gpt-6-luna' })).toThrow(
+      'WARDEN_EVAL_AUXILIARY_MODEL requires WARDEN_EVAL_MODEL'
+    );
+  });
+
+  it('reads agent and auxiliary effort separately', () => {
+    const config = resolveEvalProvider({
+      WARDEN_EVAL_MODEL: 'openrouter/x-ai/grok-4.5',
+      WARDEN_EVAL_EFFORT: 'high',
+      WARDEN_EVAL_AUXILIARY_EFFORT: ' medium ',
+    });
+
+    expect(config.effort).toBe('high');
+    expect(config.auxiliaryEffort).toBe('medium');
+  });
+
+  it('rejects an unknown effort level', () => {
+    expect(() => resolveEvalProvider({ WARDEN_EVAL_EFFORT: 'extreme' })).toThrow(
+      'WARDEN_EVAL_EFFORT must be one of: off, low, medium, high, xhigh, max'
+    );
+  });
+
   it('treats empty overrides as unset', () => {
     const config = resolveEvalProvider({ WARDEN_EVAL_MODEL: '', WARDEN_EVAL_JUDGE_MODEL: '  ' });
 

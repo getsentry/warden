@@ -14,6 +14,7 @@ import {
   FindingSchema,
   RuntimeNameSchema,
   verifyLocalFindings,
+  type Effort,
   type Finding,
   type RuntimeName,
   type UsageStats,
@@ -82,6 +83,7 @@ export interface RunVerificationEvalOptions {
   apiKey: string;
   runtime?: RuntimeName;
   model?: string;
+  effort?: Effort;
   verbose?: boolean;
 }
 
@@ -213,6 +215,7 @@ export async function runVerificationEval(
       apiKey: options.apiKey,
       runtime,
       model,
+      effort: options.effort,
       prContext: {
         repository: sourceRepository,
         title: meta.given,

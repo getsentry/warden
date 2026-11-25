@@ -6,7 +6,7 @@ import { runLocalSkill } from '@sentry/warden';
 import { evalFixtureRepoPath, singleEvalFixtureSourceRepository } from './fixtures.js';
 import { formatEvalId } from './names.js';
 import type { EvalMeta } from './types.js';
-import type { Finding, FindingProcessingEvent, RuntimeName, SkillReport } from '@sentry/warden';
+import type { Effort, Finding, FindingProcessingEvent, RuntimeName, SkillReport } from '@sentry/warden';
 
 export interface RunEvalOptions {
   /** Anthropic API key */
@@ -17,6 +17,10 @@ export interface RunEvalOptions {
   runtime?: RuntimeName;
   /** Model for auxiliary and synthesis calls. Uses the runtime default when unset. */
   auxiliaryModel?: string;
+  /** Effort for the skill agent. Uses the runtime default when unset. */
+  effort?: Effort;
+  /** Effort for auxiliary and synthesis calls. Uses the runtime default when unset. */
+  auxiliaryEffort?: Effort;
   /** Maximum turns per agent invocation. Keeps live evals bounded. */
   maxTurns?: number;
   /** Maximum wall-clock time for one Warden skill run before aborting. */
@@ -197,6 +201,8 @@ export async function runEvalSkill(
           runtime,
           auxiliaryModel: options.auxiliaryModel,
           synthesisModel: options.auxiliaryModel,
+          effort: options.effort,
+          auxiliaryEffort: options.auxiliaryEffort,
           maxTurns: options.maxTurns,
           abortController,
           verifyFindings: options.verifyFindings,

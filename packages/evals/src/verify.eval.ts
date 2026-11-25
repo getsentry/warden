@@ -21,8 +21,9 @@ describeEval(
   {
     harness: createVerificationEvalHarness({
       apiKey: provider.apiKey,
-      model: provider.model,
+      model: provider.auxiliaryModel,
       runtime: provider.runtime,
+      effort: provider.auxiliaryEffort,
       verbose: true,
     }),
     judges: [createVerificationEvalJudge()],
