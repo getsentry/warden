@@ -64,8 +64,6 @@ describe('executeTrigger', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     capturedEvents.length = 0;
-    Sentry.getGlobalScope().clear();
-    Sentry.getIsolationScope().clear();
     resetWardenOfflineForTests();
     delete process.env['WARDEN_OFFLINE'];
     vi.spyOn(console, 'log').mockImplementation(() => undefined);

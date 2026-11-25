@@ -236,14 +236,14 @@ importers:
         specifier: ^22.0.1
         version: 22.0.1
       '@sentry/core':
-        specifier: ^10.71.0
-        version: 10.71.0
+        specifier: ^11.18.0
+        version: 11.18.0
       '@sentry/dotagents-lib':
         specifier: ^1.17.0
         version: 1.17.0
       '@sentry/node':
-        specifier: ^10.71.0
-        version: 10.71.0(@opentelemetry/core@2.10.0(@opentelemetry/api@1.9.1))
+        specifier: ^11.18.0
+        version: 11.18.0(rollup@4.60.4)
       '@sentry/warden-service-api':
         specifier: workspace:*
         version: link:../warden-service-api
@@ -1658,6 +1658,9 @@ packages:
     resolution: {integrity: sha512-wgm9Ehl2jpeqP3zw/7mo3kRHFp5MEDhqAdwy1fTGkHAwnkGOVsgpvQhL8B5n1qlb01jV3n/bI0ZfZp5lWA1k4w==}
     engines: {node: '>=18.0.0'}
 
+  '@isaacs/nonrecursive-glob-match@1.1.0':
+    resolution: {integrity: sha512-GPm/Dbvk5RLmhRnxXIa7nTpK0xtl4E0wj0MslsuNiJ1FIROU+2+9lgUC/dgF7Ey4QCWhfEsgxilMRMCdHPfDfw==}
+
   '@jridgewell/resolve-uri@3.1.2':
     resolution: {integrity: sha512-bRISgCIjP20/tbWSPWMEi54QVPRZExkuD9lJL+UIxUKtwVJA8wW1Trb1jMs1RFXo1CBTNZ/5hpC9QvmKWdopKw==}
     engines: {node: '>=6.0.0'}
@@ -2789,6 +2792,18 @@ packages:
     cpu: [x64]
     os: [win32]
 
+  '@sentry/bundler-plugins@11.18.0':
+    resolution: {integrity: sha512-rFvVTYGF1zGnis+USxzWjnCCSJQwe2+rONiCTU9KE1gZQOGf9ZsgXOadJjZAHu3RBFOMnKtkQ7NUuPlXazEnIw==}
+    engines: {node: '>=20.19.0 <22.0.0 || >=22.12.0 <23.0.0 || >=23.2.0'}
+    peerDependencies:
+      rollup: '>=3.2.0'
+      webpack: '>=5.1.0'
+    peerDependenciesMeta:
+      rollup:
+        optional: true
+      webpack:
+        optional: true
+
   '@sentry/bundler-plugins@11.6.0':
     resolution: {integrity: sha512-qHKQgOQaayRuwDCWWoAkEMkJe13RZwrpAH5Y5edL3d5XD2Gd7uenA6lPdXFw3qP1slezeSYErV0GAdcVYMo8fg==}
     engines: {node: '>=20.19.0 <22.0.0 || >=22.12.0 <23.0.0 || >=23.2.0'}
@@ -2812,9 +2827,17 @@ packages:
     resolution: {integrity: sha512-ttSRcoLf2kIENDIFzH12aJaVMdxnidMYLvVNwEX/JjXfXaQot8u5M47QmgAFOOhVJ4nQ2uU8wTCh+fwSPrrCfg==}
     engines: {node: '>=14'}
 
+  '@sentry/conventions@0.36.0':
+    resolution: {integrity: sha512-FedIjtJSiTZa3VARAds2ok7Q9Xt2LjrZJ1SeaxMvGhRgMw4V+eOaECGa/JbJWe30tw6yehE1W7T4HmgK5XJRTQ==}
+    engines: {node: '>=14'}
+
   '@sentry/core@10.71.0':
     resolution: {integrity: sha512-OIjT7rzcWJjUC6r3eBT3Td1j0afDBMkbbx9jTocSD+ZSfc25eEU7hoIPS0WvfeIOTIN3y8bfQnXavwMReaNVHQ==}
     engines: {node: '>=18'}
+
+  '@sentry/core@11.18.0':
+    resolution: {integrity: sha512-i5DvfuiCFBznC7zBAdz+C5AVuRLy+RdoGtPOQMELWJSg3CnIfLTUNJQfwweVFrLUeh6CHw0u0W4tpirQnNmx4w==}
+    engines: {node: '>=20.19.0 <22.0.0 || >=22.12.0 <23.0.0 || >=23.2.0'}
 
   '@sentry/core@11.6.0':
     resolution: {integrity: sha512-PbITT1kfJYKJiS9fH4ZtOcwIONKyt+tUsTZSPtcAjPdkUDOzMKT61MkUa1Ze07VzNtLALT24ZdUOc6d9K4YoKA==}
@@ -2849,6 +2872,10 @@ packages:
     resolution: {integrity: sha512-bw2M/xkMu2+ATo6QWFmtTZTYp5LV1krt9/DTtYqtt4GmhXmXgdFPXCv6783AJI3HUoEMx2BcehhNbKzGrFXo/g==}
     engines: {node: '>=18'}
 
+  '@sentry/node@11.18.0':
+    resolution: {integrity: sha512-qZFnEG/WOifjfvG9HUiWXM266tmZow0Omq9mZK0hKmevVT4bowgVzNi+jyejVZrBAKqSC2PF96ebymiJ1Z7FPQ==}
+    engines: {node: '>=20.19.0 <22.0.0 || >=22.12.0 <23.0.0 || >=23.2.0'}
+
   '@sentry/node@11.6.0':
     resolution: {integrity: sha512-5uHdUSACyodmtar+LxhFl4/MdICJ1/38mrp5lrMpDKfWSV/7tu/KRmr5gD2J9Nm47I/xxbghSz+oinJ4EtJatQ==}
     engines: {node: '>=20.19.0 <22.0.0 || >=22.12.0 <23.0.0 || >=23.2.0'}
@@ -2860,6 +2887,12 @@ packages:
       '@opentelemetry/api': ^1.9.0
       '@opentelemetry/core': ^1.30.1 || ^2.1.0
       '@opentelemetry/sdk-trace-base': ^1.30.1 || ^2.1.0
+
+  '@sentry/opentelemetry@11.18.0':
+    resolution: {integrity: sha512-f5cyOW/cayhmFBWgVaJIeVJ+VLi0tB0rxaNjMBb8eEKAKMBoqCngfEIOeMVeurrTRlGZ0A/525YEnBbfdTCmmg==}
+    engines: {node: '>=20.19.0 <22.0.0 || >=22.12.0 <23.0.0 || >=23.2.0'}
+    peerDependencies:
+      '@opentelemetry/api': ^1.9.0
 
   '@sentry/opentelemetry@11.6.0':
     resolution: {integrity: sha512-W6b+/8TVejHSCSOWMGsU2wVQY+d7FH/kI2zIFYXmIcxJCd7A/ULhOXe29UYeh+VX9wObR23LvEcEUmgsFVqf6A==}
@@ -2876,6 +2909,10 @@ packages:
       vitest:
         optional: true
 
+  '@sentry/server-runtime-injection@11.18.0':
+    resolution: {integrity: sha512-Lwk0lTNWyPiCFKUXZzdVN/3MDddUM1LvOiny5nLXzU1Xe4nlPZCBcZcM0WTE7/v5w5S/COb7sw8SxB7VhbZvJA==}
+    engines: {node: '>=20.19.0 <22.0.0 || >=22.12.0 <23.0.0 || >=23.2.0'}
+
   '@sentry/server-runtime-injection@11.6.0':
     resolution: {integrity: sha512-3plQzwQfvz4HJkXLDfr5VuQQL5vyjar7RKn7UwFne3jc+9OSXRkxkZ6S0Z3RdBgbaFO1GkFwf/mFNX4H8nNcuw==}
     engines: {node: '>=20.19.0 <22.0.0 || >=22.12.0 <23.0.0 || >=23.2.0'}
@@ -2883,6 +2920,10 @@ packages:
   '@sentry/server-utils@10.71.0':
     resolution: {integrity: sha512-zdyShKNsghzPGVWVRzc7oybYTsRZdKgdPtq+dsksImo1b6n7ILlD7eYx1Q0eAOZoWkDqDmm+Ml6MQb76IT1eTA==}
     engines: {node: '>=18'}
+
+  '@sentry/server-utils@11.18.0':
+    resolution: {integrity: sha512-1ny+6qT8Hyt9EWplbAcf28wiFS82jiLCGwy8PQeq2IHm8lxsGbRkohAcp3hfRHZUsyiSGOVBcN3ofORLZvxSyg==}
+    engines: {node: '>=20.19.0 <22.0.0 || >=22.12.0 <23.0.0 || >=23.2.0'}
 
   '@sentry/server-utils@11.6.0':
     resolution: {integrity: sha512-pVpGqwxBOXDMSngxTVARRlYyEXEfKA3WU1ENCdgLCeJ4xJ4vNRf4ODGXYPvXBk0zkt2NZZFvray2JHXIeYG+tg==}
@@ -4389,6 +4430,10 @@ packages:
     resolution: {integrity: sha512-Wjlyrolmm8uDpm/ogGyXZXb1Z+Ca2B8NbJwqBVg0axK9GbBeoS7yGV6vjXnYdGm6X53iehEuxxbyiKp8QmN4Vw==}
     engines: {node: 18 || 20 || >=22}
 
+  glob@14.0.6:
+    resolution: {integrity: sha512-OwXjVP2svY5EyLY75Vek96C8qK43gqrt4xsZ+qSILdnaEiJPXkd62mcfUSNx/TQErQRdu5uM5kF67sfONragKw==}
+    engines: {node: 18 || 20 || >=22}
+
   google-auth-library@10.9.1:
     resolution: {integrity: sha512-i1ydyHrqcIxXkWh/uBmVkzCvIuq5yiK2ATndIe5XxKholrG/MTYP9xGYka4sQhrbIAgGjL2B6NOE7rFaiF3fXw==}
     engines: {node: '>=18'}
@@ -5136,6 +5181,10 @@ packages:
     resolution: {integrity: sha512-vpLQEs+VLCr1nU0BXS07maYoFwlDAH0gngQuuttxIwutDFEMHq2blX+8vpgxDdK3J1PwjCJiep77OitTZ4Ll1A==}
     engines: {node: 18 || 20 || >=22}
 
+  minimatch@11.0.9:
+    resolution: {integrity: sha512-KCFkfyjqerNlSstjlhIGNXIKZGA/6O4V4RlhZ+Dsr621SPPw0mzlypE9D9ZOoPiVefHID+j7/XuMMlqfD/F60Q==}
+    engines: {node: 20 || >=22}
+
   minimatch@3.1.5:
     resolution: {integrity: sha512-VgjWUsnnT6n+NUk6eZq77zeFdpW2LWDzP6zFGrCbHXiYNul5Dzqk2HHQ5uFH2DNW5Xbp8+jVzaeNt94ssEEl4w==}
 
@@ -5414,6 +5463,10 @@ packages:
 
   path-scurry@2.0.2:
     resolution: {integrity: sha512-3O/iVVsJAPsOnpwWIeD+d6z/7PmqApyQePUtCndjatj/9I5LylHvt5qluFaBT3I5h3r1ejfR056c+FCv+NnNXg==}
+    engines: {node: 18 || 20 || >=22}
+
+  path-scurry@3.0.0:
+    resolution: {integrity: sha512-1pTbQqH1wIwMi/eleQ5leFTTCkzFsPcgXNjwOA8YGGW/W4/kHT3dssE7Z6NH+zuqNLOzOB0uaD61yl7cAcVhgg==}
     engines: {node: 18 || 20 || >=22}
 
   path-to-regexp@6.3.0:
@@ -5820,6 +5873,11 @@ packages:
 
   sentry@0.45.0:
     resolution: {integrity: sha512-kgmEbLlC22lL7uneeUm9Sjz65rp5cvwYOMTxXbZCmBum4sbVre/lLT3zTV3kwXHJ9/BM8ZS0/GhZe9Cl1t6WyA==}
+    engines: {node: '>=20.0'}
+    hasBin: true
+
+  sentry@0.50.0:
+    resolution: {integrity: sha512-2BCdoK4xO3mN4c0QTXaMtJBJ9rjL5v1VawaV7Wd605hVWVrpZTipLbjGHEFavS8IliI0W68TGi8CuScbHALPjA==}
     engines: {node: '>=20.0'}
     hasBin: true
 
@@ -7824,6 +7882,8 @@ snapshots:
     dependencies:
       minipass: 7.1.3
 
+  '@isaacs/nonrecursive-glob-match@1.1.0': {}
+
   '@jridgewell/resolve-uri@3.1.2': {}
 
   '@jridgewell/sourcemap-codec@1.5.5': {}
@@ -8599,6 +8659,17 @@ snapshots:
   '@rollup/rollup-win32-x64-msvc@4.60.4':
     optional: true
 
+  '@sentry/bundler-plugins@11.18.0(rollup@4.60.4)':
+    dependencies:
+      '@sentry/core': 11.18.0
+      dotenv: 17.4.2
+      glob: 14.0.6
+      magic-string: 1.4.3
+      oxc-parser: 0.152.0
+      sentry: 0.50.0
+    optionalDependencies:
+      rollup: 4.60.4
+
   '@sentry/bundler-plugins@11.6.0(rollup@4.60.4)':
     dependencies:
       '@sentry/core': 11.6.0
@@ -8615,9 +8686,15 @@ snapshots:
 
   '@sentry/conventions@0.26.0': {}
 
+  '@sentry/conventions@0.36.0': {}
+
   '@sentry/core@10.71.0':
     dependencies:
       '@sentry/conventions': 0.16.0
+
+  '@sentry/core@11.18.0':
+    dependencies:
+      '@sentry/conventions': 0.36.0
 
   '@sentry/core@11.6.0':
     dependencies:
@@ -8655,6 +8732,19 @@ snapshots:
       - '@opentelemetry/exporter-trace-otlp-http'
       - supports-color
 
+  '@sentry/node@11.18.0(rollup@4.60.4)':
+    dependencies:
+      '@opentelemetry/api': 1.9.1
+      '@sentry/bundler-plugins': 11.18.0(rollup@4.60.4)
+      '@sentry/conventions': 0.36.0
+      '@sentry/core': 11.18.0
+      '@sentry/opentelemetry': 11.18.0(@opentelemetry/api@1.9.1)
+      '@sentry/server-runtime-injection': 11.18.0
+      '@sentry/server-utils': 11.18.0
+    transitivePeerDependencies:
+      - rollup
+      - webpack
+
   '@sentry/node@11.6.0(rollup@4.60.4)':
     dependencies:
       '@opentelemetry/api': 1.9.1
@@ -8677,6 +8767,12 @@ snapshots:
       '@sentry/conventions': 0.16.0
       '@sentry/core': 10.71.0
 
+  '@sentry/opentelemetry@11.18.0(@opentelemetry/api@1.9.1)':
+    dependencies:
+      '@opentelemetry/api': 1.9.1
+      '@sentry/conventions': 0.36.0
+      '@sentry/core': 11.18.0
+
   '@sentry/opentelemetry@11.6.0(@opentelemetry/api@1.9.1)':
     dependencies:
       '@opentelemetry/api': 1.9.1
@@ -8693,6 +8789,11 @@ snapshots:
       - rollup
       - webpack
 
+  '@sentry/server-runtime-injection@11.18.0':
+    dependencies:
+      '@sentry/core': 11.18.0
+      '@sentry/server-utils': 11.18.0
+
   '@sentry/server-runtime-injection@11.6.0':
     dependencies:
       '@sentry/core': 11.6.0
@@ -8707,6 +8808,12 @@ snapshots:
       meriyah: 6.1.4
     transitivePeerDependencies:
       - supports-color
+
+  '@sentry/server-utils@11.18.0':
+    dependencies:
+      '@opentelemetry/api': 1.9.1
+      '@sentry/conventions': 0.36.0
+      '@sentry/core': 11.18.0
 
   '@sentry/server-utils@11.6.0':
     dependencies:
@@ -10458,6 +10565,12 @@ snapshots:
       minipass: 7.1.3
       path-scurry: 2.0.2
 
+  glob@14.0.6:
+    dependencies:
+      minimatch: 11.0.9
+      minipass: 7.1.3
+      path-scurry: 3.0.0
+
   google-auth-library@10.9.1:
     dependencies:
       base64-js: 1.5.1
@@ -11587,6 +11700,11 @@ snapshots:
     dependencies:
       brace-expansion: 5.0.12
 
+  minimatch@11.0.9:
+    dependencies:
+      '@isaacs/nonrecursive-glob-match': 1.1.0
+      brace-expansion: 5.0.12
+
   minimatch@3.1.5:
     dependencies:
       brace-expansion: 1.1.21
@@ -11902,6 +12020,11 @@ snapshots:
   path-key@3.1.1: {}
 
   path-scurry@2.0.2:
+    dependencies:
+      lru-cache: 11.5.3
+      minipass: 7.1.3
+
+  path-scurry@3.0.0:
     dependencies:
       lru-cache: 11.5.3
       minipass: 7.1.3
@@ -12466,6 +12589,8 @@ snapshots:
       - supports-color
 
   sentry@0.45.0: {}
+
+  sentry@0.50.0: {}
 
   serve-static@2.2.1:
     dependencies:

@@ -23,8 +23,11 @@ Observability via Sentry: tracing, error context, and business metrics. All tele
 |---------|-------|
 | `release` | `warden@{version}` |
 | `environment` | `github-action` or `cli` |
-| `tracesSampleRate` | `1.0` (every transaction traced) |
-| `enableLogs` | `true` (structured Sentry logs) |
+| `tracesSampleRate` | `1.0` (every trace sampled) |
+| `traceLifecycle` | SDK v11 default `stream`: spans are sent in batches as they end, not as one transaction |
+| `dataCollection` | SDK v10 baseline: no user info, cookies, HTTP bodies, DB query data, or default GenAI content |
+
+Sentry logs are on because Warden calls `Sentry.logger` and installs `consoleLoggingIntegration`.
 
 ### Global Attributes
 

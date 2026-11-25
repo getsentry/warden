@@ -45,8 +45,6 @@ describe('sentry telemetry scope', () => {
     vi.restoreAllMocks();
     clearTelemetryEnv();
     process.env['WARDEN_SENTRY_DSN'] = 'https://public@example.com/1';
-    Sentry.getGlobalScope().clear();
-    Sentry.getIsolationScope().clear();
   });
 
   afterEach(() => {
