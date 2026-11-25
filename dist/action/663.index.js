@@ -2470,22 +2470,23 @@ function snapshotSpan(span) {
     const spanId = stringValue(spanJson?.span_id);
     if (!traceId || !spanId)
         return undefined;
+    const attributes = spanJson?.attributes;
     const startTimeUnixMs = timestampMs(spanJson?.start_timestamp);
-    const endTimeUnixMs = timestampMs(spanJson?.timestamp);
+    const endTimeUnixMs = timestampMs(spanJson?.end_timestamp);
     return {
         traceId,
         spanId,
         parentSpanId: stringValue(spanJson?.parent_span_id),
-        op: stringValue(spanJson?.op),
-        name: stringValue(spanJson?.description),
+        op: stringValue(attributes?.['sentry.op']),
+        name: stringValue(spanJson?.name),
         startTimeUnixMs,
         endTimeUnixMs,
         durationMs: startTimeUnixMs !== undefined && endTimeUnixMs !== undefined
             ? Math.max(0, endTimeUnixMs - startTimeUnixMs)
             : undefined,
         status: stringValue(spanJson?.status),
-        origin: stringValue(spanJson?.origin),
-        attributes: compactAttributes(spanJson?.data),
+        origin: stringValue(attributes?.['sentry.origin']),
+        attributes: compactAttributes(attributes),
     };
 }
 function descendantsForParent(spans, parentSpanId) {
@@ -2592,14 +2593,15 @@ function startTraceRecorder(parentSpan) {
 /* harmony export */   yI: () => (/* binding */ emitExtractionMetrics)
 /* harmony export */ });
 /* unused harmony exports setGlobalAttributes, getTraceId */
-/* harmony import */ var _sentry_node__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(11825);
-/* harmony import */ var _sentry_node__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(9604);
-/* harmony import */ var _sentry_node__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(49042);
-/* harmony import */ var _sentry_node__WEBPACK_IMPORTED_MODULE_7__ = __webpack_require__(15082);
-/* harmony import */ var _sentry_node__WEBPACK_IMPORTED_MODULE_8__ = __webpack_require__(78471);
-/* harmony import */ var _sentry_node__WEBPACK_IMPORTED_MODULE_9__ = __webpack_require__(68724);
-/* harmony import */ var _sentry_node__WEBPACK_IMPORTED_MODULE_10__ = __webpack_require__(15414);
-/* harmony import */ var _sentry_node__WEBPACK_IMPORTED_MODULE_11__ = __webpack_require__(96048);
+/* harmony import */ var _sentry_node__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(61135);
+/* harmony import */ var _sentry_node__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(53240);
+/* harmony import */ var _sentry_node__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(59070);
+/* harmony import */ var _sentry_node__WEBPACK_IMPORTED_MODULE_7__ = __webpack_require__(85563);
+/* harmony import */ var _sentry_node__WEBPACK_IMPORTED_MODULE_8__ = __webpack_require__(57459);
+/* harmony import */ var _sentry_node__WEBPACK_IMPORTED_MODULE_9__ = __webpack_require__(70440);
+/* harmony import */ var _sentry_node__WEBPACK_IMPORTED_MODULE_10__ = __webpack_require__(24618);
+/* harmony import */ var _sentry_node__WEBPACK_IMPORTED_MODULE_11__ = __webpack_require__(46730);
+/* harmony import */ var _sentry_node__WEBPACK_IMPORTED_MODULE_12__ = __webpack_require__(40484);
 /* harmony import */ var _types_index_js__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(78481);
 /* harmony import */ var _utils_index_js__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(82272);
 /* harmony import */ var _sdk_otel_js__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(85884);
@@ -2610,6 +2612,8 @@ function startTraceRecorder(parentSpan) {
 
 
 let initialized = false;
+/** Header and query keys that carry client network identity; the SDK v10 default denylist. */
+const NETWORK_IDENTITY_KEYS = ['forwarded', '-ip', 'remote-', 'via', '-user'];
 function getGitHubServerUrl() {
     const serverUrl = process.env['GITHUB_SERVER_URL'] || 'https://github.com';
     return serverUrl.replace(/\/+$/, '');
@@ -2641,7 +2645,22 @@ function initSentry(context, options = {}) {
         release: `warden@${(0,_utils_index_js__WEBPACK_IMPORTED_MODULE_1__/* .getVersion */ .HF)()}`,
         environment: context === 'action' ? 'github-action' : 'cli',
         tracesSampleRate: 1.0,
-        enableLogs: true,
+        // SDK v11 collects HTTP bodies, unscrubbed headers, and user info by
+        // default. Warden handles tokens and private code, so keep the v10 baseline.
+        dataCollection: {
+            userInfo: false,
+            cookies: false,
+            httpHeaders: {
+                request: { deny: NETWORK_IDENTITY_KEYS },
+                response: { deny: NETWORK_IDENTITY_KEYS },
+            },
+            httpBodies: [],
+            urlQueryParams: { deny: NETWORK_IDENTITY_KEYS },
+            genAI: { inputs: false, outputs: false },
+            databaseQueryData: false,
+            queues: false,
+            graphQL: { document: false, variables: false },
+        },
         ...options,
         integrations: [
             _sentry_node__WEBPACK_IMPORTED_MODULE_5__/* .consoleLoggingIntegration */ .d({ levels: ['warn', 'error'] }),
@@ -2667,7 +2686,7 @@ function ensureLocalTracing() {
     });
 }
 
-const { logger } = _sentry_node__WEBPACK_IMPORTED_MODULE_10__;
+const logger = _sentry_node__WEBPACK_IMPORTED_MODULE_11__/* .logger */ .vF;
 /**
  * Set attributes on the global Sentry scope.
  * These apply to logs and metrics. Pass them explicitly when starting spans.
@@ -2822,7 +2841,7 @@ function emitUsageComponentMetrics(attrs, usage) {
     for (const { category, tokens } of usageTokenComponents(usage)) {
         if (tokens <= 0)
             continue;
-        _sentry_node__WEBPACK_IMPORTED_MODULE_11__.distribution('warden.gen_ai.token.usage', tokens, {
+        _sentry_node__WEBPACK_IMPORTED_MODULE_12__/* .metrics */ .qd.distribution('warden.gen_ai.token.usage', tokens, {
             unit: '{token}',
             attributes: { ...attrs, 'warden.gen_ai.token.category': category },
         });
@@ -2845,7 +2864,7 @@ function emitCostComponentMetrics(attrs, model, usage) {
     for (const { component, costUSD } of components) {
         if (costUSD <= 0)
             continue;
-        _sentry_node__WEBPACK_IMPORTED_MODULE_11__.distribution('warden.gen_ai.cost.component.usd', costUSD, {
+        _sentry_node__WEBPACK_IMPORTED_MODULE_12__/* .metrics */ .qd.distribution('warden.gen_ai.cost.component.usd', costUSD, {
             attributes: { ...attrs, 'warden.gen_ai.cost.component': component },
         });
     }
@@ -2856,7 +2875,7 @@ function emitCostComponentMetrics(attrs, model, usage) {
  */
 function emitRunMetric() {
     safeEmit(() => {
-        _sentry_node__WEBPACK_IMPORTED_MODULE_11__.count('warden.workflow.runs', 1);
+        _sentry_node__WEBPACK_IMPORTED_MODULE_12__/* .metrics */ .qd.count('warden.workflow.runs', 1);
     });
 }
 /** Emit the final outcome of a GitHub Action invocation, including startup failures. */
@@ -2868,13 +2887,13 @@ function emitActionRunMetric(outcome, stage, errorCode) {
         };
         if (errorCode)
             attrs['warden.error.code'] = errorCode;
-        _sentry_node__WEBPACK_IMPORTED_MODULE_11__.count('warden.action.runs', 1, { attributes: attrs });
+        _sentry_node__WEBPACK_IMPORTED_MODULE_12__/* .metrics */ .qd.count('warden.action.runs', 1, { attributes: attrs });
     });
 }
 function emitSkillMetrics(report) {
     safeEmit(() => {
         const attrs = agentMetricAttributes(report.skill, report.model, report.runtime);
-        _sentry_node__WEBPACK_IMPORTED_MODULE_11__.distribution('warden.skill.duration', report.durationMs ?? 0, {
+        _sentry_node__WEBPACK_IMPORTED_MODULE_12__/* .metrics */ .qd.distribution('warden.skill.duration', report.durationMs ?? 0, {
             unit: 'millisecond',
             attributes: attrs,
         });
@@ -2884,24 +2903,24 @@ function emitSkillMetrics(report) {
                 'gen_ai.operation.name': 'invoke_agent',
                 'gen_ai.provider.name': (0,_sdk_otel_js__WEBPACK_IMPORTED_MODULE_2__/* .genAiProviderName */ .Jo)(report.runtime, report.model),
             };
-            _sentry_node__WEBPACK_IMPORTED_MODULE_11__.distribution('gen_ai.client.token.usage', report.usage.inputTokens, {
+            _sentry_node__WEBPACK_IMPORTED_MODULE_12__/* .metrics */ .qd.distribution('gen_ai.client.token.usage', report.usage.inputTokens, {
                 unit: '{token}',
                 attributes: { ...tokenAttrs, 'gen_ai.token.type': 'input' },
             });
-            _sentry_node__WEBPACK_IMPORTED_MODULE_11__.distribution('gen_ai.client.token.usage', report.usage.outputTokens, {
+            _sentry_node__WEBPACK_IMPORTED_MODULE_12__/* .metrics */ .qd.distribution('gen_ai.client.token.usage', report.usage.outputTokens, {
                 unit: '{token}',
                 attributes: { ...tokenAttrs, 'gen_ai.token.type': 'output' },
             });
             emitUsageComponentMetrics(tokenAttrs, report.usage);
             emitCostComponentMetrics(attrs, report.model, report.usage);
             if (report.usage.costUSD) {
-                _sentry_node__WEBPACK_IMPORTED_MODULE_11__.distribution('warden.gen_ai.cost.usd', report.usage.costUSD, { attributes: attrs });
+                _sentry_node__WEBPACK_IMPORTED_MODULE_12__/* .metrics */ .qd.distribution('warden.gen_ai.cost.usd', report.usage.costUSD, { attributes: attrs });
             }
         }
         for (const severity of Object.keys(_types_index_js__WEBPACK_IMPORTED_MODULE_0__/* .SEVERITY_ORDER */ .B)) {
             const count = report.findings.filter((f) => f.severity === severity).length;
             if (count > 0) {
-                _sentry_node__WEBPACK_IMPORTED_MODULE_11__.count('warden.findings', count, {
+                _sentry_node__WEBPACK_IMPORTED_MODULE_12__/* .metrics */ .qd.count('warden.findings', count, {
                     attributes: { ...attrs, 'warden.finding.severity': severity },
                 });
             }
@@ -2911,24 +2930,24 @@ function emitSkillMetrics(report) {
 function emitExtractionMetrics(skill, method, count) {
     safeEmit(() => {
         const attrs = { ...agentMetricAttributes(skill), 'warden.extraction.method': method };
-        _sentry_node__WEBPACK_IMPORTED_MODULE_11__.count('warden.extraction.attempts', 1, { attributes: attrs });
-        _sentry_node__WEBPACK_IMPORTED_MODULE_11__.count('warden.extraction.findings', count, { attributes: attrs });
+        _sentry_node__WEBPACK_IMPORTED_MODULE_12__/* .metrics */ .qd.count('warden.extraction.attempts', 1, { attributes: attrs });
+        _sentry_node__WEBPACK_IMPORTED_MODULE_12__/* .metrics */ .qd.count('warden.extraction.findings', count, { attributes: attrs });
     });
 }
 function emitFixEvalMetrics(evaluated, resolved, failed, skipped, uniqueFindingsEvaluated, uniqueFindingsCodeChanged, uniqueFindingsResolved) {
     safeEmit(() => {
-        _sentry_node__WEBPACK_IMPORTED_MODULE_11__.count('warden.fix_eval.evaluated', evaluated);
-        _sentry_node__WEBPACK_IMPORTED_MODULE_11__.count('warden.fix_eval.resolved', resolved);
-        _sentry_node__WEBPACK_IMPORTED_MODULE_11__.count('warden.fix_eval.failed', failed);
-        _sentry_node__WEBPACK_IMPORTED_MODULE_11__.count('warden.fix_eval.skipped', skipped);
-        _sentry_node__WEBPACK_IMPORTED_MODULE_11__.count('warden.fix_eval.unique_findings.evaluated', uniqueFindingsEvaluated);
-        _sentry_node__WEBPACK_IMPORTED_MODULE_11__.count('warden.fix_eval.unique_findings.code_changed', uniqueFindingsCodeChanged);
-        _sentry_node__WEBPACK_IMPORTED_MODULE_11__.count('warden.fix_eval.unique_findings.resolved', uniqueFindingsResolved);
+        _sentry_node__WEBPACK_IMPORTED_MODULE_12__/* .metrics */ .qd.count('warden.fix_eval.evaluated', evaluated);
+        _sentry_node__WEBPACK_IMPORTED_MODULE_12__/* .metrics */ .qd.count('warden.fix_eval.resolved', resolved);
+        _sentry_node__WEBPACK_IMPORTED_MODULE_12__/* .metrics */ .qd.count('warden.fix_eval.failed', failed);
+        _sentry_node__WEBPACK_IMPORTED_MODULE_12__/* .metrics */ .qd.count('warden.fix_eval.skipped', skipped);
+        _sentry_node__WEBPACK_IMPORTED_MODULE_12__/* .metrics */ .qd.count('warden.fix_eval.unique_findings.evaluated', uniqueFindingsEvaluated);
+        _sentry_node__WEBPACK_IMPORTED_MODULE_12__/* .metrics */ .qd.count('warden.fix_eval.unique_findings.code_changed', uniqueFindingsCodeChanged);
+        _sentry_node__WEBPACK_IMPORTED_MODULE_12__/* .metrics */ .qd.count('warden.fix_eval.unique_findings.resolved', uniqueFindingsResolved);
     });
 }
 function emitRetryMetric(skill, attempt) {
     safeEmit(() => {
-        _sentry_node__WEBPACK_IMPORTED_MODULE_11__.count('warden.skill.retries', 1, {
+        _sentry_node__WEBPACK_IMPORTED_MODULE_12__/* .metrics */ .qd.count('warden.skill.retries', 1, {
             attributes: { ...agentMetricAttributes(skill), 'warden.retry.attempt': attempt },
         });
     });
@@ -2936,10 +2955,10 @@ function emitRetryMetric(skill, attempt) {
 function emitDedupMetrics(skill, total, unique) {
     safeEmit(() => {
         const attrs = agentMetricAttributes(skill);
-        _sentry_node__WEBPACK_IMPORTED_MODULE_11__.distribution('warden.dedup.total', total, { attributes: attrs });
-        _sentry_node__WEBPACK_IMPORTED_MODULE_11__.distribution('warden.dedup.unique', unique, { attributes: attrs });
+        _sentry_node__WEBPACK_IMPORTED_MODULE_12__/* .metrics */ .qd.distribution('warden.dedup.total', total, { attributes: attrs });
+        _sentry_node__WEBPACK_IMPORTED_MODULE_12__/* .metrics */ .qd.distribution('warden.dedup.unique', unique, { attributes: attrs });
         if (total > 0) {
-            _sentry_node__WEBPACK_IMPORTED_MODULE_11__.distribution('warden.dedup.removed', total - unique, { attributes: attrs });
+            _sentry_node__WEBPACK_IMPORTED_MODULE_12__/* .metrics */ .qd.distribution('warden.dedup.removed', total - unique, { attributes: attrs });
         }
     });
 }
@@ -2955,13 +2974,13 @@ function emitFixEvalVerdictMetric(verdict, skill, options = {}) {
         if (skill) {
             Object.assign(attrs, agentMetricAttributes(skill));
         }
-        _sentry_node__WEBPACK_IMPORTED_MODULE_11__.count('warden.fix_eval.verdict', 1, { attributes: attrs });
+        _sentry_node__WEBPACK_IMPORTED_MODULE_12__/* .metrics */ .qd.count('warden.fix_eval.verdict', 1, { attributes: attrs });
     });
 }
 function emitStaleResolutionMetric(count, skill) {
     safeEmit(() => {
         const attrs = skill ? agentMetricAttributes(skill) : undefined;
-        _sentry_node__WEBPACK_IMPORTED_MODULE_11__.count('warden.stale.resolved', count, attrs ? { attributes: attrs } : undefined);
+        _sentry_node__WEBPACK_IMPORTED_MODULE_12__/* .metrics */ .qd.count('warden.stale.resolved', count, attrs ? { attributes: attrs } : undefined);
     });
 }
 /**

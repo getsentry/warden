@@ -4326,7 +4326,7 @@ class Gaxios {
      * @returns A proxy agent
      */
     static async #getProxyAgent() {
-        this.#proxyAgent ||= (await __webpack_require__.e(/* import() */ 599).then(__webpack_require__.t.bind(__webpack_require__, 4599, 23))).HttpsProxyAgent;
+        this.#proxyAgent ||= (await Promise.all(/* import() */[__webpack_require__.e(675), __webpack_require__.e(599)]).then(__webpack_require__.t.bind(__webpack_require__, 4599, 23))).HttpsProxyAgent;
         return this.#proxyAgent;
     }
     static async #getFetch() {
@@ -15198,7 +15198,7 @@ module.exports = {
 /* istanbul ignore else  */
 if (!process.env.WS_NO_BUFFER_UTIL) {
   try {
-    const bufferUtil = __webpack_require__(48812);
+    const bufferUtil = __webpack_require__(26431);
 
     module.exports.mask = function (source, mask, output, offset, length) {
       if (length < 48) _mask(source, mask, output, offset, length);
@@ -20108,7 +20108,7 @@ function socketOnError() {
 
 /***/ }),
 
-/***/ 48812:
+/***/ 26431:
 /***/ ((module) => {
 
 module.exports = eval("require")("bufferutil");
@@ -21326,7 +21326,7 @@ function safeJsonStringify(value) {
 
 /***/ }),
 
-/***/ 55278:
+/***/ 40:
 /***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __webpack_require__) => {
 
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {

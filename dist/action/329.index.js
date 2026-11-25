@@ -15949,7 +15949,7 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony import */ var _utils_event_stream_js__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(45174);
 /* harmony import */ var _utils_headers_js__WEBPACK_IMPORTED_MODULE_9__ = __webpack_require__(82003);
 /* harmony import */ var _utils_json_parse_js__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(84781);
-/* harmony import */ var _utils_pi_user_agent_js__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(55278);
+/* harmony import */ var _utils_pi_user_agent_js__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(40);
 /* harmony import */ var _utils_provider_env_js__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(67982);
 /* harmony import */ var _utils_provider_retry_js__WEBPACK_IMPORTED_MODULE_8__ = __webpack_require__(46863);
 /* harmony import */ var _utils_sanitize_unicode_js__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(43780);
@@ -17207,7 +17207,7 @@ function buildCopilotDynamicHeaders(params) {
 
 /***/ }),
 
-/***/ 55278:
+/***/ 40:
 /***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __webpack_require__) => {
 
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {

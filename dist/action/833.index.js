@@ -63,7 +63,7 @@ hljs.registerLanguage('dust', __webpack_require__(32188));
 hljs.registerLanguage('ebnf', __webpack_require__(35603));
 hljs.registerLanguage('elixir', __webpack_require__(61755));
 hljs.registerLanguage('elm', __webpack_require__(79046));
-hljs.registerLanguage('ruby', __webpack_require__(31176));
+hljs.registerLanguage('ruby', __webpack_require__(8795));
 hljs.registerLanguage('erb', __webpack_require__(36193));
 hljs.registerLanguage('erlang-repl', __webpack_require__(37497));
 hljs.registerLanguage('erlang', __webpack_require__(89843));
