@@ -494,7 +494,7 @@ async function callHaiku(options) {
         if (prefill) {
             messages.push({ role: 'assistant', content: prefill });
         }
-        (0,_otel_js__WEBPACK_IMPORTED_MODULE_3__/* .setGenAiInputMessagesAttr */ .uQ)(span, messages);
+        (0,_otel_js__WEBPACK_IMPORTED_MODULE_3__/* .setGenAiInputMessageHashesAttr */ .vL)(span, messages);
         try {
             const response = await client.messages.create({
                 model,
@@ -601,7 +601,7 @@ async function callHaikuWithTools(options) {
                     'gen_ai.output.type': 'json',
                 },
             }, async (chatSpan) => {
-                (0,_otel_js__WEBPACK_IMPORTED_MODULE_3__/* .setGenAiInputMessagesAttr */ .uQ)(chatSpan, inputMessages);
+                (0,_otel_js__WEBPACK_IMPORTED_MODULE_3__/* .setGenAiInputMessageHashesAttr */ .vL)(chatSpan, inputMessages);
                 try {
                     const response = await client.messages.create({
                         model,
@@ -767,8 +767,11 @@ function isWardenOffline() {
 /* harmony export */   kj: () => (/* binding */ genAiSpanName),
 /* harmony export */   kq: () => (/* binding */ setGenAiSystemInstructionsAttr),
 /* harmony export */   qk: () => (/* binding */ setGenAiUsageAttrs),
-/* harmony export */   uQ: () => (/* binding */ setGenAiInputMessagesAttr)
+/* harmony export */   vL: () => (/* binding */ setGenAiInputMessageHashesAttr)
 /* harmony export */ });
+/* harmony import */ var node_crypto__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(77598);
+/* harmony import */ var node_crypto__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(node_crypto__WEBPACK_IMPORTED_MODULE_0__);
+
 const PROVIDER_NAME_ALIASES = {
     mistral: 'mistral_ai',
     xai: 'x_ai',
@@ -945,9 +948,16 @@ function normalizeMessage(message) {
         ...finishReasonAttrs(message),
     };
 }
-/** Set OTel GenAI input messages from raw runtime transcript messages. */
-function setGenAiInputMessagesAttr(span, messages) {
-    span.setAttribute('gen_ai.input.messages', JSON.stringify(messages.map(normalizeMessage)));
+/**
+ * Set content hashes for input messages instead of their content.
+ *
+ * Chat spans carry the whole conversation so far, so full content grows with
+ * every turn and pushes long runs past Relay's span size limit, which drops the
+ * entire transaction. Hashes still show where two requests' inputs diverge.
+ * Earlier turns stay readable from their own output messages and tool spans.
+ */
+function setGenAiInputMessageHashesAttr(span, messages) {
+    span.setAttribute('warden.gen_ai.input.message_hashes', JSON.stringify(messages.map((message) => (0,node_crypto__WEBPACK_IMPORTED_MODULE_0__.createHash)('sha256').update(JSON.stringify(normalizeMessage(message))).digest('hex').slice(0, 16))));
 }
 /** Set OTel GenAI output messages from raw runtime response messages. */
 function setGenAiOutputMessagesAttrFromMessages(span, messages) {
@@ -1840,7 +1850,7 @@ async function runPiPrompt(options) {
                     ...usageAttrs,
                 },
             }, (span) => {
-                (0,otel/* setGenAiInputMessagesAttr */.uQ)(span, conversationMessages);
+                (0,otel/* setGenAiInputMessageHashesAttr */.vL)(span, conversationMessages);
                 (0,otel/* setGenAiOutputMessagesAttrFromMessages */.L6)(span, [outputMessage]);
             }, options.traceRecorder);
         }
@@ -2005,7 +2015,7 @@ async function runStructured(request) {
         },
     }, async (span) => {
         (0,otel/* setGenAiSystemInstructionsAttr */.kq)(span, systemPrompt);
-        (0,otel/* setGenAiInputMessagesAttr */.uQ)(span, [{ role: 'user', content: request.prompt }]);
+        (0,otel/* setGenAiInputMessageHashesAttr */.vL)(span, [{ role: 'user', content: request.prompt }]);
         try {
             const run = await runPiPrompt({
                 cwd: process.cwd(),
@@ -2087,7 +2097,7 @@ const piRuntime = {
             },
         }, async (span) => {
             (0,otel/* setGenAiSystemInstructionsAttr */.kq)(span, systemPrompt);
-            (0,otel/* setGenAiInputMessagesAttr */.uQ)(span, [{ role: 'user', content: userPrompt }]);
+            (0,otel/* setGenAiInputMessageHashesAttr */.vL)(span, [{ role: 'user', content: userPrompt }]);
             try {
                 const run = await runPiPrompt({
                     cwd: repoPath,
