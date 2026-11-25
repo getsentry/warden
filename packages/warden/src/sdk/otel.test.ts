@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { genAiProviderName, genAiToolCallAttributes, genAiUsageAttributes } from './otel.js';
+import {
+  genAiProviderName,
+  genAiToolCallAttributes,
+  genAiUsageAttributes,
+  setGenAiInputMessageHashesAttr,
+} from './otel.js';
 
 describe('OpenTelemetry GenAI provider attribution', () => {
   it('uses provider ids from model selectors', () => {
@@ -46,5 +51,43 @@ describe('OpenTelemetry GenAI tool call attributes', () => {
       'gen_ai.tool.call.arguments': '{"path":"src/index.ts"}',
       'gen_ai.tool.call.result': '{"ok":true}',
     });
+  });
+});
+
+describe('OpenTelemetry GenAI input message hashes', () => {
+  function capture(messages: Parameters<typeof setGenAiInputMessageHashesAttr>[1]) {
+    const attrs = new Map<string, unknown>();
+    setGenAiInputMessageHashesAttr({ setAttribute: (key, value) => attrs.set(key, value) }, messages);
+    return attrs;
+  }
+
+  it('records one hash per message and no message content', () => {
+    const secret = 'x'.repeat(10_000);
+    const attrs = capture([
+      { role: 'user', content: secret },
+      { role: 'assistant', content: [{ type: 'text', text: 'ok' }] },
+    ]);
+
+    expect(attrs.has('gen_ai.input.messages')).toBe(false);
+    const raw = attrs.get('warden.gen_ai.input.message_hashes') as string;
+    expect(raw).not.toContain('xxxx');
+    const hashes = JSON.parse(raw) as string[];
+    expect(hashes).toHaveLength(2);
+    for (const hash of hashes) expect(hash).toMatch(/^[0-9a-f]{16}$/);
+  });
+
+  it('keeps hashes stable for shared history and changes them when content differs', () => {
+    const history = [{ role: 'user', content: 'review this diff' }];
+    const first = JSON.parse(capture(history).get('warden.gen_ai.input.message_hashes') as string) as string[];
+    const next = JSON.parse(capture([
+      ...history,
+      { role: 'assistant', content: 'done' },
+    ]).get('warden.gen_ai.input.message_hashes') as string) as string[];
+    const changed = JSON.parse(capture([
+      { role: 'user', content: 'review that diff' },
+    ]).get('warden.gen_ai.input.message_hashes') as string) as string[];
+
+    expect(next[0]).toBe(first[0]);
+    expect(changed[0]).not.toBe(first[0]);
   });
 });

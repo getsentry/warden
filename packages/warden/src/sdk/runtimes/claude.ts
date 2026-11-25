@@ -25,7 +25,7 @@ import {
   genAiSpanName,
   genAiToolCallAttributes,
   genAiUsageAttributes,
-  setGenAiInputMessagesAttr,
+  setGenAiInputMessageHashesAttr,
   setGenAiOutputMessagesAttr,
   setGenAiOutputMessagesAttrFromMessages,
   setGenAiSystemInstructionsAttr,
@@ -385,7 +385,7 @@ export const claudeRuntime: Runtime = {
       },
       async (span) => {
         setGenAiSystemInstructionsAttr(span, systemPrompt);
-        setGenAiInputMessagesAttr(span, [{ role: 'user', content: userPrompt }]);
+        setGenAiInputMessageHashesAttr(span, [{ role: 'user', content: userPrompt }]);
 
         const stderrChunks: string[] = [];
 
@@ -468,7 +468,7 @@ export const claudeRuntime: Runtime = {
                 },
               },
               (chatSpan) => {
-                setGenAiInputMessagesAttr(chatSpan, inputMessages);
+                setGenAiInputMessageHashesAttr(chatSpan, inputMessages);
                 setGenAiOutputMessagesAttrFromMessages(chatSpan, [turn.outputMessage]);
               },
               request.traceRecorder,

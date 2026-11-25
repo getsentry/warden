@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import type { UsageStats } from '../types/index.js';
 
 interface SpanLike {
@@ -245,9 +246,20 @@ function normalizeMessage(message: GenAiMessage): Record<string, unknown> {
   };
 }
 
-/** Set OTel GenAI input messages from raw runtime transcript messages. */
-export function setGenAiInputMessagesAttr(span: SpanLike, messages: GenAiMessage[]): void {
-  span.setAttribute('gen_ai.input.messages', JSON.stringify(messages.map(normalizeMessage)));
+/**
+ * Set content hashes for input messages instead of their content.
+ *
+ * Chat spans carry the whole conversation so far, so full content grows with
+ * every turn and pushes long runs past Relay's span size limit, which drops the
+ * entire transaction. Hashes still show where two requests' inputs diverge.
+ * Earlier turns stay readable from their own output messages and tool spans.
+ */
+export function setGenAiInputMessageHashesAttr(span: SpanLike, messages: GenAiMessage[]): void {
+  span.setAttribute('warden.gen_ai.input.message_hashes', JSON.stringify(
+    messages.map((message) =>
+      createHash('sha256').update(JSON.stringify(normalizeMessage(message))).digest('hex').slice(0, 16)
+    ),
+  ));
 }
 
 /** Set OTel GenAI output messages from raw runtime response messages. */
