@@ -127,7 +127,7 @@ The `gen_ai.invoke_agent` span on `executeQuery()` carries attributes for Sentry
 | `gen_ai.request.model` | Model ID from options | [OTel conditionally required](https://opentelemetry.io/docs/specs/semconv/gen-ai/gen-ai-agent-spans/) |
 | `warden.request.max_turns` | `maxTurns` value | Warden extension (not in spec) |
 | `gen_ai.system_instructions` | Stringified text instruction parts | OTel GenAI |
-| `gen_ai.input.messages` | Stringified normalized message array | OTel GenAI |
+| `warden.gen_ai.input.message_hashes` | Stringified array of per-message SHA-256 prefixes (16 hex chars) | Warden extension. Replaces `gen_ai.input.messages` so input content does not push spans past Relay's size limit |
 
 ### Response attributes (set after SDK result)
 
@@ -167,6 +167,8 @@ Created from `SDKAssistantMessage` events streamed by `query()`. Each span repre
 | `gen_ai.usage.output_tokens` | `message.message.usage.output_tokens` | Output tokens for this turn |
 | `gen_ai.usage.cache_read.input_tokens` | `message.message.usage.cache_read_input_tokens` | Cache read subset |
 | `gen_ai.usage.cache_creation.input_tokens` | `message.message.usage.cache_creation_input_tokens` | Cache write subset |
+| `warden.gen_ai.input.message_hashes` | Conversation so far, one hash per message | Content is omitted; compare hashes to see where inputs diverge |
+| `gen_ai.output.messages` | This turn's assistant message | Full content |
 
 ### Per-tool `gen_ai.execute_tool` attributes
 

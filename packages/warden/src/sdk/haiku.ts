@@ -8,7 +8,7 @@ import { aggregateUsage, emptyUsage } from './usage.js';
 import {
   genAiSpanName,
   genAiToolCallAttributes,
-  setGenAiInputMessagesAttr,
+  setGenAiInputMessageHashesAttr,
   setGenAiOutputMessagesAttr,
   setGenAiOutputMessagesAttrFromMessages,
   setGenAiUsageAttrs,
@@ -215,7 +215,7 @@ export async function callHaiku<T>(options: CallHaikuOptions<T>): Promise<HaikuR
         messages.push({ role: 'assistant', content: prefill });
       }
 
-      setGenAiInputMessagesAttr(span, messages);
+      setGenAiInputMessageHashesAttr(span, messages);
 
       try {
         const response = await client.messages.create({
@@ -373,7 +373,7 @@ export async function callHaikuWithTools<T>(options: CallHaikuWithToolsOptions<T
             },
           },
           async (chatSpan) => {
-            setGenAiInputMessagesAttr(chatSpan, inputMessages);
+            setGenAiInputMessageHashesAttr(chatSpan, inputMessages);
             try {
               const response = await client.messages.create({
                 model,

@@ -43,7 +43,7 @@ import {
   genAiToolCallAttributes,
   genAiProviderName,
   genAiUsageAttributes,
-  setGenAiInputMessagesAttr,
+  setGenAiInputMessageHashesAttr,
   setGenAiOutputMessagesAttr,
   setGenAiOutputMessagesAttrFromMessages,
   setGenAiSystemInstructionsAttr,
@@ -728,7 +728,7 @@ async function runPiPrompt(options: PiPromptOptions): Promise<PiPromptResult> {
           },
         },
         (span) => {
-          setGenAiInputMessagesAttr(span, conversationMessages);
+          setGenAiInputMessageHashesAttr(span, conversationMessages);
           setGenAiOutputMessagesAttrFromMessages(span, [outputMessage]);
         },
         options.traceRecorder,
@@ -935,7 +935,7 @@ async function runStructured<T>(
     },
     async (span) => {
       setGenAiSystemInstructionsAttr(span, systemPrompt);
-      setGenAiInputMessagesAttr(span, [{ role: 'user', content: request.prompt }]);
+      setGenAiInputMessageHashesAttr(span, [{ role: 'user', content: request.prompt }]);
 
       try {
         const run = await runPiPrompt({
@@ -1037,7 +1037,7 @@ export const piRuntime: Runtime = {
       },
       async (span) => {
         setGenAiSystemInstructionsAttr(span, systemPrompt);
-        setGenAiInputMessagesAttr(span, [{ role: 'user', content: userPrompt }]);
+        setGenAiInputMessageHashesAttr(span, [{ role: 'user', content: userPrompt }]);
 
         try {
           const run = await runPiPrompt({

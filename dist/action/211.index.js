@@ -16576,7 +16576,7 @@ const claudeRuntime = {
             },
         }, async (span) => {
             (0,otel/* setGenAiSystemInstructionsAttr */.kq)(span, systemPrompt);
-            (0,otel/* setGenAiInputMessagesAttr */.uQ)(span, [{ role: 'user', content: userPrompt }]);
+            (0,otel/* setGenAiInputMessageHashesAttr */.vL)(span, [{ role: 'user', content: userPrompt }]);
             const stderrChunks = [];
             const stream = (0,sdk/* query */.P)({
                 prompt: userPrompt,
@@ -16651,7 +16651,7 @@ const claudeRuntime = {
                             ...usageAttrs,
                         },
                     }, (chatSpan) => {
-                        (0,otel/* setGenAiInputMessagesAttr */.uQ)(chatSpan, inputMessages);
+                        (0,otel/* setGenAiInputMessageHashesAttr */.vL)(chatSpan, inputMessages);
                         (0,otel/* setGenAiOutputMessagesAttrFromMessages */.L6)(chatSpan, [turn.outputMessage]);
                     }, request.traceRecorder);
                     for (const toolUse of turn.toolUses) {
