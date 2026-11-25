@@ -7,11 +7,21 @@ import {
   traceRequest,
 } from './sentry.js';
 
-type InitOptions = NonNullable<Parameters<typeof initServiceTelemetry>[1]>;
-type BeforeSendTransaction = NonNullable<InitOptions['beforeSendTransaction']>;
-type Transaction = Parameters<BeforeSendTransaction>[0];
+interface SentSpan {
+  name: string;
+  status: string;
+  is_segment: boolean;
+  attributes: Record<string, { value: unknown }>;
+}
 
-const transactions: Transaction[] = [];
+/** Streamed spans exactly as the transport would send them. */
+const sentSpans: SentSpan[] = [];
+
+function attributeValues(span: SentSpan | undefined): Record<string, unknown> {
+  return Object.fromEntries(
+    Object.entries(span?.attributes ?? {}).map(([key, attribute]) => [key, attribute.value]),
+  );
+}
 
 beforeAll(() => {
   initServiceTelemetry({
@@ -19,19 +29,20 @@ beforeAll(() => {
     VERCEL_ENV: 'production',
     VERCEL_GIT_COMMIT_SHA: 'abc123',
   }, {
-    beforeSendTransaction(event) {
-      transactions.push(event);
-      return event;
-    },
     transport: () => ({
-      send: async () => ({}),
+      send: async ([, items]) => {
+        for (const [header, payload] of items) {
+          if (header.type === 'span') sentSpans.push(...(payload as { items: SentSpan[] }).items);
+        }
+        return {};
+      },
       flush: async () => true,
     }),
   });
 });
 
 afterEach(() => {
-  transactions.length = 0;
+  sentSpans.length = 0;
 });
 
 afterAll(async () => {
@@ -43,7 +54,7 @@ describe('Warden Service telemetry', () => {
     const beforeSendSpan = Sentry.getClient()?.getOptions().beforeSendSpan;
     if (!beforeSendSpan) throw new Error('Sentry span sanitizer was not initialized');
     const span = {
-      data: {
+      attributes: {
         'drizzle.query.text': 'select * from repositories where tenant_id = $1',
         'drizzle.query.params': '["private-tenant-id"]',
       },
@@ -51,10 +62,10 @@ describe('Warden Service telemetry', () => {
 
     const sanitized = beforeSendSpan(span);
 
-    expect(sanitized.data).toMatchObject({
+    expect(sanitized.attributes).toMatchObject({
       'drizzle.query.text': 'select * from repositories where tenant_id = $1',
     });
-    expect(sanitized.data).not.toHaveProperty('drizzle.query.params');
+    expect(sanitized.attributes).not.toHaveProperty('drizzle.query.params');
   });
 
   it('records bounded request transactions without trusting query strings, entity IDs, or Host', async () => {
@@ -69,24 +80,18 @@ describe('Warden Service telemetry', () => {
     }, { statusCode: 500 });
     await Sentry.flush(1_000);
 
-    expect(transactions).toHaveLength(1);
-    expect(transactions[0]).toMatchObject({
-      transaction: 'GET /api/v1/findings/:id',
-      contexts: {
-        trace: {
-          op: 'http.server',
-          status: 'ok',
-          data: {
-            'http.request.method': 'GET',
-            'http.route': '/api/v1/findings/:id',
-            'http.response.status_code': 200,
-            'service.name': 'warden-service',
-          },
-        },
-      },
+    const roots = sentSpans.filter((span) => span.is_segment);
+    expect(roots).toHaveLength(1);
+    expect(roots[0]).toMatchObject({ name: 'GET /api/v1/findings/:id', status: 'ok' });
+    expect(attributeValues(roots[0])).toMatchObject({
+      'sentry.op': 'http.server',
+      'http.request.method': 'GET',
+      'http.route': '/api/v1/findings/:id',
+      'http.response.status_code': 200,
+      'service.name': 'warden-service',
     });
-    expect(JSON.stringify(transactions[0])).not.toContain('private');
-    expect(JSON.stringify(transactions[0])).not.toContain('not-a-valid-id');
+    expect(JSON.stringify(sentSpans)).not.toContain('private');
+    expect(JSON.stringify(sentSpans)).not.toContain('not-a-valid-id');
   });
 
   it('records raw SQL as a child span without recording parameter values', async () => {
@@ -123,18 +128,14 @@ describe('Warden Service telemetry', () => {
     await Sentry.flush(1_000);
 
     expect(receivedValues).toEqual([['private-tenant-id']]);
-    expect(transactions).toHaveLength(1);
-    expect(transactions[0]?.spans).toEqual(expect.arrayContaining([
-      expect.objectContaining({
-        op: 'db.query',
-        description: 'SELECT id, full_name FROM repositories WHERE tenant_id = $1',
-        data: expect.objectContaining({
-          'db.system.name': 'postgresql',
-          'db.operation.name': 'SELECT',
-          'db.query.text': 'SELECT id, full_name FROM repositories WHERE tenant_id = $1',
-        }),
-      }),
-    ]));
-    expect(JSON.stringify(transactions[0])).not.toContain('private-tenant-id');
+    expect(sentSpans.filter((span) => span.is_segment)).toHaveLength(1);
+    const query = sentSpans.find((span) => attributeValues(span)['sentry.op'] === 'db.query');
+    expect(query?.name).toBe('SELECT id, full_name FROM repositories WHERE tenant_id = $1');
+    expect(attributeValues(query)).toMatchObject({
+      'db.system.name': 'postgresql',
+      'db.operation.name': 'SELECT',
+      'db.query.text': 'SELECT id, full_name FROM repositories WHERE tenant_id = $1',
+    });
+    expect(JSON.stringify(sentSpans)).not.toContain('private-tenant-id');
   });
 });
