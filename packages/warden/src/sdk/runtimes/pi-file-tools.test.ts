@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { ToolDefinition } from '@earendil-works/pi-coding-agent';
-import { createCheckoutFileTools } from './pi-file-tools.js';
+import { changedToolEvidence, createCheckoutFileTools, type ToolEvidence } from './pi-file-tools.js';
 import { resolveSkillAsync } from '../../skills/loader.js';
 import { buildHunkSystemPrompt } from '../prompt.js';
 
@@ -132,5 +132,60 @@ describe('createCheckoutFileTools', () => {
 
     await expect(executeTool('read', { path: 'linked.ts' }))
       .rejects.toThrow('is outside the checkout');
+  });
+});
+
+describe('changedToolEvidence', () => {
+  let checkoutPath: string;
+
+  beforeEach(async () => {
+    checkoutPath = await mkdtemp(join(tmpdir(), 'warden-tool-evidence-'));
+    await mkdir(join(checkoutPath, 'src'), { recursive: true });
+    await writeFile(join(checkoutPath, 'src', 'auth.py'), 'def require_admin(user):\n    return user.is_admin\n');
+    await writeFile(join(checkoutPath, 'src', 'views.py'), 'from auth import require_admin\n');
+    await writeFile(join(checkoutPath, 'src', 'unrelated.py'), 'VALUE = 1\n');
+  });
+
+  afterEach(async () => {
+    await rm(checkoutPath, { recursive: true, force: true });
+  });
+
+  async function record(): Promise<ToolEvidence[]> {
+    const evidence: ToolEvidence[] = [];
+    const tools = createCheckoutFileTools(checkoutPath, ['read', 'grep'], undefined, (entry) => evidence.push(entry));
+    const byName = new Map(tools.map((tool) => [tool.name, tool]));
+    await byName.get('read')!.execute('1', { path: 'src/auth.py' }, undefined, undefined, undefined as never);
+    await byName.get('grep')!.execute('2', { pattern: 'require_admin', path: 'src' }, undefined, undefined, undefined as never);
+    return evidence;
+  }
+
+  it('records each call with repository-relative params', async () => {
+    const evidence = await record();
+
+    expect(evidence.map(({ tool, params, isError }) => ({ tool, params, isError }))).toEqual([
+      { tool: 'read', params: { path: 'src/auth.py' }, isError: false },
+      { tool: 'grep', params: { pattern: 'require_admin', path: 'src' }, isError: false },
+    ]);
+  });
+
+  it('reports no change when everything the agent saw is unchanged', async () => {
+    const evidence = await record();
+    await writeFile(join(checkoutPath, 'src', 'unrelated.py'), 'VALUE = 2\n');
+
+    expect(await changedToolEvidence(checkoutPath, evidence)).toEqual([]);
+  });
+
+  it('reports a read whose file changed, but not a search whose matches did not', async () => {
+    const evidence = await record();
+    await writeFile(join(checkoutPath, 'src', 'auth.py'), 'def require_admin(user):\n    return True\n');
+
+    expect((await changedToolEvidence(checkoutPath, evidence)).map((entry) => entry.tool)).toEqual(['read']);
+  });
+
+  it('reports a search that gained a match', async () => {
+    const evidence = await record();
+    await writeFile(join(checkoutPath, 'src', 'admin.py'), 'from auth import require_admin\n');
+
+    expect((await changedToolEvidence(checkoutPath, evidence)).map((entry) => entry.tool)).toEqual(['grep']);
   });
 });
