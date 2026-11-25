@@ -10,7 +10,7 @@ export type SentryContext = 'cli' | 'action';
 
 type SentryInitOptions = Pick<
   NodeOptions,
-  'beforeSend' | 'beforeSendSpan' | 'transport'
+  'beforeSend' | 'transport'
 >;
 
 let initialized = false;

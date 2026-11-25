@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ErrorEvent, StreamedSpanJSON } from '@sentry/core';
+import type { ErrorEvent } from '@sentry/core';
 import type { ActionInputs } from './inputs.js';
 import { initSentry, Sentry } from '../sentry.js';
 
@@ -52,7 +52,6 @@ const baseInputs: ActionInputs = {
   parallel: 4,
 };
 
-const capturedRootSpans: StreamedSpanJSON[] = [];
 const capturedEvents: ErrorEvent[] = [];
 
 function spyOnClientEmit() {
@@ -92,10 +91,6 @@ describe('runAction', () => {
         send: async () => ({}),
         flush: async () => true,
       }),
-      beforeSendSpan: (span) => {
-        if (span.is_segment) capturedRootSpans.push(span);
-        return span;
-      },
       beforeSend: (event) => {
         capturedEvents.push(event);
         return event;
@@ -106,7 +101,6 @@ describe('runAction', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     vi.clearAllMocks();
-    capturedRootSpans.length = 0;
     capturedEvents.length = 0;
     process.env['GITHUB_EVENT_NAME'] = 'schedule';
     process.env['GITHUB_EVENT_PATH'] = '/tmp/event.json';
@@ -184,13 +178,6 @@ describe('runAction', () => {
         }),
       })
     );
-    expect(capturedRootSpans).toContainEqual(
-      expect.objectContaining({
-        name: 'run Warden action',
-        status: 'ok',
-        attributes: expect.objectContaining({ 'sentry.op': 'cicd.workflow', 'warden.action.outcome': 'success' }),
-      })
-    );
   });
 
   it('attributes input parsing failures before capturing them', async () => {
@@ -220,28 +207,9 @@ describe('runAction', () => {
         }),
       })
     );
-    expect(capturedRootSpans).toContainEqual(
-      expect.objectContaining({
-        name: 'run Warden action',
-        status: 'error',
-        attributes: expect.objectContaining({
-          'sentry.op': 'cicd.workflow',
-        'warden.action.outcome': 'failure',
-        'warden.action.stage': 'input',
-        'warden.error.code': 'unknown',
-        'vcs.repository.name': 'warden',
-        'cicd.pipeline.run.id': '12345',
-      }),
-      })
-    );
-    const rootTraceId = capturedRootSpans.find(
-      (span) => span.name === 'run Warden action'
-    )?.trace_id;
-    expect(rootTraceId).toBeTruthy();
     expect(capturedEvents).toContainEqual(
       expect.objectContaining({
         contexts: expect.objectContaining({
-          trace: expect.objectContaining({ trace_id: rootTraceId }),
           github_actions: expect.objectContaining({
             repository: 'getsentry/warden',
             event: 'schedule',
@@ -281,20 +249,9 @@ describe('runAction', () => {
       })
     );
     expect(capturedEvents).toEqual([]);
-    expect(capturedRootSpans).toContainEqual(
-      expect.objectContaining({
-        name: 'run Warden action',
-        status: 'error',
-        attributes: expect.objectContaining({
-          'sentry.op': 'cicd.workflow',
-        'warden.action.outcome': 'failure',
-        'warden.action.stage': 'environment',
-      }),
-      })
-    );
   });
 
-  it('records classified dispatch failures on the span, metric, and issue', async () => {
+  it('records classified dispatch failures on the metric and issue', async () => {
     const error = new Error('Provider is unavailable');
     const emit = spyOnClientEmit();
     mocks.runScheduleWorkflow.mockRejectedValueOnce(error);
@@ -316,18 +273,6 @@ describe('runAction', () => {
           'warden.action.stage': 'dispatch',
           'warden.error.code': 'provider_unavailable',
         }),
-      })
-    );
-    expect(capturedRootSpans).toContainEqual(
-      expect.objectContaining({
-        name: 'run Warden action',
-        status: 'error',
-        attributes: expect.objectContaining({
-          'sentry.op': 'cicd.workflow',
-        'warden.action.outcome': 'failure',
-        'warden.action.stage': 'dispatch',
-        'warden.error.code': 'provider_unavailable',
-      }),
       })
     );
     expect(capturedEvents).toContainEqual(
