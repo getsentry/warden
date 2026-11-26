@@ -72,6 +72,11 @@ const MUTATING_TOOLS: ToolName[] = ['Write', 'Edit', 'Bash'];
 const UNSUPPORTED_TOOLS: ToolName[] = ['WebFetch', 'WebSearch'];
 const DEFAULT_PI_PROVIDER_MAX_RETRIES = 2;
 const PI_SKILL_PROVIDER_MAX_RETRIES = 0;
+/**
+ * Output cap for each model response in a skill review. Reviews peak near 18k output tokens across a
+ * whole hunk; without a cap a runaway response can reach the model limit (~500k) before failing.
+ */
+const PI_SKILL_MAX_OUTPUT_TOKENS = 64_000;
 const PI_MODEL_REFRESH_TIMEOUT_MS = 15_000;
 /**
  * Share one network catalog refresh per provider across concurrent Pi prompts.
@@ -1051,13 +1056,14 @@ export const piRuntime: Runtime = {
             toolNames: skillTools.toolNames,
             maxTurns,
             effort,
+            maxTokens: PI_SKILL_MAX_OUTPUT_TOKENS,
             maxRetries: PI_SKILL_PROVIDER_MAX_RETRIES,
             abortController,
             parentSpan: span,
             traceRecorder: request.traceRecorder,
           });
           run.warnings.unshift(...skillTools.warnings);
-          const result = normalizePiResult(run);
+          const result = normalizePiResult(run, PI_SKILL_MAX_OUTPUT_TOKENS);
 
           if (result) {
             if (run.lastAssistant?.provider) {
