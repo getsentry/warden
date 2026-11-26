@@ -24,6 +24,8 @@ export type RuntimeName = z.infer<typeof RuntimeNameSchema>;
 export type SkillRunStatus =
   | 'success'
   | 'provider_error'
+  /** The provider rejected the request because input plus output exceed its context window. */
+  | 'context_overflow'
   | 'auth_error'
   | 'turn_limit'
   | 'output_limit'
