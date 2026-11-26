@@ -1,4 +1,21 @@
 # Changelog
+## 0.55.0
+
+### New Features ✨
+
+- (config) Inherit base incremental default in repo skills by @Jeffreyhung with @sentry-junior and @getsantry in [#578](https://github.com/getsentry/warden/pull/578)
+- (evals) Add auxiliary model and effort overrides by @gricha in [#581](https://github.com/getsentry/warden/pull/581)
+
+### Bug Fixes 🐛
+
+- (action) Keep open findings when no trigger matches the event by @lcian with @sentry-junior and @getsantry in [#576](https://github.com/getsentry/warden/pull/576)
+- (telemetry) Hash gen_ai input messages instead of sending content by @dcramer with @sentry-junior and @getsantry in [#579](https://github.com/getsentry/warden/pull/579)
+
+### Internal Changes 🔧
+
+- (deps) Upgrade every package to Sentry JS SDK v11 by @dcramer with @sentry-junior and @getsantry in [#580](https://github.com/getsentry/warden/pull/580)
+- (mcp) Use the Sentry CLI stdio server for Sentry MCP by @dcramer with @sentry-junior in [#571](https://github.com/getsentry/warden/pull/571)
+
 ## 0.54.0
 
 ### New Features ✨
