@@ -52,6 +52,8 @@ import {
 import { aggregateUsage, emptyUsage } from '../usage.js';
 import { InvalidPiModelSelectorError, isPiModelSelector } from './model-selectors.js';
 import { isWardenOffline } from '../offline.js';
+import { anyAbortSignal, timeoutAbortSignal } from './abort-signals.js';
+import { withRequestDeadline } from './pi-request-deadline.js';
 import { createCheckoutFileTools } from './pi-file-tools.js';
 import type {
   AuxiliaryRunRequest,
@@ -72,6 +74,13 @@ const MUTATING_TOOLS: ToolName[] = ['Write', 'Edit', 'Bash'];
 const UNSUPPORTED_TOOLS: ToolName[] = ['WebFetch', 'WebSearch'];
 const DEFAULT_PI_PROVIDER_MAX_RETRIES = 2;
 const PI_SKILL_PROVIDER_MAX_RETRIES = 0;
+/**
+ * Wall-clock limit for one skill model request. Over 7 days, 0.09% of OpenRouter
+ * requests ran past 2 minutes, and most of those hung for 40+ minutes.
+ */
+const PI_SKILL_REQUEST_DEADLINE_MS = 180_000;
+/** Pi agent-level retries per skill turn. Worst case per request: 3 x deadline plus backoff. */
+const PI_SKILL_TURN_MAX_RETRIES = 2;
 const PI_MODEL_REFRESH_TIMEOUT_MS = 15_000;
 /**
  * Share one network catalog refresh per provider across concurrent Pi prompts.
@@ -125,6 +134,10 @@ interface PiPromptOptions {
   effort?: Effort;
   maxRetries?: number;
   timeout?: number;
+  /** Wall-clock limit per model request; a timed-out request is retried by Pi. */
+  requestDeadlineMs?: number;
+  /** Pi agent-level retries per turn. Pi's default applies when unset. */
+  turnMaxRetries?: number;
   abortController?: AbortController;
   toolDescriptions?: Record<string, string>;
   /** Parent `invoke_agent` span for model-call and tool-execution child spans. */
@@ -156,52 +169,6 @@ function legacyApiKeyProvider(model: string | undefined): string | undefined {
 
   const selector = parseModelSelector(model);
   return selector.provider === 'anthropic' ? 'anthropic' : undefined;
-}
-
-/**
- * Combine abort signals without AbortSignal.any (Node < 20.3).
- * Warden's engines field allows Node >= 20.0.0.
- */
-function anyAbortSignal(...signals: AbortSignal[]): AbortSignal {
-  if (typeof AbortSignal.any === 'function') {
-    return AbortSignal.any(signals);
-  }
-
-  const controller = new AbortController();
-  const onAbort = (): void => {
-    controller.abort();
-    for (const signal of signals) {
-      signal.removeEventListener('abort', onAbort);
-    }
-  };
-
-  for (const signal of signals) {
-    if (signal.aborted) {
-      onAbort();
-      break;
-    }
-    signal.addEventListener('abort', onAbort, { once: true });
-  }
-
-  return controller.signal;
-}
-
-/**
- * Build a timeout signal without AbortSignal.timeout (Node < 20.3).
- * Same engines window as anyAbortSignal above.
- */
-function timeoutAbortSignal(ms: number): AbortSignal {
-  if (typeof AbortSignal.timeout === 'function') {
-    return AbortSignal.timeout(ms);
-  }
-
-  const controller = new AbortController();
-  const timer = setTimeout(() => {
-    controller.abort(new DOMException('The operation was aborted due to timeout', 'TimeoutError'));
-  }, ms);
-  // Match Node's AbortSignal.timeout: do not keep the process alive for the deadline alone.
-  timer.unref?.();
-  return controller.signal;
 }
 
 function refreshSignal(abortSignal?: AbortSignal): AbortSignal {
@@ -516,13 +483,17 @@ function normalizePiResult(run: PiPromptResult, maxTokens?: number): SkillRunRes
   };
 }
 
-function buildSettingsManager(timeout: number | undefined, maxRetries: number | undefined): SettingsManager {
+function buildSettingsManager(
+  options: Pick<PiPromptOptions, 'timeout' | 'maxRetries' | 'turnMaxRetries'>,
+): SettingsManager {
+  const { timeout, maxRetries, turnMaxRetries } = options;
   const providerMaxRetries = maxRetries ?? DEFAULT_PI_PROVIDER_MAX_RETRIES;
   return SettingsManager.inMemory({
     compaction: { enabled: false },
     retry: {
       // Provider retries are independent from Pi's agent-level transient retry loop.
       enabled: true,
+      ...(turnMaxRetries !== undefined ? { maxRetries: turnMaxRetries } : {}),
       provider: {
         ...(timeout !== undefined ? { timeoutMs: timeout } : {}),
         maxRetries: providerMaxRetries,
@@ -584,7 +555,7 @@ async function runPiPrompt(options: PiPromptOptions): Promise<PiPromptResult> {
     options.abortController?.signal,
   );
   const model = resolvePiModel(options.model, modelRuntime);
-  const settingsManager = buildSettingsManager(options.timeout, options.maxRetries);
+  const settingsManager = buildSettingsManager(options);
   const agentDir = getAgentDir();
   const resourceLoader = new DefaultResourceLoader({
     cwd: options.cwd,
@@ -740,6 +711,16 @@ async function runPiPrompt(options: PiPromptOptions): Promise<PiPromptResult> {
     conversationMessages.push(outputMessage, ...followUpMessages);
   }
 
+  /**
+   * Pi drops a failed turn from its context before an automatic retry.
+   * Undo that turn's count and transcript entry so retries do not use up
+   * maxTurns. The failed turn's chat span and usage stay recorded.
+   */
+  function discardRetriedTurn(): void {
+    numTurns--;
+    conversationMessages.pop();
+  }
+
   try {
     const result = await createAgentSession({
       cwd: options.cwd,
@@ -755,6 +736,9 @@ async function runPiPrompt(options: PiPromptOptions): Promise<PiPromptResult> {
       settingsManager,
     });
     session = result.session;
+    if (options.requestDeadlineMs !== undefined) {
+      session.agent.streamFunction = withRequestDeadline(session.agent.streamFunction, options.requestDeadlineMs);
+    }
     if (options.maxTokens !== undefined) {
       // Preserve Pi's provider/auth wrapper while forwarding the caller's cap.
       // Otherwise structured calls silently use the model's full output limit.
@@ -785,6 +769,8 @@ async function runPiPrompt(options: PiPromptOptions): Promise<PiPromptResult> {
         startToolSpan(event);
       } else if (event.type === 'tool_execution_end') {
         finishToolSpan(event);
+      } else if (event.type === 'auto_retry_start') {
+        discardRetriedTurn();
       } else if (event.type === 'turn_end') {
         if (isAssistantMessage(event.message)) {
           recordTurnSpan(event.message, event.toolResults);
@@ -1052,6 +1038,8 @@ export const piRuntime: Runtime = {
             maxTurns,
             effort,
             maxRetries: PI_SKILL_PROVIDER_MAX_RETRIES,
+            requestDeadlineMs: PI_SKILL_REQUEST_DEADLINE_MS,
+            turnMaxRetries: PI_SKILL_TURN_MAX_RETRIES,
             abortController,
             parentSpan: span,
             traceRecorder: request.traceRecorder,
