@@ -359,6 +359,21 @@ describe('piRuntime.runSkill', () => {
     });
   });
 
+  it('caps each model response so a runaway review fails early', async () => {
+    piMocks.streamFunction.mockReset();
+    piMocks.session.agent.streamFunction = piMocks.streamFunction;
+    piMocks.session.prompt.mockImplementationOnce(async () => {
+      await piMocks.session.agent.streamFunction(piMocks.model, { messages: [] }, {});
+      emitSuccessfulRun();
+    });
+
+    await piRuntime.runSkill(baseSkillRequest());
+
+    expect(piMocks.streamFunction).toHaveBeenCalledWith(
+      piMocks.model, { messages: [] }, expect.objectContaining({ maxTokens: 64_000 }),
+    );
+  });
+
   it('passes only the resolved skill root to its confined file tools', async () => {
     await piRuntime.runSkill({ ...baseSkillRequest(), skillRoot: '/installed/skills/security-review' });
 
