@@ -2716,7 +2716,7 @@ async function executeTrigger(trigger, deps) {
         const policy = { failOn, reportOn, minConfidence, failCheck, requestChanges, maxFindings };
         try {
             (0,_sdk_runtimes_model_selectors_js__WEBPACK_IMPORTED_MODULE_8__/* .assertValidPiModelSelectors */ .lG)([trigger]);
-            const incremental = deps.incremental && trigger.incremental
+            const incremental = deps.incremental && trigger.incremental === true
                 ? await prepareIncrementalReview(deps.incremental, trigger, triggerContext, resolveSkill, policy)
                 : undefined;
             const gateScope = deps.gateScope
@@ -2750,7 +2750,7 @@ async function executeTrigger(trigger, deps) {
                     circuitBreaker: deps.circuitBreaker,
                     historicalEvidence: deps.historicalEvidence,
                     skipHunks: incremental?.skipHunks,
-                    hunkReviewCache: trigger.reviewCache ? deps.hunkReviewCache : undefined,
+                    hunkReviewCache: trigger.incremental === 'evidence' ? deps.hunkReviewCache : undefined,
                 },
             };
             const defaultCallbacks = (0,_cli_output_tasks_js__WEBPACK_IMPORTED_MODULE_4__/* .createDefaultCallbacks */ .O7)([taskOptions], CI_OUTPUT_MODE, _cli_output_verbosity_js__WEBPACK_IMPORTED_MODULE_7__/* .Verbosity */ .W.Normal);
@@ -3866,7 +3866,7 @@ function createTriggerCheckReporter(octokit, context, postChecks) {
 function checkHistoryFor(octokit, context, matchedTriggers) {
     if (context.eventType !== 'pull_request' || !context.pullRequest)
         return undefined;
-    if (!matchedTriggers.some((trigger) => trigger.incremental || trigger.incrementalApp))
+    if (!matchedTriggers.some((trigger) => trigger.incremental === true || trigger.incrementalApp))
         return undefined;
     return (0,_incremental_js__WEBPACK_IMPORTED_MODULE_16__/* .createIncrementalBaselineSource */ .P7)(octokit, {
         owner: context.repository.owner,
@@ -3883,7 +3883,7 @@ function hunkReviewCacheFor(service, context, matchedTriggers) {
         return undefined;
     if (context.eventType !== 'pull_request' || !context.pullRequest)
         return undefined;
-    if (!matchedTriggers.some((trigger) => trigger.reviewCache))
+    if (!matchedTriggers.some((trigger) => trigger.incremental === 'evidence'))
         return undefined;
     return (0,_service_client_js__WEBPACK_IMPORTED_MODULE_14__/* .createServiceHunkReviewCache */ .cA)(service, {
         provider: 'github',
@@ -10184,7 +10184,6 @@ function resolveSkillConfigs(config, cliModel, skillRootsByName) {
                 failCheck: skill.failCheck ?? defaults?.failCheck,
                 incremental: skill.incremental ?? defaults?.incremental,
                 incrementalApp: defaults?.incrementalApp,
-                reviewCache: skill.reviewCache ?? defaults?.reviewCache,
                 model: baseModel,
                 maxTurns: baseMaxTurns,
                 effort,
@@ -10225,7 +10224,6 @@ function resolveSkillConfigs(config, cliModel, skillRootsByName) {
                     failCheck: trigger.failCheck ?? skill.failCheck ?? defaults?.failCheck,
                     incremental: trigger.incremental ?? skill.incremental ?? defaults?.incremental,
                     incrementalApp: defaults?.incrementalApp,
-                    reviewCache: trigger.reviewCache ?? skill.reviewCache ?? defaults?.reviewCache,
                     model: emptyToUndefined(trigger.model) ?? baseModel,
                     maxTurns: trigger.maxTurns ?? baseMaxTurns,
                     effort,
@@ -10283,7 +10281,7 @@ __webpack_require__.d(__webpack_exports__, {
   kV: () => (/* binding */ WardenConfigSchema)
 });
 
-// UNUSED EXPORTS: AgentRuntimeConfigSchema, AuxiliaryRuntimeConfigSchema, ChunkingConfigSchema, CoalesceConfigSchema, DefaultsSchema, EffortSchema, FilePatternSchema, IgnoreConfigSchema, LogCleanupModeSchema, LogsConfigSchema, RunnerConfigSchema, RuntimeNameSchema, ScanConfigSchema, ScheduleConfigSchema, SkillConfigSchema, SkillDefinitionSchema, SkillTriggerSchema, SynthesisRuntimeConfigSchema, ToolConfigSchema, ToolNameSchema, TriggerTypeSchema, VerificationConfigSchema
+// UNUSED EXPORTS: AgentRuntimeConfigSchema, AuxiliaryRuntimeConfigSchema, ChunkingConfigSchema, CoalesceConfigSchema, DefaultsSchema, EffortSchema, FilePatternSchema, IgnoreConfigSchema, IncrementalModeSchema, LogCleanupModeSchema, LogsConfigSchema, RunnerConfigSchema, RuntimeNameSchema, ScanConfigSchema, ScheduleConfigSchema, SkillConfigSchema, SkillDefinitionSchema, SkillTriggerSchema, SynthesisRuntimeConfigSchema, ToolConfigSchema, ToolNameSchema, TriggerTypeSchema, VerificationConfigSchema
 
 // EXTERNAL MODULE: ../../node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/classic/schemas.js + 7 modules
 var schemas = __webpack_require__(51737);
@@ -10349,6 +10347,8 @@ const ScheduleConfigSchema = schemas/* object */.Ikc({
 // Trigger type: where the trigger runs
 const TriggerTypeSchema = schemas/* enum */.k5n(['pull_request', 'local', 'schedule']);
 
+/** Incremental review: `true` matches hunk text, `"evidence"` also requires unchanged review evidence. */
+const IncrementalModeSchema = schemas/* union */.KCZ([schemas/* boolean */.zMY(), schemas/* literal */.euz('evidence')]);
 const EffortSchema = schemas/* enum */.k5n(['off', 'low', 'medium', 'high', 'xhigh', 'max']);
 const AgentRuntimeConfigSchema = schemas/* object */.Ikc({
     /** Model for repo-aware skill execution. Overrides legacy defaults.model. */
@@ -10393,10 +10393,8 @@ const SkillTriggerSchema = schemas/* object */.Ikc({
     requestChanges: schemas/* boolean */.zMY().optional(),
     /** Fail the check run when findings exceed failOn */
     failCheck: schemas/* boolean */.zMY().optional(),
-    /** Skip hunks an earlier clean run on this PR already reviewed. Overrides skill/defaults. */
-    incremental: schemas/* boolean */.zMY().optional(),
-    /** Reuse clean hunk reviews whose prompt and tool evidence are unchanged. Overrides skill/defaults. */
-    reviewCache: schemas/* boolean */.zMY().optional(),
+    /** Incremental review mode. Overrides skill/defaults. */
+    incremental: IncrementalModeSchema.optional(),
     model: schemas/* string */.YjP().optional(),
     maxTurns: schemas/* number */.aig().int().positive().optional(),
     /** Candidate finding verification. Overrides skill/defaults verification. */
@@ -10439,10 +10437,8 @@ const SkillConfigSchema = schemas/* object */.Ikc({
     requestChanges: schemas/* boolean */.zMY().optional(),
     /** Fail the check run when findings exceed failOn */
     failCheck: schemas/* boolean */.zMY().optional(),
-    /** Skip hunks an earlier clean run on this PR already reviewed. Overrides defaults.incremental. */
-    incremental: schemas/* boolean */.zMY().optional(),
-    /** Reuse clean hunk reviews whose prompt and tool evidence are unchanged. Overrides defaults.reviewCache. */
-    reviewCache: schemas/* boolean */.zMY().optional(),
+    /** Incremental review mode. Overrides defaults.incremental. */
+    incremental: IncrementalModeSchema.optional(),
     /** Model to use for this skill (e.g., 'openai/gpt-5.5'). Uses SDK default if not specified. */
     model: schemas/* string */.YjP().optional(),
     /** Maximum agentic turns (API round-trips) per hunk analysis. Overrides defaults.maxTurns. */
@@ -10518,16 +10514,13 @@ const DefaultsSchema = schemas/* object */.Ikc({
     /** Fail the check run when findings exceed failOn. Default: false */
     failCheck: schemas/* boolean */.zMY().optional(),
     /**
-     * Skip hunks an earlier clean run on this PR already reviewed with the same
-     * skill config. Pull request runs in the GitHub Action only. Default: false
+     * Incremental review mode. Pull request runs in the GitHub Action only. Default: false
+     * - `true`: skip hunks an earlier clean run on this PR already reviewed with the same skill config.
+     * - `"evidence"`: skip a hunk only when an earlier review found nothing, its prompt is unchanged,
+     *   and every file read or search it made returns the same output. Stored in the Warden service;
+     *   needs a non-metrics data profile and the Pi runtime.
      */
-    incremental: schemas/* boolean */.zMY().optional(),
-    /**
-     * Reuse a hunk review that found nothing when its prompt is unchanged and every file read or
-     * search it made returns the same output. Stored in the Warden service; needs a non-metrics data
-     * profile. Pull request runs in the GitHub Action only. Default: false
-     */
-    reviewCache: schemas/* boolean */.zMY().optional(),
+    incremental: IncrementalModeSchema.optional(),
     /**
      * Slug of the GitHub App that writes Warden's check runs. Only its checks
      * count as incremental baselines or as runs that covered the PR for a
