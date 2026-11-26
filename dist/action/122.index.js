@@ -1163,10 +1163,9 @@ function assertValidPiModelSelectors(targets) {
 /***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
 
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
-/* harmony export */   Gt: () => (/* binding */ createCheckoutFileTools),
-/* harmony export */   gz: () => (/* binding */ changedToolEvidence)
+/* harmony export */   G: () => (/* binding */ createCheckoutFileTools),
+/* harmony export */   g: () => (/* binding */ changedToolEvidence)
 /* harmony export */ });
-/* unused harmony export hashToolOutput */
 /* harmony import */ var node_crypto__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(77598);
 /* harmony import */ var node_crypto__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(node_crypto__WEBPACK_IMPORTED_MODULE_0__);
 /* harmony import */ var node_fs_promises__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(51455);
@@ -1267,28 +1266,21 @@ function hashToolOutput(toolName, result) {
     }
     return (0,node_crypto__WEBPACK_IMPORTED_MODULE_0__.createHash)('sha256').update(canonical).digest('hex');
 }
-const SKILL_PATH_PREFIX = 'skill:';
 /**
- * Record a requested path so it replays on another machine: skill resources become `skill:<relative>`
- * and absolute checkout paths become repository-relative. Both roots differ between Action runs.
+ * Record a requested path so it replays on another machine. Skill resources are stored relative to the
+ * skill root and absolute checkout paths relative to the checkout; both roots differ between Action runs.
  */
 function portablePath(requestedPath, checkoutPath, skillRoot) {
     if (!(0,node_path__WEBPACK_IMPORTED_MODULE_2__.isAbsolute)(requestedPath))
-        return requestedPath;
+        return { path: requestedPath };
     const target = (0,node_path__WEBPACK_IMPORTED_MODULE_2__.resolve)(requestedPath);
     if (skillRoot && isWithinPath((0,node_path__WEBPACK_IMPORTED_MODULE_2__.resolve)(skillRoot), target)) {
-        return `${SKILL_PATH_PREFIX}${(0,node_path__WEBPACK_IMPORTED_MODULE_2__.relative)((0,node_path__WEBPACK_IMPORTED_MODULE_2__.resolve)(skillRoot), target)}`;
+        return { path: (0,node_path__WEBPACK_IMPORTED_MODULE_2__.relative)((0,node_path__WEBPACK_IMPORTED_MODULE_2__.resolve)(skillRoot), target), skillResource: true };
     }
     if (isWithinPath((0,node_path__WEBPACK_IMPORTED_MODULE_2__.resolve)(checkoutPath), target)) {
-        return (0,node_path__WEBPACK_IMPORTED_MODULE_2__.relative)((0,node_path__WEBPACK_IMPORTED_MODULE_2__.resolve)(checkoutPath), target) || '.';
+        return { path: (0,node_path__WEBPACK_IMPORTED_MODULE_2__.relative)((0,node_path__WEBPACK_IMPORTED_MODULE_2__.resolve)(checkoutPath), target) || '.' };
     }
-    return requestedPath;
-}
-function replayParams(params, skillRoot) {
-    const path = params['path'];
-    if (typeof path !== 'string' || !path.startsWith(SKILL_PATH_PREFIX) || !skillRoot)
-        return params;
-    return { ...params, path: (0,node_path__WEBPACK_IMPORTED_MODULE_2__.resolve)(skillRoot, path.slice(SKILL_PATH_PREFIX.length)) };
+    return { path: requestedPath };
 }
 /**
  * Whether replaying this call later can return the same output. Grep and find do not sort their
@@ -1300,8 +1292,10 @@ function isReplayable(toolName, result) {
     const details = result?.details;
     return !details?.['matchLimitReached'] && !details?.['resultLimitReached'] && !details?.['truncation'];
 }
-function hashToolError(error) {
-    return (0,node_crypto__WEBPACK_IMPORTED_MODULE_0__.createHash)('sha256').update(error instanceof Error ? error.message : String(error)).digest('hex');
+/** Hash an error without the checkout location, which appears in path errors and differs between runners. */
+function hashToolError(error, checkoutPath) {
+    const message = error instanceof Error ? error.message : String(error);
+    return (0,node_crypto__WEBPACK_IMPORTED_MODULE_0__.createHash)('sha256').update(message.replaceAll((0,node_path__WEBPACK_IMPORTED_MODULE_2__.resolve)(checkoutPath), '<checkout>')).digest('hex');
 }
 function confineTool(tool, checkoutPath, skillRoot, onEvidence) {
     const guidance = skillRoot
@@ -1319,9 +1313,10 @@ function confineTool(tool, checkoutPath, skillRoot, onEvidence) {
             const requestedPath = typeof input.path === 'string' ? input.path : '.';
             const record = (outputHash, isError) => {
                 const recordedParams = { ...params };
-                if (typeof input.path === 'string')
-                    recordedParams['path'] = portablePath(input.path, checkoutPath, skillRoot);
-                onEvidence?.({ tool: tool.name, params: recordedParams, outputHash, isError });
+                const portable = typeof input.path === 'string' ? portablePath(input.path, checkoutPath, skillRoot) : undefined;
+                if (portable)
+                    recordedParams['path'] = portable.path;
+                onEvidence?.({ tool: tool.name, params: recordedParams, outputHash, isError, ...(portable?.skillResource ? { skillResource: true } : {}) });
             };
             try {
                 const confinedPath = await resolveAllowedPath(checkoutPath, requestedPath, skillRoot);
@@ -1336,7 +1331,7 @@ function confineTool(tool, checkoutPath, skillRoot, onEvidence) {
                 return result;
             }
             catch (error) {
-                record(hashToolError(error), true);
+                record(hashToolError(error, checkoutPath), true);
                 throw error;
             }
         },
@@ -1377,12 +1372,15 @@ async function changedToolEvidence(checkoutPath, evidence, skillRoot) {
         let outputHash;
         let isError = false;
         try {
-            const result = await tool.execute('replay', replayParams(entry.params, skillRoot), undefined, undefined, undefined);
+            const params = entry.skillResource && skillRoot && typeof entry.params['path'] === 'string'
+                ? { ...entry.params, path: (0,node_path__WEBPACK_IMPORTED_MODULE_2__.resolve)(skillRoot, entry.params['path']) }
+                : entry.params;
+            const result = await tool.execute('replay', params, undefined, undefined, undefined);
             outputHash = hashToolOutput(entry.tool, result);
         }
         catch (error) {
             isError = true;
-            outputHash = hashToolError(error);
+            outputHash = hashToolError(error, checkoutPath);
         }
         if (outputHash !== entry.outputHash || isError !== entry.isError) {
             changed.push(entry);
@@ -1858,7 +1856,7 @@ async function runPiPrompt(options) {
     const customToolNames = new Set(customTools.map((tool) => tool.name));
     const evidence = [];
     let toolCalls = 0;
-    const checkoutFileTools = (0,_pi_file_tools_js__WEBPACK_IMPORTED_MODULE_8__/* .createCheckoutFileTools */ .Gt)(options.cwd, options.toolNames.filter((toolName) => !customToolNames.has(toolName)), options.skillRoot, (entry) => evidence.push(entry));
+    const checkoutFileTools = (0,_pi_file_tools_js__WEBPACK_IMPORTED_MODULE_8__/* .createCheckoutFileTools */ .G)(options.cwd, options.toolNames.filter((toolName) => !customToolNames.has(toolName)), options.skillRoot, (entry) => evidence.push(entry));
     const sessionCustomTools = [...customTools, ...checkoutFileTools];
     const buildToolAttributes = (args) => (0,_otel_js__WEBPACK_IMPORTED_MODULE_6__/* .genAiToolCallAttributes */ .Mf)({
         agentName: options.agentName,

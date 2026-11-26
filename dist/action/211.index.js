@@ -13543,18 +13543,18 @@ const TEMPLATE_PROBE = {
 /** Most tool calls one stored review may carry; the service rejects larger records. */
 const MAX_EVIDENCE_PER_REVIEW = 200;
 /**
- * Key a hunk review by what the agent is shown: the system prompt (with any recalled memory), the
- * user prompt template, PR title and body, the hunk and its surrounding lines without positions, and
- * the model settings. The title and body stay in the key so text in one PR's description cannot earn
- * a clean review that another PR reuses. The changed-file list is left out because it changes on
- * most pushes.
+ * Key a hunk review by what the agent is shown: the skill's system prompt, the user prompt template,
+ * PR title and body, the hunk and its surrounding lines without positions, and the model settings.
+ * The title and body stay in the key so text in one PR's description cannot earn a clean review that
+ * another PR reuses. Recalled memory and the changed-file list are left out: both change on most
+ * pushes, and memory is lower-authority guidance that expires with the review.
  */
 function hunkReviewKey(skill, hunkCtx, options, prContext) {
     return sha256(JSON.stringify([
         skill.name,
         sha256(JSON.stringify([prContext?.title ?? null, prContext?.body ?? null])),
         skill.tools ?? null,
-        sha256((0,sdk_prompt/* buildHunkSystemPrompt */.qE)(skill, options.historicalEvidence)),
+        sha256((0,sdk_prompt/* buildHunkSystemPrompt */.qE)(skill)),
         sha256((0,sdk_prompt/* buildHunkUserPrompt */._R)(skill, TEMPLATE_PROBE)),
         (0,diff/* hunkContextFingerprint */.K0)(hunkCtx),
         options.runtime ?? 'pi',
@@ -13593,7 +13593,7 @@ class HunkReviewSession {
         const evidence = key ? this.recalled.get(key) : undefined;
         if (!evidence)
             return false;
-        const changed = await (0,pi_file_tools/* changedToolEvidence */.gz)(repoPath, evidence, this.skill.rootDir);
+        const changed = await (0,pi_file_tools/* changedToolEvidence */.g)(repoPath, evidence, this.skill.rootDir);
         if (changed.length > 0)
             return false;
         this.reused++;
@@ -14334,7 +14334,6 @@ async function analyzeFile(skill, file, repoPath, options = {}, callbacks, prCon
                 extractionPreview: result.extractionPreview,
                 auxiliaryUsage: result.auxiliaryUsage,
                 trace: result.trace,
-                ...(reused ? { reused: true } : {}),
             };
             callbacks?.onChunkComplete?.(chunkResult);
             return { lineRange, result };
@@ -19384,6 +19383,7 @@ const HunkReviewEvidenceSchema = schemas/* object */.Ikc({
     params: HunkReviewToolParamsSchema,
     outputHash: schemas/* string */.YjP().regex(/^[0-9a-f]{64}$/),
     isError: schemas/* boolean */.zMY(),
+    skillResource: schemas/* literal */.euz(true).optional(),
 }).strict();
 const HunkReviewKeySchema = schemas/* string */.YjP().regex(/^[0-9a-f]{64}$/);
 /** A clean hunk review: the key covers everything the agent was shown, the evidence covers what it looked up. */
