@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { readFileSync, existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
@@ -286,4 +287,18 @@ export function formatHunkForAnalysis(hunkCtx: HunkWithContext): string {
   }
 
   return lines.join('\n');
+}
+
+/**
+ * Fingerprint what a hunk prompt shows the agent: file, scope, surrounding lines, and the change.
+ * Line numbers are left out, so a hunk that only moved within its file keeps its fingerprint.
+ */
+export function hunkContextFingerprint(hunkCtx: HunkWithContext): string {
+  return createHash('sha256').update(JSON.stringify([
+    hunkCtx.filename,
+    hunkCtx.hunk.header ?? '',
+    hunkCtx.contextBefore,
+    hunkCtx.hunk.lines,
+    hunkCtx.contextAfter,
+  ])).digest('hex');
 }

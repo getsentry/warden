@@ -23,6 +23,7 @@ describe('migrateDatabase', () => {
             { version: '0006_tiny_garia' },
             { version: '0007_finding_short_urls' },
             { version: '0008_stable_finding_short_urls' },
+            { version: '0009_hunk_reviews' },
           ]) as unknown as QueryResult<TRow>;
         }
         return result();
@@ -34,7 +35,7 @@ describe('migrateDatabase', () => {
       statementTimeoutMs: 15_000,
       withClient: (operation) => operation(client),
       query: async <TRow extends Record<string, unknown>>() => (
-        result([{ version: '0008_stable_finding_short_urls' }]) as unknown as QueryResult<TRow>
+        result([{ version: '0009_hunk_reviews' }]) as unknown as QueryResult<TRow>
       ),
       transaction: (operation) => operation(client),
       close: () => Promise.resolve(),

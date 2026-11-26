@@ -23,7 +23,7 @@ const ExportResponseSchema = z.object({
   version: z.literal(1),
   exportedAt: z.string().datetime(),
   records: z.array(z.object({
-    type: z.enum(['repository', 'run', 'skill', 'usage', 'finding', 'memory']),
+    type: z.enum(['repository', 'run', 'skill', 'usage', 'finding', 'memory', 'hunk_review']),
     id: z.string().min(1).max(128),
     repositoryId: z.string().min(1).max(128).optional(),
     data: z.record(z.string(), z.unknown()),

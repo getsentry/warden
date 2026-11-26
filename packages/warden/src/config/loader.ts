@@ -22,6 +22,7 @@ import {
   type RuntimeName,
   type AgentRuntimeConfig,
   type AuxiliaryRuntimeConfig,
+  type IncrementalMode,
 } from './schema.js';
 import type { SeverityThreshold, ConfidenceThreshold } from '../types/index.js';
 
@@ -479,7 +480,7 @@ export interface ResolvedTrigger {
   /** Fail the check run when findings exceed failOn */
   failCheck?: boolean;
   /** Incremental PR review (merged: trigger > skill > defaults) */
-  incremental?: boolean;
+  incremental?: IncrementalMode;
   /** GitHub App slug whose checks count as incremental baselines (defaults only) */
   incrementalApp?: string;
   /** Model (merged: trigger > skill > defaults > cli > env) */

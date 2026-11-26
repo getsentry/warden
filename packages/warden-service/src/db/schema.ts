@@ -21,7 +21,7 @@ const timestamps = {
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 };
 
-export const serviceRoleEnum = pgEnum('service_role', ['ingest', 'read', 'admin']);
+export const serviceRoleEnum = pgEnum('service_role', ['ingest', 'read', 'admin', 'review_cache']);
 export const runOutcomeEnum = pgEnum('run_outcome', ['success', 'failure', 'cancelled', 'skipped']);
 export const runSourceEnum = pgEnum('run_source', ['cli', 'action', 'sdk', 'replay']);
 export const dataProfileEnum = pgEnum('data_profile', ['metrics', 'findings', 'code']);
@@ -398,3 +398,17 @@ export const memoryFeedback = pgTable('memory_feedback', {
   reason: text('reason'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [index('memory_feedback_tenant_memory_idx').on(table.tenantId, table.memoryId, table.createdAt)]);
+
+export const hunkReviews = pgTable('hunk_reviews', {
+  tenantId: uuid('tenant_id').notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  repositoryId: uuid('repository_id').notNull().references(() => repositories.id, { onDelete: 'cascade' }),
+  reviewKey: text('review_key').notNull(),
+  skill: text('skill').notNull(),
+  reviewedSha: text('reviewed_sha'),
+  evidence: jsonb('evidence').notNull(),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  ...timestamps,
+}, (table) => [
+  primaryKey({ columns: [table.tenantId, table.repositoryId, table.reviewKey] }),
+  index('hunk_reviews_expiry_idx').on(table.expiresAt),
+]);

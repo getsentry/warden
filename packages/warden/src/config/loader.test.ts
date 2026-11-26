@@ -206,6 +206,27 @@ describe('resolveSkillConfigs', () => {
     ]);
   });
 
+  it('lets each skill pick its incremental mode', () => {
+    const config: WardenConfig = {
+      version: 1,
+      defaults: { incremental: true, incrementalApp: 'sentry-warden' },
+      skills: [
+        { name: 'code-review' },
+        { name: 'security-review', incremental: 'evidence' },
+        {
+          name: 'trigger-evidence',
+          triggers: [{ type: 'pull_request', actions: ['opened'], incremental: 'evidence' }],
+        },
+      ],
+    };
+
+    expect(resolveSkillConfigs(config).map((t) => [t.name, t.incremental])).toEqual([
+      ['code-review', true],
+      ['security-review', 'evidence'],
+      ['trigger-evidence', 'evidence'],
+    ]);
+  });
+
   it('requestChanges and failCheck use defaults when not set at skill or trigger level', () => {
     const config: WardenConfig = {
       ...baseConfig,

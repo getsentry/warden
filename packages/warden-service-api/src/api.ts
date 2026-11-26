@@ -283,3 +283,63 @@ export const MemoryDetailResponseSchema = z.object({
   }).strict()),
 }).strict();
 export type MemoryDetailResponse = z.infer<typeof MemoryDetailResponseSchema>;
+
+/** One file-tool call from a hunk review and a hash of what it returned. */
+const ToolTextParamSchema = z.string().max(4_000);
+const ToolNumberParamSchema = z.number().int().nonnegative().max(1_000_000);
+
+/** Arguments of the checkout file tools (read, grep, find, ls). Bounded because they come from clients. */
+const HunkReviewToolParamsSchema = z.object({
+  path: ToolTextParamSchema.optional(),
+  pattern: ToolTextParamSchema.optional(),
+  glob: ToolTextParamSchema.optional(),
+  offset: ToolNumberParamSchema.optional(),
+  limit: ToolNumberParamSchema.optional(),
+  context: ToolNumberParamSchema.optional(),
+  ignoreCase: z.boolean().optional(),
+  literal: z.boolean().optional(),
+}).strict();
+
+export const HunkReviewEvidenceSchema = z.object({
+  tool: z.string().trim().min(1).max(64),
+  params: HunkReviewToolParamsSchema,
+  outputHash: z.string().regex(/^[0-9a-f]{64}$/),
+  isError: z.boolean(),
+  skillResource: z.literal(true).optional(),
+}).strict();
+export type HunkReviewEvidence = z.infer<typeof HunkReviewEvidenceSchema>;
+
+const HunkReviewKeySchema = z.string().regex(/^[0-9a-f]{64}$/);
+
+/** A clean hunk review: the key covers everything the agent was shown, the evidence covers what it looked up. */
+export const HunkReviewSchema = z.object({
+  key: HunkReviewKeySchema,
+  skill: z.string().trim().min(1).max(512),
+  reviewedSha: z.string().trim().min(1).max(64).optional(),
+  evidence: z.array(HunkReviewEvidenceSchema).max(200),
+}).strict();
+export type HunkReview = z.infer<typeof HunkReviewSchema>;
+
+export const HunkReviewRecordRequestSchema = z.object({
+  protocolVersion: z.literal(SERVICE_PROTOCOL_VERSION),
+  repository: RepositoryIdentitySchema,
+  reviews: z.array(HunkReviewSchema).max(500),
+}).strict();
+export type HunkReviewRecordRequest = z.infer<typeof HunkReviewRecordRequestSchema>;
+
+export const HunkReviewRecordResponseSchema = z.object({
+  recorded: z.number().int().nonnegative(),
+}).strict();
+export type HunkReviewRecordResponse = z.infer<typeof HunkReviewRecordResponseSchema>;
+
+export const HunkReviewRecallRequestSchema = z.object({
+  protocolVersion: z.literal(SERVICE_PROTOCOL_VERSION),
+  repository: RepositoryIdentitySchema,
+  keys: z.array(HunkReviewKeySchema).max(1_000),
+}).strict();
+export type HunkReviewRecallRequest = z.infer<typeof HunkReviewRecallRequestSchema>;
+
+export const HunkReviewRecallResponseSchema = z.object({
+  reviews: z.array(HunkReviewSchema.pick({ key: true, evidence: true })).max(1_000),
+}).strict();
+export type HunkReviewRecallResponse = z.infer<typeof HunkReviewRecallResponseSchema>;

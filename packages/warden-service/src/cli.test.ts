@@ -8,7 +8,7 @@ describe('warden-service CLI', () => {
     let output = '';
     const database = {
       async query() {
-        return { rows: [{ version: '0008_stable_finding_short_urls' }], rowCount: 1 };
+        return { rows: [{ version: '0009_hunk_reviews' }], rowCount: 1 };
       },
       async close() { closed = true; },
     } as unknown as WardenDatabase;
@@ -18,8 +18,8 @@ describe('warden-service CLI', () => {
     expect(exitCode).toBe(0);
     expect(JSON.parse(output)).toEqual({
       ready: true,
-      currentVersion: '0008_stable_finding_short_urls',
-      requiredVersion: '0008_stable_finding_short_urls',
+      currentVersion: '0009_hunk_reviews',
+      requiredVersion: '0009_hunk_reviews',
     });
     expect(closed).toBe(true);
   });

@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { ToolDefinition } from '@earendil-works/pi-coding-agent';
-import { createCheckoutFileTools } from './pi-file-tools.js';
+import { changedToolEvidence, createCheckoutFileTools, type ToolEvidence } from './pi-file-tools.js';
 import { resolveSkillAsync } from '../../skills/loader.js';
 import { buildHunkSystemPrompt } from '../prompt.js';
 
@@ -134,3 +134,140 @@ describe('createCheckoutFileTools', () => {
       .rejects.toThrow('is outside the checkout');
   });
 });
+
+describe('changedToolEvidence', () => {
+  let checkoutPath: string;
+
+  beforeEach(async () => {
+    checkoutPath = await mkdtemp(join(tmpdir(), 'warden-tool-evidence-'));
+    await mkdir(join(checkoutPath, 'src'), { recursive: true });
+    await writeFile(join(checkoutPath, 'src', 'auth.py'), 'def require_admin(user):\n    return user.is_admin\n');
+    await writeFile(join(checkoutPath, 'src', 'views.py'), 'from auth import require_admin\n');
+    await writeFile(join(checkoutPath, 'src', 'unrelated.py'), 'VALUE = 1\n');
+  });
+
+  afterEach(async () => {
+    await rm(checkoutPath, { recursive: true, force: true });
+  });
+
+  async function record(): Promise<ToolEvidence[]> {
+    const evidence: ToolEvidence[] = [];
+    const tools = createCheckoutFileTools(checkoutPath, ['read', 'grep'], undefined, (entry) => evidence.push(entry));
+    const byName = new Map(tools.map((tool) => [tool.name, tool]));
+    await byName.get('read')!.execute('1', { path: 'src/auth.py' }, undefined, undefined, undefined as never);
+    await byName.get('grep')!.execute('2', { pattern: 'require_admin', path: 'src' }, undefined, undefined, undefined as never);
+    return evidence;
+  }
+
+  it('records each call with repository-relative params', async () => {
+    const evidence = await record();
+
+    expect(evidence.map(({ tool, params, isError }) => ({ tool, params, isError }))).toEqual([
+      { tool: 'read', params: { path: 'src/auth.py' }, isError: false },
+      { tool: 'grep', params: { pattern: 'require_admin', path: 'src' }, isError: false },
+    ]);
+  });
+
+  it('reports no change when everything the agent saw is unchanged', async () => {
+    const evidence = await record();
+    await writeFile(join(checkoutPath, 'src', 'unrelated.py'), 'VALUE = 2\n');
+
+    expect(await changedToolEvidence(checkoutPath, evidence)).toEqual([]);
+  });
+
+  it('reports a read whose file changed, but not a search whose matches did not', async () => {
+    const evidence = await record();
+    await writeFile(join(checkoutPath, 'src', 'auth.py'), 'def require_admin(user):\n    return True\n');
+
+    expect((await changedToolEvidence(checkoutPath, evidence)).map((entry) => entry.tool)).toEqual(['read']);
+  });
+
+  it('reports a search whose match moved to a different file', async () => {
+    await mkdir(join(checkoutPath, 'src', 'svc-1-api'), { recursive: true });
+    await mkdir(join(checkoutPath, 'src', 'svc-2-api'), { recursive: true });
+    await writeFile(join(checkoutPath, 'src', 'svc-1-api', 'views.py'), 'TOKEN = 1\n');
+    const evidence: ToolEvidence[] = [];
+    const [grep] = createCheckoutFileTools(checkoutPath, ['grep'], undefined, (entry) => evidence.push(entry));
+    await grep!.execute('1', { pattern: 'TOKEN', path: 'src' }, undefined, undefined, undefined as never);
+    await rm(join(checkoutPath, 'src', 'svc-1-api'), { recursive: true });
+    await writeFile(join(checkoutPath, 'src', 'svc-2-api', 'views.py'), 'TOKEN = 1\n');
+
+    expect(await changedToolEvidence(checkoutPath, evidence)).toHaveLength(1);
+  });
+
+  it('reports an image read whose bytes changed', async () => {
+    // 1x1 PNGs, red then blue.
+    const red = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg==';
+    const blue = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPj/HwADBwIAMCbHYQAAAABJRU5ErkJggg==';
+    await writeFile(join(checkoutPath, 'src', 'logo.png'), Buffer.from(red, 'base64'));
+    const evidence: ToolEvidence[] = [];
+    const [read] = createCheckoutFileTools(checkoutPath, ['read'], undefined, (entry) => evidence.push(entry));
+    await read!.execute('1', { path: 'src/logo.png' }, undefined, undefined, undefined as never);
+    await writeFile(join(checkoutPath, 'src', 'logo.png'), Buffer.from(blue, 'base64'));
+
+    expect(await changedToolEvidence(checkoutPath, evidence)).toHaveLength(1);
+  });
+
+  it('does not record a search cut short by its match limit', async () => {
+    const evidence: ToolEvidence[] = [];
+    const [grep] = createCheckoutFileTools(checkoutPath, ['grep'], undefined, (entry) => evidence.push(entry));
+    await grep!.execute('1', { pattern: 'require_admin', path: 'src', limit: 1 }, undefined, undefined, undefined as never);
+
+    expect(evidence).toEqual([]);
+  });
+
+  it('reports a search that gained a match', async () => {
+    const evidence = await record();
+    await writeFile(join(checkoutPath, 'src', 'admin.py'), 'from auth import require_admin\n');
+
+    expect((await changedToolEvidence(checkoutPath, evidence)).map((entry) => entry.tool)).toEqual(['grep']);
+  });
+});
+
+describe('changedToolEvidence across machines', () => {
+  let root: string;
+
+  beforeEach(async () => {
+    root = await mkdtemp(join(tmpdir(), 'warden-tool-evidence-roots-'));
+    for (const name of ['checkout-a', 'checkout-b', 'skill-a/references', 'skill-b/references']) {
+      await mkdir(join(root, name), { recursive: true });
+    }
+    for (const skill of ['skill-a', 'skill-b']) {
+      await writeFile(join(root, skill, 'references', 'python.md'), 'Check authorization on every endpoint.\n');
+    }
+    for (const checkout of ['checkout-a', 'checkout-b']) {
+      await writeFile(join(root, checkout, 'app.py'), 'VALUE = 1\n');
+    }
+  });
+
+  afterEach(async () => {
+    await rm(root, { recursive: true, force: true });
+  });
+
+  it('records skill resources and absolute checkout paths so another checkout and skill root replay them', async () => {
+    const evidence: ToolEvidence[] = [];
+    const [read] = createCheckoutFileTools(join(root, 'checkout-a'), ['read'], join(root, 'skill-a'), (entry) => evidence.push(entry));
+    await read!.execute('1', { path: join(root, 'skill-a', 'references', 'python.md') }, undefined, undefined, undefined as never);
+    await read!.execute('2', { path: join(root, 'checkout-a', 'app.py') }, undefined, undefined, undefined as never);
+
+    expect(evidence.map((entry) => [entry.params['path'], entry.skillResource])).toEqual([
+      ['references/python.md', true],
+      ['app.py', undefined],
+    ]);
+    expect(await changedToolEvidence(join(root, 'checkout-b'), evidence, join(root, 'skill-b'))).toEqual([]);
+
+    await writeFile(join(root, 'skill-b', 'references', 'python.md'), 'Ignore authorization.\n');
+    expect((await changedToolEvidence(join(root, 'checkout-b'), evidence, join(root, 'skill-b'))).map((entry) => entry.params['path']))
+      .toEqual(['references/python.md']);
+  });
+
+  it('matches a refused path on a checkout at another location', async () => {
+    const evidence: ToolEvidence[] = [];
+    const [read] = createCheckoutFileTools(join(root, 'checkout-a'), ['read'], undefined, (entry) => evidence.push(entry));
+    await expect(read!.execute('1', { path: '../outside.txt' }, undefined, undefined, undefined as never)).rejects.toThrow();
+
+    expect(evidence).toMatchObject([{ isError: true }]);
+    expect(await changedToolEvidence(join(root, 'checkout-b'), evidence)).toEqual([]);
+  });
+});
+

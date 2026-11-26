@@ -1,4 +1,5 @@
-export type ServiceRole = 'ingest' | 'read' | 'admin';
+/** `review_cache` may store clean hunk reviews that later runs skip analysis for. */
+export type ServiceRole = 'ingest' | 'read' | 'admin' | 'review_cache';
 export type CredentialKind = 'service' | 'personal' | 'browser';
 
 export interface ServiceContext {

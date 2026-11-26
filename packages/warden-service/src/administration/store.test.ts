@@ -41,6 +41,7 @@ describe('service administration store', () => {
     expect(statements.find((item) => item.sql.includes("title = '[retained finding]'"))?.values).toEqual([context.tenantId, 90]);
     expect(statements.find((item) => item.sql.includes('DELETE FROM runs'))?.values).toEqual([context.tenantId, 365]);
     expect(statements.find((item) => item.sql.includes('DELETE FROM memories'))?.values).toEqual([context.tenantId, 180]);
+    expect(statements.find((item) => item.sql.includes('DELETE FROM hunk_reviews'))?.values).toEqual([context.tenantId, 90]);
   });
 
   it('deletes an authorized run, job payload references, and unsupported derived indexes', async () => {
@@ -69,6 +70,9 @@ describe('service administration store', () => {
       if (sql.includes('FROM runs WHERE')) return { rows: [{
         id: 'run-1', repository_id: 'repository-1', data: { clientRunId: 'client-run-1', dataProfile: 'metrics' },
       }], rowCount: 1 };
+      if (sql.includes('FROM hunk_reviews WHERE')) return { rows: [{
+        id: 'a'.repeat(64), repository_id: 'repository-1', data: { skill: 'security-review', evidence: [] },
+      }], rowCount: 1 };
       return { rows: [], rowCount: 0 };
     });
 
@@ -76,6 +80,7 @@ describe('service administration store', () => {
     expect(records).toMatchObject([
       { type: 'repository', id: 'repository-1' },
       { type: 'run', id: 'run-1', data: { dataProfile: 'metrics' } },
+      { type: 'hunk_review', id: 'a'.repeat(64), data: { skill: 'security-review' } },
     ]);
     expect(statements.find((sql) => sql.includes('FROM repositories WHERE'))).toContain('full_name = ANY');
     const findingExport = statements.find((sql) => sql.includes('FROM findings f')) ?? '';

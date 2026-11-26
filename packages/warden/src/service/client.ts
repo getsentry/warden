@@ -1,9 +1,12 @@
-import { createWardenServiceClient } from '@sentry/warden-service-api';
+import { createWardenServiceClient, HunkReviewSchema } from '@sentry/warden-service-api';
 import type { RunEnvelopeV1 } from '@sentry/warden-service-api';
 import type {
   MemoryRecallRequest,
   MemoryRecallResponse,
+  RepositoryIdentity,
 } from '@sentry/warden-service-api';
+import type { HunkReviewCache } from '../sdk/hunk-review-cache.js';
+import type { ToolEvidence } from '../sdk/runtimes/types.js';
 import type { ResolvedServiceOptions } from './options.js';
 
 export interface DeferredRunEnvelope {
@@ -48,4 +51,54 @@ export async function recallMemoryFailOpen(
   } catch {
     return undefined;
   }
+}
+
+const RECALL_BATCH = 1_000;
+const RECORD_BATCH = 500;
+
+function batches<T>(items: readonly T[], size: number): T[][] {
+  const out: T[][] = [];
+  for (let index = 0; index < items.length; index += size) out.push(items.slice(index, index + size));
+  return out;
+}
+
+/**
+ * Hunk review cache backed by the Warden service. Every failure falls back to a full review: recall
+ * returns nothing and record drops the reviews.
+ */
+export function createServiceHunkReviewCache(
+  service: ResolvedServiceOptions,
+  repository: RepositoryIdentity,
+  reviewedSha?: string,
+  onWarning?: (message: string) => void,
+): HunkReviewCache {
+  const client = createWardenServiceClient({ baseUrl: service.url, token: service.token, timeoutMs: service.timeoutMs });
+  return {
+    async recall(keys) {
+      const recalled = new Map<string, ToolEvidence[]>();
+      try {
+        for (const batch of batches(keys, RECALL_BATCH)) {
+          const response = await client.recallHunkReviews({ protocolVersion: 1, repository, keys: batch });
+          for (const review of response.reviews) recalled.set(review.key, review.evidence);
+        }
+      } catch {
+        return new Map();
+      }
+      return recalled;
+    },
+    async record(reviews) {
+      // Drop reviews the service would reject, such as tool calls with unknown arguments, so one bad
+      // review does not fail its whole batch.
+      const storable = reviews
+        .map((review) => ({ ...review, ...(reviewedSha ? { reviewedSha } : {}) }))
+        .filter((review) => HunkReviewSchema.safeParse(review).success);
+      try {
+        for (const batch of batches(storable, RECORD_BATCH)) {
+          await client.recordHunkReviews({ protocolVersion: 1, repository, reviews: batch });
+        }
+      } catch {
+        onWarning?.('Warden service could not store hunk reviews. Later runs will review these hunks again.');
+      }
+    },
+  };
 }

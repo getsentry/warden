@@ -48,6 +48,8 @@ import {
 } from '../service.js';
 import type { ActionMemoryRecall } from '../service.js';
 import type { ResolvedServiceOptions } from '../../service/index.js';
+import { createServiceHunkReviewCache } from '../../service/client.js';
+import type { HunkReviewCache } from '../../sdk/hunk-review-cache.js';
 import { executeTrigger } from '../triggers/executor.js';
 import {
   baselineExternalId,
@@ -645,7 +647,7 @@ function checkHistoryFor(
   matchedTriggers: readonly ResolvedTrigger[]
 ): PullRequestCheckHistory | undefined {
   if (context.eventType !== 'pull_request' || !context.pullRequest) return undefined;
-  if (!matchedTriggers.some((trigger) => trigger.incremental || trigger.incrementalApp)) return undefined;
+  if (!matchedTriggers.some((trigger) => trigger.incremental === true || trigger.incrementalApp)) return undefined;
   return createIncrementalBaselineSource(octokit, {
     owner: context.repository.owner,
     repo: context.repository.name,
@@ -654,6 +656,29 @@ function checkHistoryFor(
     baseSha: context.pullRequest.baseSha,
     warn: warnAction,
   });
+}
+
+/**
+ * Service-backed review cache for pull request triggers with `incremental = "evidence"`. Stored evidence
+ * includes file-tool arguments such as search patterns, so it needs the `code` data profile.
+ */
+export function hunkReviewCacheFor(
+  service: ResolvedServiceOptions | undefined,
+  context: EventContext,
+  matchedTriggers: readonly ResolvedTrigger[],
+): HunkReviewCache | undefined {
+  if (context.eventType !== 'pull_request' || !context.pullRequest) return undefined;
+  if (!matchedTriggers.some((trigger) => trigger.incremental === 'evidence')) return undefined;
+  if (service?.data !== 'code') {
+    warnAction('incremental = "evidence" needs the Warden service with data = "code"; reviewing every hunk');
+    return undefined;
+  }
+  return createServiceHunkReviewCache(service, {
+    provider: 'github',
+    owner: context.repository.owner,
+    name: context.repository.name,
+    fullName: context.repository.fullName,
+  }, context.pullRequest.headSha, warnAction);
 }
 
 async function executeAllTriggers(
@@ -665,6 +690,7 @@ async function executeAllTriggers(
     checks?: TriggerCheckReporter;
     memoryRecall?: ActionMemoryRecall;
     checkHistory?: PullRequestCheckHistory;
+    hunkReviewCache?: HunkReviewCache;
     /** Fired after each trigger settles, with every result settled so far (completion order, not input order). */
     onTriggerComplete?: (completedSoFar: TriggerResult[]) => void;
   } = {}
@@ -696,6 +722,7 @@ async function executeAllTriggers(
         circuitBreaker,
         checks: options.checks,
         historicalEvidence: options.memoryRecall?.historicalEvidence,
+        hunkReviewCache: options.hunkReviewCache,
         incremental: options.checkHistory,
         gateScope: options.checkHistory,
       });
@@ -2125,6 +2152,7 @@ async function runAnalyzeMode(
     skippedTriggers,
     skipCoreCheck,
     memoryRecall,
+    service,
   } = initResult;
 
   if (skipCoreCheck || matchedTriggers.length === 0) {
@@ -2154,6 +2182,7 @@ async function runAnalyzeMode(
     () => executeAllTriggers(matchedTriggers, context, runnerConcurrency, inputs, {
       memoryRecall,
       checkHistory: checkHistoryFor(octokit, context, matchedTriggers),
+      hunkReviewCache: hunkReviewCacheFor(service, context, matchedTriggers),
       onTriggerComplete: (completedSoFar) => {
         const reportsSoFar = completedSoFar.flatMap((r) => (r.report ? [r.report] : []));
         writeFindingsOutputLive(reportsSoFar, context, [], {
@@ -2537,6 +2566,7 @@ export async function runPRWorkflow(
             checks: createTriggerCheckReporter(octokit, context, postChecks),
             memoryRecall,
             checkHistory: checkHistoryFor(octokit, context, matchedTriggers),
+            hunkReviewCache: hunkReviewCacheFor(service, context, matchedTriggers),
             onTriggerComplete: (completedSoFar) => {
               const reportsSoFar = completedSoFar.flatMap((r) => (r.report ? [r.report] : []));
               writeFindingsOutputLive(reportsSoFar, context, [], {

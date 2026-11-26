@@ -39,7 +39,7 @@ export async function runServiceCli(
       if (!values.tenant || !values.name || !values.role?.length) {
         throw new TypeError('token create requires --tenant, --name, and at least one --role');
       }
-      const validRoles = new Set<ServiceRole>(['ingest', 'read', 'admin']);
+      const validRoles = new Set<ServiceRole>(['ingest', 'read', 'admin', 'review_cache']);
       const roles = values.role as ServiceRole[];
       if (roles.some((role) => !validRoles.has(role))) throw new TypeError('invalid token role');
       const created = await createServiceToken(database, {

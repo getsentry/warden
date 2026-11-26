@@ -10,6 +10,7 @@ import type { CircuitBreakerReason } from './circuit-breaker.js';
 import { DEFAULT_RETRY_CONFIG, calculateRetryDelay, sleep } from './retry.js';
 import { aggregateUsage, emptyUsage, estimateTokens, aggregateAuxiliaryUsage, aggregateAuxiliaryUsageAttribution, resolveResponseModel } from './usage.js';
 import { buildHunkSystemPrompt, buildHunkUserPrompt, type PRPromptContext } from './prompt.js';
+import { HunkReviewSession } from './hunk-review-cache.js';
 import { extractFindingsJson, extractFindingsWithLLM, validateFindings } from './extract.js';
 import type { ExtractFindingsResult } from './extract.js';
 import { postProcessFindings } from './post-process.js';
@@ -609,6 +610,7 @@ async function analyzeHunk(
                 }]
               : undefined,
             responseModel: resultMessage.responseModel,
+            evidence: resultMessage.evidence,
             trace: buildHunkTrace({
               enabled: options.captureTraces,
               span,
@@ -833,6 +835,7 @@ export async function analyzeFile(
   callbacks?: FileAnalysisCallbacks,
   prContext?: PRPromptContext,
   analysisQueue?: AsyncWorkQueue,
+  reviewSession?: HunkReviewSession,
 ): Promise<FileAnalysisResult> {
   return Sentry.startSpan(
     {
@@ -883,18 +886,22 @@ export async function analyzeFile(
             : undefined;
 
           const hunkStartTime = Date.now();
-          const result = await analyzeHunk(
-            skill,
-            hunk,
-            repoPath,
-            hunkOptions,
-            hunkCallbacks,
-            prContext,
-            span,
-          ).catch((error: unknown) => {
-            abortController.abort();
-            throw error;
-          });
+          const reused = await reviewSession?.reusable(hunk, repoPath) ?? false;
+          const result: HunkAnalysisResult = reused
+            ? { findings: [], usage: emptyUsage(), failed: false, extractionFailed: false }
+            : await analyzeHunk(
+              skill,
+              hunk,
+              repoPath,
+              hunkOptions,
+              hunkCallbacks,
+              prContext,
+              span,
+            ).catch((error: unknown) => {
+              abortController.abort();
+              throw error;
+            });
+          if (!reused) reviewSession?.note(hunk, result);
           const hunkDurationMs = Date.now() - hunkStartTime;
 
           attachElapsedTime(result.findings, callbacks?.skillStartTime);
@@ -1171,6 +1178,7 @@ async function runSkillAnalysis(
       fileCallbacks,
       prContext,
       analysisQueue,
+      reviewSession,
     );
 
     if (fileStartTime !== undefined) {
@@ -1188,6 +1196,10 @@ async function runSkillAnalysis(
     ? options.concurrency ?? DEFAULT_ANALYSIS_CONCURRENCY
     : 1;
   const analysisQueue = new AsyncWorkQueue(concurrency);
+  // Evidence is only recorded by the Pi runtime's checkout tools.
+  const reviewSession = options.hunkReviewCache && (options.runtime ?? 'pi') === 'pi'
+    ? await HunkReviewSession.open(options.hunkReviewCache, skill, fileHunks, options, prContext)
+    : undefined;
 
   // Collect results in input order (Promise.all preserves order)
   const fileResults: { filename: string; result: FileAnalysisResult; durationMs: number }[] = [];
@@ -1205,6 +1217,11 @@ async function runSkillAnalysis(
 
       fileResults.push(await processFile(fileHunkEntry, fileIndex));
     }
+  }
+
+  if (reviewSession) {
+    Sentry.getActiveSpan()?.setAttribute('warden.hunk.reused_count', reviewSession.reused);
+    await reviewSession.flush();
   }
 
   // Accumulate results from ordered fileResults

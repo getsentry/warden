@@ -52,7 +52,7 @@ import {
 import { aggregateUsage, emptyUsage } from '../usage.js';
 import { InvalidPiModelSelectorError, isPiModelSelector } from './model-selectors.js';
 import { isWardenOffline } from '../offline.js';
-import { createCheckoutFileTools } from './pi-file-tools.js';
+import { createCheckoutFileTools, type ToolEvidence } from './pi-file-tools.js';
 import type {
   AuxiliaryRunRequest,
   AuxiliaryRunResult,
@@ -108,6 +108,8 @@ interface PiPromptResult {
   numTurns: number;
   hitMaxTurns: boolean;
   warnings: string[];
+  /** Every checkout tool call the session made, or undefined when some call was not recorded. */
+  evidence?: ToolEvidence[];
 }
 
 interface PiPromptOptions {
@@ -513,6 +515,7 @@ function normalizePiResult(run: PiPromptResult, maxTokens?: number): SkillRunRes
     sessionId: run.sessionId,
     durationMs: run.durationMs,
     numTurns: run.numTurns,
+    evidence: run.evidence,
   };
 }
 
@@ -612,10 +615,13 @@ async function runPiPrompt(options: PiPromptOptions): Promise<PiPromptResult> {
   // Same-name custom tools override its built-ins, so file access stays in the checkout.
   const customTools = options.customTools ?? [];
   const customToolNames = new Set(customTools.map((tool) => tool.name));
+  const evidence: ToolEvidence[] = [];
+  let toolCalls = 0;
   const checkoutFileTools = createCheckoutFileTools(
     options.cwd,
     options.toolNames.filter((toolName) => !customToolNames.has(toolName)),
     options.skillRoot,
+    (entry) => evidence.push(entry),
   );
   const sessionCustomTools = [...customTools, ...checkoutFileTools];
 
@@ -782,6 +788,7 @@ async function runPiPrompt(options: PiPromptOptions): Promise<PiPromptResult> {
       } else if (event.type === 'agent_end') {
         agentEndMessages = [...event.messages];
       } else if (event.type === 'tool_execution_start') {
+        toolCalls++;
         startToolSpan(event);
       } else if (event.type === 'tool_execution_end') {
         finishToolSpan(event);
@@ -842,6 +849,7 @@ async function runPiPrompt(options: PiPromptOptions): Promise<PiPromptResult> {
     numTurns,
     hitMaxTurns,
     warnings,
+    evidence: evidence.length === toolCalls ? evidence : undefined,
   };
 }
 
