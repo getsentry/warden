@@ -658,15 +658,21 @@ function checkHistoryFor(
   });
 }
 
-/** Service-backed review cache when a matched pull request trigger opts in and the service may hold code metadata. */
-function hunkReviewCacheFor(
+/**
+ * Service-backed review cache for pull request triggers with `incremental = "evidence"`. Stored evidence
+ * includes file-tool arguments such as search patterns, so it needs the `code` data profile.
+ */
+export function hunkReviewCacheFor(
   service: ResolvedServiceOptions | undefined,
   context: EventContext,
   matchedTriggers: readonly ResolvedTrigger[],
 ): HunkReviewCache | undefined {
-  if (!service || service.data === 'metrics') return undefined;
   if (context.eventType !== 'pull_request' || !context.pullRequest) return undefined;
   if (!matchedTriggers.some((trigger) => trigger.incremental === 'evidence')) return undefined;
+  if (service?.data !== 'code') {
+    warnAction('incremental = "evidence" needs the Warden service with data = "code"; reviewing every hunk');
+    return undefined;
+  }
   return createServiceHunkReviewCache(service, {
     provider: 'github',
     owner: context.repository.owner,

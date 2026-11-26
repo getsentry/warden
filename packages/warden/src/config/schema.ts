@@ -249,7 +249,7 @@ export const DefaultsSchema = z.object({
    * - `true`: skip hunks an earlier clean run on this PR already reviewed with the same skill config.
    * - `"evidence"`: skip a hunk only when an earlier review found nothing, its prompt is unchanged,
    *   and every file read or search it made returns the same output. Stored in the Warden service;
-   *   needs a non-metrics data profile and the Pi runtime.
+   *   needs the `code` data profile and the Pi runtime.
    */
   incremental: IncrementalModeSchema.optional(),
   /**

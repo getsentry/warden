@@ -55,7 +55,8 @@ export function hunkReviewKey(
     skill.name,
     sha256(JSON.stringify([prContext?.title ?? null, prContext?.body ?? null])),
     skill.tools ?? null,
-    sha256(buildHunkSystemPrompt(skill)),
+    // The prompt names the skill's install path, which differs between runners.
+    sha256(skill.rootDir ? buildHunkSystemPrompt(skill).replaceAll(skill.rootDir, '<skill>') : buildHunkSystemPrompt(skill)),
     sha256(buildHunkUserPrompt(skill, TEMPLATE_PROBE)),
     hunkContextFingerprint(hunkCtx),
     options.runtime ?? 'pi',

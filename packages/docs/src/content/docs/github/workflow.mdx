@@ -282,9 +282,11 @@ patterns, and output hashes, not file contents. Recalled repository memory is
 not part of the match, so a new memory reaches an unchanged hunk when its
 stored review expires or the hunk changes.
 
-Evidence mode needs a service `data` profile other than `metrics`, a service
-token with the `review_cache` role (plus `read` to recall reviews), and the Pi
-runtime, which records the evidence it relies on. A stored review lets later
+Evidence mode needs the service [`data` profile](/service/#data-profiles) set
+to `code`, because search patterns often quote the code under review. It also
+needs a service token with the `review_cache` role (plus `read` to recall
+reviews), and the Pi runtime, which records the evidence it relies on. With any
+other profile, Warden warns and reviews every hunk. A stored review lets later
 runs skip the hunk, so only the Warden workflow's token should have that role.
 If the service is unreachable, Warden reviews every hunk.
 

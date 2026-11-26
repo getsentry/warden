@@ -58,6 +58,18 @@ describe('hunkReviewKey', () => {
     expect(hunkReviewKey({ ...skill, prompt: 'Find bugs.' }, hunkAt(10), { model: 'openrouter/x-ai/grok-4.5' })).not.toBe(key);
   });
 
+  it('ignores where the skill is installed', async () => {
+    const roots = await Promise.all(['a', 'b'].map(async (name) => {
+      const root = await mkdtemp(join(tmpdir(), `warden-skill-${name}-`));
+      await mkdir(join(root, 'references'));
+      return root;
+    }));
+    const [a, b] = roots.map((rootDir) => hunkReviewKey({ ...skill, rootDir }, hunkAt(10), {}));
+
+    expect(a).toBe(b);
+    await Promise.all(roots.map((root) => rm(root, { recursive: true, force: true })));
+  });
+
   it('keys on the PR description so one PR cannot lend another its clean review', () => {
     const options = { model: 'openrouter/x-ai/grok-4.5' };
     const clean = hunkReviewKey(skill, hunkAt(10), options, { title: 'Add view', body: 'Adds the view.' });

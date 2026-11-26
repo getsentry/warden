@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import type { Octokit } from '@octokit/rest';
 import type { ActionInputs } from '../inputs.js';
 import type { EventContext, SkillReport, Finding } from '../../types/index.js';
+import type { ResolvedTrigger } from '../../config/loader.js';
 import type { ExistingComment } from '../../output/dedup.js';
 import type * as BaseWorkflow from './base.js';
 
@@ -130,7 +131,7 @@ import {
   writeFindingsOutput,
   writeFindingsOutputLive,
 } from './base.js';
-import { runPRWorkflow } from './pr-workflow.js';
+import { hunkReviewCacheFor, runPRWorkflow } from './pr-workflow.js';
 import { clearSkillsCache } from '../../skills/loader.js';
 import { AsyncWorkQueue } from '../../utils/index.js';
 import { buildFindingsOutput } from '../../reporting/output.js';
@@ -3353,3 +3354,24 @@ describe('runPRWorkflow', () => {
     });
   });
 });
+
+describe('hunkReviewCacheFor', () => {
+  const service = { url: 'https://warden.example.com', token: 'token', memory: false, timeoutMs: 1_000 };
+  const context = {
+    eventType: 'pull_request',
+    repository: { owner: 'acme', name: 'widgets', fullName: 'acme/widgets', defaultBranch: 'main' },
+    pullRequest: { number: 1, headSha: 'abc123' },
+  } as unknown as EventContext;
+  const evidenceTrigger = { incremental: 'evidence' } as ResolvedTrigger;
+
+  it('stores evidence only under the code data profile', () => {
+    expect(hunkReviewCacheFor({ ...service, data: 'code' }, context, [evidenceTrigger])).toBeDefined();
+    expect(hunkReviewCacheFor({ ...service, data: 'findings' }, context, [evidenceTrigger])).toBeUndefined();
+    expect(hunkReviewCacheFor(undefined, context, [evidenceTrigger])).toBeUndefined();
+  });
+
+  it('is not created for hunk-text incremental review', () => {
+    expect(hunkReviewCacheFor({ ...service, data: 'code' }, context, [{ incremental: true } as ResolvedTrigger])).toBeUndefined();
+  });
+});
+

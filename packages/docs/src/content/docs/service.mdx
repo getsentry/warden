@@ -150,9 +150,9 @@ Replay uses the artifact's original run ID and the current profile validation an
 | --- | --- | --- |
 | `metrics` | Repository and run identity, commit and event metadata, skill and trigger identity, timing, stable errors, model and runtime attribution, usage, cost, and finding counts | Finding prose, file paths, snippets, and trace content |
 | `findings` | Everything in `metrics`, plus bounded finding identity, title, description, locations, provenance, and outcome observations | Source snippets, raw diffs, prompts, model output, tool data, and trace content |
-| `code` | Everything in `findings`, plus bounded source evidence already attached to a finding | Unrestricted files, repository snapshots, raw diffs, prompts, transcripts, tool data, and trace content |
+| `code` | Everything in `findings`, plus bounded source evidence already attached to a finding. For skills with [`incremental = "evidence"`](/github/workflow/#evidence-mode), also the arguments of file reads and searches (paths, search patterns, globs) and hashes of their output | Unrestricted files, repository snapshots, raw diffs, prompts, transcripts, tool results, and trace content |
 
-Warden never sends service credentials, authorization headers, unrestricted prompts, model transcripts, tool arguments or results, raw trace bodies, or complete repository diffs. Memory requires `findings` or `code`.
+Warden never sends service credentials, authorization headers, unrestricted prompts, model transcripts, tool results, raw trace bodies, or complete repository diffs. It sends tool arguments only for evidence mode under the `code` profile. Memory requires `findings` or `code`.
 
 ## Retention and Deletion
 
