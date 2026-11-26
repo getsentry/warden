@@ -17790,13 +17790,14 @@ function createServiceHunkReviewCache(service, repository, reviewedSha, onWarnin
             return recalled;
         },
         async record(reviews) {
+            // Drop reviews the service would reject, such as tool calls with unknown arguments, so one bad
+            // review does not fail its whole batch.
+            const storable = reviews
+                .map((review) => ({ ...review, ...(reviewedSha ? { reviewedSha } : {}) }))
+                .filter((review) => _sentry_warden_service_api__WEBPACK_IMPORTED_MODULE_0__/* .HunkReviewSchema */ .sy.safeParse(review).success);
             try {
-                for (const batch of batches(reviews, RECORD_BATCH)) {
-                    await client.recordHunkReviews({
-                        protocolVersion: 1,
-                        repository,
-                        reviews: batch.map((review) => ({ ...review, ...(reviewedSha ? { reviewedSha } : {}) })),
-                    });
+                for (const batch of batches(storable, RECORD_BATCH)) {
+                    await client.recordHunkReviews({ protocolVersion: 1, repository, reviews: batch });
                 }
             }
             catch {
@@ -18945,11 +18946,12 @@ function countSeverity(reports, severity) {
 // EXPORTS
 __webpack_require__.d(__webpack_exports__, {
   ly: () => (/* reexport */ DataProfileSchema),
+  sy: () => (/* reexport */ HunkReviewSchema),
   Qb: () => (/* reexport */ createWardenServiceClient),
   O: () => (/* reexport */ redactRunProjection)
 });
 
-// UNUSED EXPORTS: ApiErrorSchema, CodeFindingRecordSchema, CodeRunEnvelopeSchema, CostAggregateResponseSchema, CostBreakdownsResponseSchema, CostGroupSchema, DashboardSummaryResponseSchema, FindingCountsSchema, FindingDetailResponseSchema, FindingFeedItemSchema, FindingListResponseSchema, FindingLocationSchema, FindingObservationSchema, FindingOutcomeSchema, FindingProvenanceSchema, FindingRecordSchema, FindingShortIdSchema, FindingsRunEnvelopeSchema, HistoryDimensionsResponseSchema, HunkReviewEvidenceSchema, HunkReviewRecallRequestSchema, HunkReviewRecallResponseSchema, HunkReviewRecordRequestSchema, HunkReviewRecordResponseSchema, HunkReviewSchema, IngestRunResponseSchema, MemoryDetailResponseSchema, MemoryKindSchema, MemoryLifecycleSchema, MemoryListResponseSchema, MemoryMutationResponseSchema, MemoryRecallRequestSchema, MemoryRecallResponseSchema, MemoryRecordSchema, MetricsRunEnvelopeSchema, OutcomeSummaryResponseSchema, RecalledMemoryReferenceSchema, RepositoryIdentitySchema, RepositoryListResponseSchema, RepositorySummarySchema, RunDetailResponseSchema, RunEnvelopeV1Schema, RunListResponseSchema, RunProjectionSchema, RunSummarySchema, SERVICE_PROTOCOL_VERSION, ServiceClientError, SkillExecutionSchema, SkillListResponseSchema, SkillSummarySchema, SourceEvidenceSchema, UsageLineItemSchema, canonicalJson, sha256Checksum
+// UNUSED EXPORTS: ApiErrorSchema, CodeFindingRecordSchema, CodeRunEnvelopeSchema, CostAggregateResponseSchema, CostBreakdownsResponseSchema, CostGroupSchema, DashboardSummaryResponseSchema, FindingCountsSchema, FindingDetailResponseSchema, FindingFeedItemSchema, FindingListResponseSchema, FindingLocationSchema, FindingObservationSchema, FindingOutcomeSchema, FindingProvenanceSchema, FindingRecordSchema, FindingShortIdSchema, FindingsRunEnvelopeSchema, HistoryDimensionsResponseSchema, HunkReviewEvidenceSchema, HunkReviewRecallRequestSchema, HunkReviewRecallResponseSchema, HunkReviewRecordRequestSchema, HunkReviewRecordResponseSchema, IngestRunResponseSchema, MemoryDetailResponseSchema, MemoryKindSchema, MemoryLifecycleSchema, MemoryListResponseSchema, MemoryMutationResponseSchema, MemoryRecallRequestSchema, MemoryRecallResponseSchema, MemoryRecordSchema, MetricsRunEnvelopeSchema, OutcomeSummaryResponseSchema, RecalledMemoryReferenceSchema, RepositoryIdentitySchema, RepositoryListResponseSchema, RepositorySummarySchema, RunDetailResponseSchema, RunEnvelopeV1Schema, RunListResponseSchema, RunProjectionSchema, RunSummarySchema, SERVICE_PROTOCOL_VERSION, ServiceClientError, SkillExecutionSchema, SkillListResponseSchema, SkillSummarySchema, SourceEvidenceSchema, UsageLineItemSchema, canonicalJson, sha256Checksum
 
 // EXTERNAL MODULE: ../../node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/classic/schemas.js + 7 modules
 var schemas = __webpack_require__(51737);
@@ -19364,9 +19366,22 @@ const MemoryDetailResponseSchema = schemas/* object */.Ikc({
     }).strict()),
 }).strict();
 /** One file-tool call from a hunk review and a hash of what it returned. */
+const ToolTextParamSchema = schemas/* string */.YjP().max(4_000);
+const ToolNumberParamSchema = schemas/* number */.aig().int().nonnegative().max(1_000_000);
+/** Arguments of the checkout file tools (read, grep, find, ls). Bounded because they come from clients. */
+const HunkReviewToolParamsSchema = schemas/* object */.Ikc({
+    path: ToolTextParamSchema.optional(),
+    pattern: ToolTextParamSchema.optional(),
+    glob: ToolTextParamSchema.optional(),
+    offset: ToolNumberParamSchema.optional(),
+    limit: ToolNumberParamSchema.optional(),
+    context: ToolNumberParamSchema.optional(),
+    ignoreCase: schemas/* boolean */.zMY().optional(),
+    literal: schemas/* boolean */.zMY().optional(),
+}).strict();
 const HunkReviewEvidenceSchema = schemas/* object */.Ikc({
     tool: schemas/* string */.YjP().trim().min(1).max(64),
-    params: schemas/* record */.g1P(schemas/* string */.YjP(), schemas/* unknown */.L5J()),
+    params: HunkReviewToolParamsSchema,
     outputHash: schemas/* string */.YjP().regex(/^[0-9a-f]{64}$/),
     isError: schemas/* boolean */.zMY(),
 }).strict();

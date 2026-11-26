@@ -1256,7 +1256,10 @@ const GREP_LINE = /^(.+?)([:-])\d+\2/;
  */
 function hashToolOutput(toolName, result) {
     const content = result?.content ?? [];
-    const text = content.map((part) => (part.type === 'text' ? part.text ?? '' : `[${part.type}]`)).join('\n');
+    // Hash image bytes too: the text note Pi adds for an image is the same for any image of that type.
+    const text = content.map((part) => (part.type === 'text'
+        ? part.text ?? ''
+        : `[${part.type}:${part.mimeType ?? ''}:${part.data ?? ''}]`)).join('\n');
     let canonical = text;
     if (toolName !== 'read') {
         const lines = text.split('\n');
