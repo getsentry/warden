@@ -63,11 +63,29 @@ def severity_label(severity: str) -> str:
     return f" ({severity.upper()})"
 
 
+def read_verified_findings(sweep_dir: str) -> list[dict[str, Any]]:
+    """Read verified.jsonl with each entry merged over its all-findings.jsonl record.
+
+    Verify agents return verdict fields only (references/verify-prompt.md), so
+    skill, severity, file and title come from all-findings.jsonl, joined by findingId.
+    """
+    data_dir = os.path.join(sweep_dir, "data")
+    by_id = {
+        f["findingId"]: f
+        for f in read_jsonl(os.path.join(data_dir, "all-findings.jsonl"))
+        if "findingId" in f
+    }
+    return [
+        {**by_id.get(v.get("findingId"), {}), **v}
+        for v in read_jsonl(os.path.join(data_dir, "verified.jsonl"))
+    ]
+
+
 def identify_security_findings(
     sweep_dir: str,
 ) -> list[dict[str, Any]]:
     """Find security-related verified findings and write security/index.jsonl."""
-    verified = read_jsonl(os.path.join(sweep_dir, "data", "verified.jsonl"))
+    verified = read_verified_findings(sweep_dir)
 
     security_findings: list[dict[str, Any]] = []
     for finding in verified:
@@ -184,7 +202,7 @@ def update_tracking_issue(sweep_dir: str) -> None:
         return
 
     patches = read_jsonl(os.path.join(sweep_dir, "data", "patches.jsonl"))
-    verified = read_jsonl(os.path.join(sweep_dir, "data", "verified.jsonl"))
+    verified = read_verified_findings(sweep_dir)
     security_index = read_jsonl(os.path.join(sweep_dir, "security", "index.jsonl"))
 
     # Build lookup from findingId to verified finding
