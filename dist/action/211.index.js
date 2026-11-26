@@ -3400,6 +3400,7 @@ __webpack_require__.a(module, async (__webpack_handle_async_dependencies__, __we
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   r: () => (/* binding */ runPRWorkflow)
 /* harmony export */ });
+/* unused harmony export hunkReviewCacheFor */
 /* harmony import */ var node_fs__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(73024);
 /* harmony import */ var node_fs__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(node_fs__WEBPACK_IMPORTED_MODULE_0__);
 /* harmony import */ var node_path__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(76760);
@@ -3877,14 +3878,19 @@ function checkHistoryFor(octokit, context, matchedTriggers) {
         warn: _cli_output_tty_js__WEBPACK_IMPORTED_MODULE_25__/* .warnAction */ .T6,
     });
 }
-/** Service-backed review cache when a matched pull request trigger opts in and the service may hold code metadata. */
+/**
+ * Service-backed review cache for pull request triggers with `incremental = "evidence"`. Stored evidence
+ * includes file-tool arguments such as search patterns, so it needs the `code` data profile.
+ */
 function hunkReviewCacheFor(service, context, matchedTriggers) {
-    if (!service || service.data === 'metrics')
-        return undefined;
     if (context.eventType !== 'pull_request' || !context.pullRequest)
         return undefined;
     if (!matchedTriggers.some((trigger) => trigger.incremental === 'evidence'))
         return undefined;
+    if (service?.data !== 'code') {
+        (0,_cli_output_tty_js__WEBPACK_IMPORTED_MODULE_25__/* .warnAction */ .T6)('incremental = "evidence" needs the Warden service with data = "code"; reviewing every hunk');
+        return undefined;
+    }
     return (0,_service_client_js__WEBPACK_IMPORTED_MODULE_14__/* .createServiceHunkReviewCache */ .cA)(service, {
         provider: 'github',
         owner: context.repository.owner,
@@ -10518,7 +10524,7 @@ const DefaultsSchema = schemas/* object */.Ikc({
      * - `true`: skip hunks an earlier clean run on this PR already reviewed with the same skill config.
      * - `"evidence"`: skip a hunk only when an earlier review found nothing, its prompt is unchanged,
      *   and every file read or search it made returns the same output. Stored in the Warden service;
-     *   needs a non-metrics data profile and the Pi runtime.
+     *   needs the `code` data profile and the Pi runtime.
      */
     incremental: IncrementalModeSchema.optional(),
     /**
@@ -13554,7 +13560,8 @@ function hunkReviewKey(skill, hunkCtx, options, prContext) {
         skill.name,
         sha256(JSON.stringify([prContext?.title ?? null, prContext?.body ?? null])),
         skill.tools ?? null,
-        sha256((0,sdk_prompt/* buildHunkSystemPrompt */.qE)(skill)),
+        // The prompt names the skill's install path, which differs between runners.
+        sha256(skill.rootDir ? (0,sdk_prompt/* buildHunkSystemPrompt */.qE)(skill).replaceAll(skill.rootDir, '<skill>') : (0,sdk_prompt/* buildHunkSystemPrompt */.qE)(skill)),
         sha256((0,sdk_prompt/* buildHunkUserPrompt */._R)(skill, TEMPLATE_PROBE)),
         (0,diff/* hunkContextFingerprint */.K0)(hunkCtx),
         options.runtime ?? 'pi',
