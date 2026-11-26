@@ -16824,8 +16824,8 @@ const claudeRuntime = {
     },
 };
 
-// EXTERNAL MODULE: ./src/sdk/runtimes/pi.ts + 1 modules
-var pi = __webpack_require__(60522);
+// EXTERNAL MODULE: ./src/sdk/runtimes/pi.ts + 3 modules
+var pi = __webpack_require__(10959);
 ;// CONCATENATED MODULE: ./src/sdk/runtimes/index.ts
 
 
