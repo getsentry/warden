@@ -10637,7 +10637,7 @@ __webpack_require__.d(__webpack_exports__, {
   PQ: () => (/* reexport */ splitLargeHunks)
 });
 
-// UNUSED EXPORTS: DEFAULT_MAX_CHUNK_SIZE, DEFAULT_MAX_GAP_LINES, applyDiffToContent, clearFileCache, expandHunkContext, getExpandedLineRange, wouldCoalesceReduce
+// UNUSED EXPORTS: DEFAULT_MAX_CHUNK_SIZE, DEFAULT_MAX_GAP_LINES, applyDiffToContent, clearFileCache, expandHunkContext, getExpandedLineRange, hunkContextFingerprint, wouldCoalesceReduce
 
 ;// CONCATENATED MODULE: ./src/diff/parser.ts
 /**
@@ -10735,6 +10735,8 @@ function getExpandedLineRange(hunk, contextLines = 20) {
     };
 }
 
+// EXTERNAL MODULE: external "node:crypto"
+var external_node_crypto_ = __webpack_require__(77598);
 // EXTERNAL MODULE: external "node:child_process"
 var external_node_child_process_ = __webpack_require__(31421);
 // EXTERNAL MODULE: external "node:fs"
@@ -10744,6 +10746,7 @@ var external_node_path_ = __webpack_require__(76760);
 // EXTERNAL MODULE: ./src/utils/exec.ts
 var exec = __webpack_require__(82224);
 ;// CONCATENATED MODULE: ./src/diff/context.ts
+
 
 
 
@@ -10938,6 +10941,19 @@ function formatHunkForAnalysis(hunkCtx) {
         lines.push('```');
     }
     return lines.join('\n');
+}
+/**
+ * Fingerprint what a hunk prompt shows the agent: file, scope, surrounding lines, and the change.
+ * Line numbers are left out, so a hunk that only moved within its file keeps its fingerprint.
+ */
+function hunkContextFingerprint(hunkCtx) {
+    return createHash('sha256').update(JSON.stringify([
+        hunkCtx.filename,
+        hunkCtx.hunk.header ?? '',
+        hunkCtx.contextBefore,
+        hunkCtx.hunk.lines,
+        hunkCtx.contextAfter,
+    ])).digest('hex');
 }
 
 // EXTERNAL MODULE: ./src/triggers/matcher.ts
