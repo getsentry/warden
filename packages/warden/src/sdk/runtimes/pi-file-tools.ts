@@ -12,6 +12,9 @@ import {
 } from '@earendil-works/pi-coding-agent';
 import type { TSchema } from '@earendil-works/pi-ai';
 import { SKILL_RESOURCE_DIRECTORIES } from '../../skills/resources.js';
+import type { ToolEvidence } from './types.js';
+
+export type { ToolEvidence } from './types.js';
 
 const CHECKOUT_GUIDANCE = 'Stay inside the current checkout. Use repository-relative paths.';
 
@@ -95,13 +98,6 @@ async function resolveAllowedPath(checkoutPath: string, requestedPath: string, s
   throw checkoutPathError(requestedPath, checkout);
 }
 
-/** One checkout tool call, as the agent sent it, and a hash of what it returned. */
-export interface ToolEvidence {
-  tool: string;
-  params: Record<string, unknown>;
-  outputHash: string;
-  isError: boolean;
-}
 
 /** Grep match (`path:12: text`) and context (`path-12- text`) lines. */
 const GREP_LINE = /^(.+?)([:-])\d+\2/;
@@ -119,6 +115,40 @@ export function hashToolOutput(toolName: string, result: unknown): string {
     canonical = (toolName === 'grep' ? lines.map((line) => line.replace(GREP_LINE, '$1$2')) : lines).sort().join('\n');
   }
   return createHash('sha256').update(canonical).digest('hex');
+}
+
+const SKILL_PATH_PREFIX = 'skill:';
+
+/**
+ * Record a requested path so it replays on another machine: skill resources become `skill:<relative>`
+ * and absolute checkout paths become repository-relative. Both roots differ between Action runs.
+ */
+function portablePath(requestedPath: string, checkoutPath: string, skillRoot?: string): string {
+  if (!isAbsolute(requestedPath)) return requestedPath;
+  const target = resolve(requestedPath);
+  if (skillRoot && isWithinPath(resolve(skillRoot), target)) {
+    return `${SKILL_PATH_PREFIX}${relative(resolve(skillRoot), target)}`;
+  }
+  if (isWithinPath(resolve(checkoutPath), target)) {
+    return relative(resolve(checkoutPath), target) || '.';
+  }
+  return requestedPath;
+}
+
+function replayParams(params: Record<string, unknown>, skillRoot?: string): Record<string, unknown> {
+  const path = params['path'];
+  if (typeof path !== 'string' || !path.startsWith(SKILL_PATH_PREFIX) || !skillRoot) return params;
+  return { ...params, path: resolve(skillRoot, path.slice(SKILL_PATH_PREFIX.length)) };
+}
+
+/**
+ * Whether replaying this call later can return the same output. Grep and find do not sort their
+ * results, so once a match or byte limit truncates them, which entries come back varies between runs.
+ */
+function isReplayable(toolName: string, result: unknown): boolean {
+  if (toolName !== 'grep' && toolName !== 'find') return true;
+  const details = (result as { details?: Record<string, unknown> } | undefined)?.details;
+  return !details?.['matchLimitReached'] && !details?.['resultLimitReached'] && !details?.['truncation'];
 }
 
 function hashToolError(error: unknown): string {
@@ -145,7 +175,9 @@ function confineTool<TParams extends TSchema, TDetails, TState>(
       const input = params as FileToolInput;
       const requestedPath = typeof input.path === 'string' ? input.path : '.';
       const record = (outputHash: string, isError: boolean): void => {
-        onEvidence?.({ tool: tool.name, params: { ...(params as Record<string, unknown>) }, outputHash, isError });
+        const recordedParams: Record<string, unknown> = { ...(params as Record<string, unknown>) };
+        if (typeof input.path === 'string') recordedParams['path'] = portablePath(input.path, checkoutPath, skillRoot);
+        onEvidence?.({ tool: tool.name, params: recordedParams, outputHash, isError });
       };
       try {
         const confinedPath = await resolveAllowedPath(checkoutPath, requestedPath, skillRoot);
@@ -154,7 +186,8 @@ function confineTool<TParams extends TSchema, TDetails, TState>(
           path: pathToFileURL(confinedPath).href,
         } as typeof params;
         const result = await tool.execute(toolCallId, confinedParams, signal, onUpdate, context);
-        record(hashToolOutput(tool.name, result), false);
+        // Unreplayable calls stay unrecorded, so the session's evidence counts as incomplete.
+        if (isReplayable(tool.name, result)) record(hashToolOutput(tool.name, result), false);
         return result;
       } catch (error) {
         record(hashToolError(error), true);
@@ -213,7 +246,7 @@ export async function changedToolEvidence(
     let outputHash: string;
     let isError = false;
     try {
-      const result = await tool.execute('replay', entry.params, undefined, undefined, undefined as never);
+      const result = await tool.execute('replay', replayParams(entry.params, skillRoot), undefined, undefined, undefined as never);
       outputHash = hashToolOutput(entry.tool, result);
     } catch (error) {
       isError = true;

@@ -62,6 +62,14 @@ export interface SkillRunRequest {
   providerOptions?: unknown;
 }
 
+/** One checkout tool call, as the agent sent it, and a hash of what it returned. */
+export interface ToolEvidence {
+  tool: string;
+  params: Record<string, unknown>;
+  outputHash: string;
+  isError: boolean;
+}
+
 export interface SkillRunResult {
   status: SkillRunStatus;
   text: string;
@@ -75,6 +83,8 @@ export interface SkillRunResult {
   durationMs?: number;
   durationApiMs?: number;
   numTurns?: number;
+  /** Checkout tool calls and output hashes, when the runtime recorded all of them. */
+  evidence?: ToolEvidence[];
 }
 
 export interface SkillRunResponse {

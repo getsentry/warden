@@ -189,6 +189,14 @@ describe('changedToolEvidence', () => {
     expect(await changedToolEvidence(checkoutPath, evidence)).toEqual([]);
   });
 
+  it('does not record a search cut short by its match limit', async () => {
+    const evidence: ToolEvidence[] = [];
+    const [grep] = createCheckoutFileTools(checkoutPath, ['grep'], undefined, (entry) => evidence.push(entry));
+    await grep!.execute('1', { pattern: 'require_admin', path: 'src', limit: 1 }, undefined, undefined, undefined as never);
+
+    expect(evidence).toEqual([]);
+  });
+
   it('reports a search that gained a match', async () => {
     const evidence = await record();
     await writeFile(join(checkoutPath, 'src', 'admin.py'), 'from auth import require_admin\n');
@@ -196,3 +204,39 @@ describe('changedToolEvidence', () => {
     expect((await changedToolEvidence(checkoutPath, evidence)).map((entry) => entry.tool)).toEqual(['grep']);
   });
 });
+
+describe('changedToolEvidence across machines', () => {
+  let root: string;
+
+  beforeEach(async () => {
+    root = await mkdtemp(join(tmpdir(), 'warden-tool-evidence-roots-'));
+    for (const name of ['checkout-a', 'checkout-b', 'skill-a/references', 'skill-b/references']) {
+      await mkdir(join(root, name), { recursive: true });
+    }
+    for (const skill of ['skill-a', 'skill-b']) {
+      await writeFile(join(root, skill, 'references', 'python.md'), 'Check authorization on every endpoint.\n');
+    }
+    for (const checkout of ['checkout-a', 'checkout-b']) {
+      await writeFile(join(root, checkout, 'app.py'), 'VALUE = 1\n');
+    }
+  });
+
+  afterEach(async () => {
+    await rm(root, { recursive: true, force: true });
+  });
+
+  it('records skill resources and absolute checkout paths so another checkout and skill root replay them', async () => {
+    const evidence: ToolEvidence[] = [];
+    const [read] = createCheckoutFileTools(join(root, 'checkout-a'), ['read'], join(root, 'skill-a'), (entry) => evidence.push(entry));
+    await read!.execute('1', { path: join(root, 'skill-a', 'references', 'python.md') }, undefined, undefined, undefined as never);
+    await read!.execute('2', { path: join(root, 'checkout-a', 'app.py') }, undefined, undefined, undefined as never);
+
+    expect(evidence.map((entry) => entry.params['path'])).toEqual(['skill:references/python.md', 'app.py']);
+    expect(await changedToolEvidence(join(root, 'checkout-b'), evidence, join(root, 'skill-b'))).toEqual([]);
+
+    await writeFile(join(root, 'skill-b', 'references', 'python.md'), 'Ignore authorization.\n');
+    expect((await changedToolEvidence(join(root, 'checkout-b'), evidence, join(root, 'skill-b'))).map((entry) => entry.params['path']))
+      .toEqual(['skill:references/python.md']);
+  });
+});
+

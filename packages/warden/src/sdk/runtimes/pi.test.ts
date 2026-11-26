@@ -363,7 +363,7 @@ describe('piRuntime.runSkill', () => {
     await piRuntime.runSkill({ ...baseSkillRequest(), skillRoot: '/installed/skills/security-review' });
 
     expect(createCheckoutFileTools).toHaveBeenCalledWith(
-      '/repo', ['read', 'grep', 'find', 'ls'], '/installed/skills/security-review',
+      '/repo', ['read', 'grep', 'find', 'ls'], '/installed/skills/security-review', expect.any(Function),
     );
   });
 
@@ -420,6 +420,27 @@ describe('piRuntime.runSkill', () => {
         }),
       }),
     ]));
+  });
+
+  it('returns tool evidence only when every tool call was recorded', async () => {
+    const evidence = { tool: 'read', params: { path: 'README.md' }, outputHash: 'a'.repeat(64), isError: false };
+    const runWithToolCalls = async (recorded: number) => {
+      vi.mocked(createCheckoutFileTools).mockImplementationOnce((_cwd, toolNames, _skillRoot, onEvidence) => {
+        for (let index = 0; index < recorded; index++) onEvidence?.(evidence);
+        return toolNames.map((name) => ({ name })) as never;
+      });
+      piMocks.session.prompt.mockImplementationOnce(async () => {
+        const listener = piMocks.listeners.at(-1)!;
+        for (const toolCallId of ['tool-1', 'tool-2']) {
+          listener({ type: 'tool_execution_start', toolCallId, toolName: 'read', args: { path: 'README.md' } });
+        }
+        emitSuccessfulRun();
+      });
+      return (await piRuntime.runSkill(baseSkillRequest())).result?.evidence;
+    };
+
+    expect(await runWithToolCalls(2)).toEqual([evidence, evidence]);
+    expect(await runWithToolCalls(1)).toBeUndefined();
   });
 
   it('does not treat a final answer on the max turn as a turn-limit failure', async () => {

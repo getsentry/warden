@@ -48,6 +48,8 @@ import {
 } from '../service.js';
 import type { ActionMemoryRecall } from '../service.js';
 import type { ResolvedServiceOptions } from '../../service/index.js';
+import { createServiceHunkReviewCache } from '../../service/client.js';
+import type { HunkReviewCache } from '../../sdk/hunk-review-cache.js';
 import { executeTrigger } from '../triggers/executor.js';
 import {
   baselineExternalId,
@@ -656,6 +658,23 @@ function checkHistoryFor(
   });
 }
 
+/** Service-backed review cache when a matched pull request trigger opts in and the service may hold code metadata. */
+function hunkReviewCacheFor(
+  service: ResolvedServiceOptions | undefined,
+  context: EventContext,
+  matchedTriggers: readonly ResolvedTrigger[],
+): HunkReviewCache | undefined {
+  if (!service || service.data === 'metrics') return undefined;
+  if (context.eventType !== 'pull_request' || !context.pullRequest) return undefined;
+  if (!matchedTriggers.some((trigger) => trigger.reviewCache)) return undefined;
+  return createServiceHunkReviewCache(service, {
+    provider: 'github',
+    owner: context.repository.owner,
+    name: context.repository.name,
+    fullName: context.repository.fullName,
+  }, context.pullRequest.headSha, warnAction);
+}
+
 async function executeAllTriggers(
   matchedTriggers: ResolvedTrigger[],
   context: EventContext,
@@ -665,6 +684,7 @@ async function executeAllTriggers(
     checks?: TriggerCheckReporter;
     memoryRecall?: ActionMemoryRecall;
     checkHistory?: PullRequestCheckHistory;
+    hunkReviewCache?: HunkReviewCache;
     /** Fired after each trigger settles, with every result settled so far (completion order, not input order). */
     onTriggerComplete?: (completedSoFar: TriggerResult[]) => void;
   } = {}
@@ -696,6 +716,7 @@ async function executeAllTriggers(
         circuitBreaker,
         checks: options.checks,
         historicalEvidence: options.memoryRecall?.historicalEvidence,
+        hunkReviewCache: options.hunkReviewCache,
         incremental: options.checkHistory,
         gateScope: options.checkHistory,
       });
@@ -2125,6 +2146,7 @@ async function runAnalyzeMode(
     skippedTriggers,
     skipCoreCheck,
     memoryRecall,
+    service,
   } = initResult;
 
   if (skipCoreCheck || matchedTriggers.length === 0) {
@@ -2154,6 +2176,7 @@ async function runAnalyzeMode(
     () => executeAllTriggers(matchedTriggers, context, runnerConcurrency, inputs, {
       memoryRecall,
       checkHistory: checkHistoryFor(octokit, context, matchedTriggers),
+      hunkReviewCache: hunkReviewCacheFor(service, context, matchedTriggers),
       onTriggerComplete: (completedSoFar) => {
         const reportsSoFar = completedSoFar.flatMap((r) => (r.report ? [r.report] : []));
         writeFindingsOutputLive(reportsSoFar, context, [], {
@@ -2537,6 +2560,7 @@ export async function runPRWorkflow(
             checks: createTriggerCheckReporter(octokit, context, postChecks),
             memoryRecall,
             checkHistory: checkHistoryFor(octokit, context, matchedTriggers),
+            hunkReviewCache: hunkReviewCacheFor(service, context, matchedTriggers),
             onTriggerComplete: (completedSoFar) => {
               const reportsSoFar = completedSoFar.flatMap((r) => (r.report ? [r.report] : []));
               writeFindingsOutputLive(reportsSoFar, context, [], {

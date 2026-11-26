@@ -206,6 +206,28 @@ describe('resolveSkillConfigs', () => {
     ]);
   });
 
+  it('reviewCache follows 3-level merge (trigger > skill > defaults)', () => {
+    const config: WardenConfig = {
+      version: 1,
+      defaults: { reviewCache: true },
+      skills: [
+        { name: 'from-defaults' },
+        { name: 'skill-off', reviewCache: false },
+        {
+          name: 'trigger-on',
+          reviewCache: false,
+          triggers: [{ type: 'pull_request', actions: ['opened'], reviewCache: true }],
+        },
+      ],
+    };
+
+    expect(resolveSkillConfigs(config).map((t) => [t.name, t.reviewCache])).toEqual([
+      ['from-defaults', true],
+      ['skill-off', false],
+      ['trigger-on', true],
+    ]);
+  });
+
   it('requestChanges and failCheck use defaults when not set at skill or trigger level', () => {
     const config: WardenConfig = {
       ...baseConfig,

@@ -104,6 +104,8 @@ export const SkillTriggerSchema = z.object({
   failCheck: z.boolean().optional(),
   /** Skip hunks an earlier clean run on this PR already reviewed. Overrides skill/defaults. */
   incremental: z.boolean().optional(),
+  /** Reuse clean hunk reviews whose prompt and tool evidence are unchanged. Overrides skill/defaults. */
+  reviewCache: z.boolean().optional(),
   model: z.string().optional(),
   maxTurns: z.number().int().positive().optional(),
   /** Candidate finding verification. Overrides skill/defaults verification. */
@@ -151,6 +153,8 @@ export const SkillConfigSchema = z.object({
   failCheck: z.boolean().optional(),
   /** Skip hunks an earlier clean run on this PR already reviewed. Overrides defaults.incremental. */
   incremental: z.boolean().optional(),
+  /** Reuse clean hunk reviews whose prompt and tool evidence are unchanged. Overrides defaults.reviewCache. */
+  reviewCache: z.boolean().optional(),
   /** Model to use for this skill (e.g., 'openai/gpt-5.5'). Uses SDK default if not specified. */
   model: z.string().optional(),
   /** Maximum agentic turns (API round-trips) per hunk analysis. Overrides defaults.maxTurns. */
@@ -245,6 +249,12 @@ export const DefaultsSchema = z.object({
    * skill config. Pull request runs in the GitHub Action only. Default: false
    */
   incremental: z.boolean().optional(),
+  /**
+   * Reuse a hunk review that found nothing when its prompt is unchanged and every file read or
+   * search it made returns the same output. Stored in the Warden service; needs a non-metrics data
+   * profile. Pull request runs in the GitHub Action only. Default: false
+   */
+  reviewCache: z.boolean().optional(),
   /**
    * Slug of the GitHub App that writes Warden's check runs. Only its checks
    * count as incremental baselines or as runs that covered the PR for a

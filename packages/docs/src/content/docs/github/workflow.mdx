@@ -246,6 +246,37 @@ even when the gate skipped most hunks. Neutral checks for skipped triggers do
 not count. Without a covered run among the last 10 commits, the gate sees the
 full pull request. Without `incrementalApp`, it sees only the triggering push.
 
+### Review Cache
+
+Incremental review does not look at code outside the hunk, so a guard removed
+elsewhere does not trigger a re-review. `reviewCache = true` is a stricter
+alternative for skills such as `security-review`. Warden reuses an earlier
+review only if it found nothing and would see the same thing now:
+
+- the same skill prompt, model settings, pull request title and body, hunk,
+  and surrounding lines; line numbers and the changed-file list are ignored
+- the same output from every file read, search, and listing that review made,
+  replayed against the current checkout
+
+Any difference means a full review of that hunk. Reviews that reported
+findings are never reused. The title and body are part of the match so text in
+one pull request's description cannot earn a clean review that another pull
+request reuses.
+
+```toml title="warden.toml"
+[[skills]]
+name = "security-review"
+incremental = false
+reviewCache = true
+```
+
+Reviews are stored in the [Warden service](/service/) for 30 days, or less
+when the tenant keeps findings for less time. They hold file paths, search
+patterns, and output hashes, not file contents. The cache needs a service
+`data` profile other than `metrics`, and only the Pi runtime records the
+evidence it relies on. If the service is unreachable, Warden reviews every
+hunk.
+
 ## Required Status Checks
 
 If Warden is a required status check, require the core `warden` check or a

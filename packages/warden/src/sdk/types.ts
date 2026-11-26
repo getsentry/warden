@@ -3,6 +3,8 @@ import type { HunkWithContext } from '../diff/index.js';
 import type { ChunkingConfig, Effort, IgnoreConfig, ScanConfig } from '../config/schema.js';
 import type { RuntimeName } from './runtimes/index.js';
 import type { ProviderFailureCircuitBreaker } from './circuit-breaker.js';
+import type { HunkReviewCache } from './hunk-review-cache.js';
+import type { ToolEvidence } from './runtimes/types.js';
 
 /** A single auxiliary usage entry, keyed by agent name (e.g. 'extraction', 'dedup'). */
 export interface AuxiliaryUsageEntry {
@@ -48,6 +50,8 @@ export interface HunkAnalysisResult {
   auxiliaryUsage?: AuxiliaryUsageEntry[];
   /** Optional runtime trace captured for this hunk. */
   trace?: HunkTrace;
+  /** Every checkout tool call the review made, when the runtime recorded all of them. */
+  evidence?: ToolEvidence[];
   /** Model that actually answered this hunk, from the live API response. */
   responseModel?: string;
 }
@@ -71,6 +75,8 @@ export interface ChunkAnalysisResult {
   auxiliaryUsage?: AuxiliaryUsageEntry[];
   /** Optional runtime trace captured for this chunk. */
   trace?: HunkTrace;
+  /** Set when an earlier clean review was reused because its prompt and tool evidence were unchanged. */
+  reused?: boolean;
 }
 
 /**
@@ -156,6 +162,8 @@ export interface SkillRunnerOptions {
   captureTraces?: boolean;
   /** Quoted, lower-authority repository history admitted by the optional memory service. */
   historicalEvidence?: string;
+  /** Reuse clean hunk reviews whose prompt and tool evidence are unchanged. */
+  hunkReviewCache?: HunkReviewCache;
 }
 
 /** Raw hunk indexes (in patch order) to leave out of analysis, keyed by filename. */
