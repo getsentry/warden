@@ -1,5 +1,5 @@
-export const id = 663;
-export const ids = [663,834,453];
+export const id = 122;
+export const ids = [122,834,453];
 export const modules = {
 
 /***/ 14420:
@@ -1159,54 +1159,24 @@ function assertValidPiModelSelectors(targets) {
 
 /***/ }),
 
-/***/ 60522:
+/***/ 24750:
 /***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
 
-// ESM COMPAT FLAG
-__webpack_require__.r(__webpack_exports__);
-
-// EXPORTS
-__webpack_require__.d(__webpack_exports__, {
-  piRuntime: () => (/* binding */ piRuntime)
-});
-
-// EXTERNAL MODULE: ../../node_modules/.pnpm/@earendil-works+pi-coding-agent@0.86.1_@modelcontextprotocol+sdk@1.32.1_zod@4.6.7__ws@8.22.0_zod@4.6.7/node_modules/@earendil-works/pi-coding-agent/dist/index.js + 221 modules
-var dist = __webpack_require__(53406);
-// EXTERNAL MODULE: ../../node_modules/.pnpm/typebox@1.3.27/node_modules/typebox/build/index.mjs + 1 modules
-var build = __webpack_require__(91862);
-// EXTERNAL MODULE: ../../node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/classic/schemas.js + 7 modules
-var schemas = __webpack_require__(51737);
-// EXTERNAL MODULE: ../../node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/json-schema-processors.js
-var json_schema_processors = __webpack_require__(9214);
-// EXTERNAL MODULE: ./src/sentry.ts
-var sentry = __webpack_require__(30340);
-// EXTERNAL MODULE: ./src/sentry-trace.ts
-var sentry_trace = __webpack_require__(68016);
-// EXTERNAL MODULE: ./src/utils/index.ts + 1 modules
-var utils = __webpack_require__(82272);
-// EXTERNAL MODULE: ./src/sdk/haiku.ts
-var haiku = __webpack_require__(39026);
-// EXTERNAL MODULE: ./src/sdk/errors.ts
-var errors = __webpack_require__(98229);
-// EXTERNAL MODULE: ./src/sdk/otel.ts
-var otel = __webpack_require__(85884);
-// EXTERNAL MODULE: ./src/sdk/usage.ts
-var usage = __webpack_require__(44759);
-// EXTERNAL MODULE: ./src/sdk/runtimes/model-selectors.ts
-var model_selectors = __webpack_require__(85286);
-// EXTERNAL MODULE: ./src/sdk/offline.ts
-var offline = __webpack_require__(8695);
-// EXTERNAL MODULE: external "node:crypto"
-var external_node_crypto_ = __webpack_require__(77598);
-// EXTERNAL MODULE: external "node:fs/promises"
-var promises_ = __webpack_require__(51455);
-// EXTERNAL MODULE: external "node:path"
-var external_node_path_ = __webpack_require__(76760);
-// EXTERNAL MODULE: external "node:url"
-var external_node_url_ = __webpack_require__(73136);
-// EXTERNAL MODULE: ./src/skills/resources.ts
-var resources = __webpack_require__(18771);
-;// CONCATENATED MODULE: ./src/sdk/runtimes/pi-file-tools.ts
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   Gt: () => (/* binding */ createCheckoutFileTools),
+/* harmony export */   gz: () => (/* binding */ changedToolEvidence)
+/* harmony export */ });
+/* unused harmony export hashToolOutput */
+/* harmony import */ var node_crypto__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(77598);
+/* harmony import */ var node_crypto__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(node_crypto__WEBPACK_IMPORTED_MODULE_0__);
+/* harmony import */ var node_fs_promises__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(51455);
+/* harmony import */ var node_fs_promises__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__webpack_require__.n(node_fs_promises__WEBPACK_IMPORTED_MODULE_1__);
+/* harmony import */ var node_path__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(76760);
+/* harmony import */ var node_path__WEBPACK_IMPORTED_MODULE_2___default = /*#__PURE__*/__webpack_require__.n(node_path__WEBPACK_IMPORTED_MODULE_2__);
+/* harmony import */ var node_url__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(73136);
+/* harmony import */ var node_url__WEBPACK_IMPORTED_MODULE_3___default = /*#__PURE__*/__webpack_require__.n(node_url__WEBPACK_IMPORTED_MODULE_3__);
+/* harmony import */ var _earendil_works_pi_coding_agent__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(53406);
+/* harmony import */ var _skills_resources_js__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(18771);
 
 
 
@@ -1220,29 +1190,29 @@ function isMissingPathError(error) {
         && (error.code === 'ENOENT' || error.code === 'ENOTDIR');
 }
 function isWithinPath(root, target) {
-    const relativePath = (0,external_node_path_.relative)(root, target);
+    const relativePath = (0,node_path__WEBPACK_IMPORTED_MODULE_2__.relative)(root, target);
     return relativePath === ''
         || (relativePath !== '..'
-            && !relativePath.startsWith(`..${external_node_path_.sep}`)
-            && !(0,external_node_path_.isAbsolute)(relativePath));
+            && !relativePath.startsWith(`..${node_path__WEBPACK_IMPORTED_MODULE_2__.sep}`)
+            && !(0,node_path__WEBPACK_IMPORTED_MODULE_2__.isAbsolute)(relativePath));
 }
 async function resolveThroughExistingAncestor(target) {
     let candidate = target;
     const missingSegments = [];
     while (true) {
         try {
-            const existingPath = await (0,promises_.realpath)(candidate);
-            return (0,external_node_path_.resolve)(existingPath, ...missingSegments.reverse());
+            const existingPath = await (0,node_fs_promises__WEBPACK_IMPORTED_MODULE_1__.realpath)(candidate);
+            return (0,node_path__WEBPACK_IMPORTED_MODULE_2__.resolve)(existingPath, ...missingSegments.reverse());
         }
         catch (error) {
             if (!isMissingPathError(error)) {
                 throw error;
             }
-            const parent = (0,external_node_path_.dirname)(candidate);
+            const parent = (0,node_path__WEBPACK_IMPORTED_MODULE_2__.dirname)(candidate);
             if (parent === candidate) {
                 throw error;
             }
-            missingSegments.push((0,external_node_path_.basename)(candidate));
+            missingSegments.push((0,node_path__WEBPACK_IMPORTED_MODULE_2__.basename)(candidate));
             candidate = parent;
         }
     }
@@ -1251,10 +1221,10 @@ function checkoutPathError(requestedPath, checkoutPath) {
     return new Error(`Path "${requestedPath}" is outside the checkout at "${checkoutPath}". ${CHECKOUT_GUIDANCE}`);
 }
 async function resolveAllowedPath(checkoutPath, requestedPath, skillRoot) {
-    const checkout = (0,external_node_path_.resolve)(checkoutPath);
-    const target = (0,external_node_path_.resolve)(checkout, requestedPath);
-    const resourceRoot = skillRoot ? resources/* SKILL_RESOURCE_DIRECTORIES */.j
-        .map((dir) => (0,external_node_path_.resolve)(skillRoot, dir))
+    const checkout = (0,node_path__WEBPACK_IMPORTED_MODULE_2__.resolve)(checkoutPath);
+    const target = (0,node_path__WEBPACK_IMPORTED_MODULE_2__.resolve)(checkout, requestedPath);
+    const resourceRoot = skillRoot ? _skills_resources_js__WEBPACK_IMPORTED_MODULE_5__/* .SKILL_RESOURCE_DIRECTORIES */ .j
+        .map((dir) => (0,node_path__WEBPACK_IMPORTED_MODULE_2__.resolve)(skillRoot, dir))
         .find((root) => isWithinPath(root, target)) : undefined;
     const withinCheckout = isWithinPath(checkout, target);
     if (!withinCheckout && !resourceRoot) {
@@ -1271,7 +1241,7 @@ async function resolveAllowedPath(checkoutPath, requestedPath, skillRoot) {
         // Anchor the extra access to the skill itself, so resource symlinks cannot
         // grant access to unrelated files outside the checkout.
         const canonicalSkillRoot = await resolveThroughExistingAncestor(skillRoot);
-        const allowedRoot = (0,external_node_path_.resolve)(canonicalSkillRoot, (0,external_node_path_.relative)((0,external_node_path_.resolve)(skillRoot), resourceRoot));
+        const allowedRoot = (0,node_path__WEBPACK_IMPORTED_MODULE_2__.resolve)(canonicalSkillRoot, (0,node_path__WEBPACK_IMPORTED_MODULE_2__.relative)((0,node_path__WEBPACK_IMPORTED_MODULE_2__.resolve)(skillRoot), resourceRoot));
         if (isWithinPath(allowedRoot, canonicalTarget)) {
             return canonicalTarget;
         }
@@ -1292,16 +1262,49 @@ function hashToolOutput(toolName, result) {
         const lines = text.split('\n');
         canonical = (toolName === 'grep' ? lines.map((line) => line.replace(GREP_LINE, '$1$2')) : lines).sort().join('\n');
     }
-    return (0,external_node_crypto_.createHash)('sha256').update(canonical).digest('hex');
+    return (0,node_crypto__WEBPACK_IMPORTED_MODULE_0__.createHash)('sha256').update(canonical).digest('hex');
+}
+const SKILL_PATH_PREFIX = 'skill:';
+/**
+ * Record a requested path so it replays on another machine: skill resources become `skill:<relative>`
+ * and absolute checkout paths become repository-relative. Both roots differ between Action runs.
+ */
+function portablePath(requestedPath, checkoutPath, skillRoot) {
+    if (!(0,node_path__WEBPACK_IMPORTED_MODULE_2__.isAbsolute)(requestedPath))
+        return requestedPath;
+    const target = (0,node_path__WEBPACK_IMPORTED_MODULE_2__.resolve)(requestedPath);
+    if (skillRoot && isWithinPath((0,node_path__WEBPACK_IMPORTED_MODULE_2__.resolve)(skillRoot), target)) {
+        return `${SKILL_PATH_PREFIX}${(0,node_path__WEBPACK_IMPORTED_MODULE_2__.relative)((0,node_path__WEBPACK_IMPORTED_MODULE_2__.resolve)(skillRoot), target)}`;
+    }
+    if (isWithinPath((0,node_path__WEBPACK_IMPORTED_MODULE_2__.resolve)(checkoutPath), target)) {
+        return (0,node_path__WEBPACK_IMPORTED_MODULE_2__.relative)((0,node_path__WEBPACK_IMPORTED_MODULE_2__.resolve)(checkoutPath), target) || '.';
+    }
+    return requestedPath;
+}
+function replayParams(params, skillRoot) {
+    const path = params['path'];
+    if (typeof path !== 'string' || !path.startsWith(SKILL_PATH_PREFIX) || !skillRoot)
+        return params;
+    return { ...params, path: (0,node_path__WEBPACK_IMPORTED_MODULE_2__.resolve)(skillRoot, path.slice(SKILL_PATH_PREFIX.length)) };
+}
+/**
+ * Whether replaying this call later can return the same output. Grep and find do not sort their
+ * results, so once a match or byte limit truncates them, which entries come back varies between runs.
+ */
+function isReplayable(toolName, result) {
+    if (toolName !== 'grep' && toolName !== 'find')
+        return true;
+    const details = result?.details;
+    return !details?.['matchLimitReached'] && !details?.['resultLimitReached'] && !details?.['truncation'];
 }
 function hashToolError(error) {
-    return (0,external_node_crypto_.createHash)('sha256').update(error instanceof Error ? error.message : String(error)).digest('hex');
+    return (0,node_crypto__WEBPACK_IMPORTED_MODULE_0__.createHash)('sha256').update(error instanceof Error ? error.message : String(error)).digest('hex');
 }
 function confineTool(tool, checkoutPath, skillRoot, onEvidence) {
     const guidance = skillRoot
         ? `${CHECKOUT_GUIDANCE} Read may also access scripts/, references/, and assets/ under the resolved skill at ${skillRoot}.`
         : CHECKOUT_GUIDANCE;
-    return (0,dist.defineTool)({
+    return (0,_earendil_works_pi_coding_agent__WEBPACK_IMPORTED_MODULE_4__.defineTool)({
         ...tool,
         description: `${tool.description} ${guidance}`,
         promptGuidelines: [
@@ -1312,16 +1315,21 @@ function confineTool(tool, checkoutPath, skillRoot, onEvidence) {
             const input = params;
             const requestedPath = typeof input.path === 'string' ? input.path : '.';
             const record = (outputHash, isError) => {
-                onEvidence?.({ tool: tool.name, params: { ...params }, outputHash, isError });
+                const recordedParams = { ...params };
+                if (typeof input.path === 'string')
+                    recordedParams['path'] = portablePath(input.path, checkoutPath, skillRoot);
+                onEvidence?.({ tool: tool.name, params: recordedParams, outputHash, isError });
             };
             try {
                 const confinedPath = await resolveAllowedPath(checkoutPath, requestedPath, skillRoot);
                 const confinedParams = {
                     ...params,
-                    path: (0,external_node_url_.pathToFileURL)(confinedPath).href,
+                    path: (0,node_url__WEBPACK_IMPORTED_MODULE_3__.pathToFileURL)(confinedPath).href,
                 };
                 const result = await tool.execute(toolCallId, confinedParams, signal, onUpdate, context);
-                record(hashToolOutput(tool.name, result), false);
+                // Unreplayable calls stay unrecorded, so the session's evidence counts as incomplete.
+                if (isReplayable(tool.name, result))
+                    record(hashToolOutput(tool.name, result), false);
                 return result;
             }
             catch (error) {
@@ -1336,16 +1344,16 @@ function createCheckoutFileTools(checkoutPath, toolNames, skillRoot, onEvidence)
     const requestedTools = new Set(toolNames);
     const tools = [];
     if (requestedTools.has('read')) {
-        tools.push(confineTool((0,dist.createReadToolDefinition)(checkoutPath), checkoutPath, skillRoot, onEvidence));
+        tools.push(confineTool((0,_earendil_works_pi_coding_agent__WEBPACK_IMPORTED_MODULE_4__.createReadToolDefinition)(checkoutPath), checkoutPath, skillRoot, onEvidence));
     }
     if (requestedTools.has('grep')) {
-        tools.push(confineTool((0,dist.createGrepToolDefinition)(checkoutPath), checkoutPath, undefined, onEvidence));
+        tools.push(confineTool((0,_earendil_works_pi_coding_agent__WEBPACK_IMPORTED_MODULE_4__.createGrepToolDefinition)(checkoutPath), checkoutPath, undefined, onEvidence));
     }
     if (requestedTools.has('find')) {
-        tools.push(confineTool((0,dist.createFindToolDefinition)(checkoutPath), checkoutPath, undefined, onEvidence));
+        tools.push(confineTool((0,_earendil_works_pi_coding_agent__WEBPACK_IMPORTED_MODULE_4__.createFindToolDefinition)(checkoutPath), checkoutPath, undefined, onEvidence));
     }
     if (requestedTools.has('ls')) {
-        tools.push(confineTool((0,dist.createLsToolDefinition)(checkoutPath), checkoutPath, undefined, onEvidence));
+        tools.push(confineTool((0,_earendil_works_pi_coding_agent__WEBPACK_IMPORTED_MODULE_4__.createLsToolDefinition)(checkoutPath), checkoutPath, undefined, onEvidence));
     }
     return tools;
 }
@@ -1366,7 +1374,7 @@ async function changedToolEvidence(checkoutPath, evidence, skillRoot) {
         let outputHash;
         let isError = false;
         try {
-            const result = await tool.execute('replay', entry.params, undefined, undefined, undefined);
+            const result = await tool.execute('replay', replayParams(entry.params, skillRoot), undefined, undefined, undefined);
             outputHash = hashToolOutput(entry.tool, result);
         }
         catch (error) {
@@ -1380,7 +1388,30 @@ async function changedToolEvidence(checkoutPath, evidence, skillRoot) {
     return changed;
 }
 
-;// CONCATENATED MODULE: ./src/sdk/runtimes/pi.ts
+
+/***/ }),
+
+/***/ 19113:
+/***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   piRuntime: () => (/* binding */ piRuntime)
+/* harmony export */ });
+/* harmony import */ var _earendil_works_pi_coding_agent__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(53406);
+/* harmony import */ var _earendil_works_pi_ai__WEBPACK_IMPORTED_MODULE_13__ = __webpack_require__(91862);
+/* harmony import */ var zod__WEBPACK_IMPORTED_MODULE_10__ = __webpack_require__(51737);
+/* harmony import */ var zod__WEBPACK_IMPORTED_MODULE_12__ = __webpack_require__(9214);
+/* harmony import */ var _sentry_js__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(30340);
+/* harmony import */ var _sentry_trace_js__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(68016);
+/* harmony import */ var _utils_index_js__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(82272);
+/* harmony import */ var _haiku_js__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(39026);
+/* harmony import */ var _errors_js__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(98229);
+/* harmony import */ var _otel_js__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(85884);
+/* harmony import */ var _usage_js__WEBPACK_IMPORTED_MODULE_11__ = __webpack_require__(44759);
+/* harmony import */ var _model_selectors_js__WEBPACK_IMPORTED_MODULE_7__ = __webpack_require__(85286);
+/* harmony import */ var _offline_js__WEBPACK_IMPORTED_MODULE_9__ = __webpack_require__(8695);
+/* harmony import */ var _pi_file_tools_js__WEBPACK_IMPORTED_MODULE_8__ = __webpack_require__(24750);
 /**
  * Pi runtime adapter.
  *
@@ -1418,11 +1449,11 @@ const PI_TOOL_NAMES = {
     Grep: ['grep'],
 };
 function errorMessage(error) {
-    return (0,errors/* sanitizeErrorMessage */.$w)(error instanceof Error ? error.message : String(error));
+    return (0,_errors_js__WEBPACK_IMPORTED_MODULE_5__/* .sanitizeErrorMessage */ .$w)(error instanceof Error ? error.message : String(error));
 }
 function parseModelSelector(model) {
-    if (!(0,model_selectors/* isPiModelSelector */.E_)(model)) {
-        throw new model_selectors/* InvalidPiModelSelectorError */.n1({ option: 'model', model });
+    if (!(0,_model_selectors_js__WEBPACK_IMPORTED_MODULE_7__/* .isPiModelSelector */ .E_)(model)) {
+        throw new _model_selectors_js__WEBPACK_IMPORTED_MODULE_7__/* .InvalidPiModelSelectorError */ .n1({ option: 'model', model });
     }
     const slashIndex = model.indexOf('/');
     return {
@@ -1518,7 +1549,7 @@ async function refreshSelectedProviderCatalog(modelRuntime, providerId, abortSig
     if (abortSignal?.aborted) {
         throw abortSignal.reason ?? new DOMException('This operation was aborted', 'AbortError');
     }
-    if ((0,offline/* isWardenOffline */.XK)()) {
+    if ((0,_offline_js__WEBPACK_IMPORTED_MODULE_9__/* .isWardenOffline */ .XK)()) {
         await modelRuntime.refresh({
             providers: [providerId],
             allowNetwork: false,
@@ -1574,7 +1605,7 @@ async function refreshSelectedProviderCatalog(modelRuntime, providerId, abortSig
     }
 }
 async function createModelRuntime(model, legacyAnthropicApiKey, abortSignal) {
-    const modelRuntime = await dist.ModelRuntime.create();
+    const modelRuntime = await _earendil_works_pi_coding_agent__WEBPACK_IMPORTED_MODULE_0__.ModelRuntime.create();
     const selectedProvider = model ? parseModelSelector(model).provider : undefined;
     const legacyProvider = legacyApiKeyProvider(model);
     if (legacyAnthropicApiKey && legacyProvider) {
@@ -1604,7 +1635,7 @@ function providerHeadersOverride(provider) {
         return undefined;
     }
     try {
-        return schemas/* record */.g1P(schemas/* string */.YjP(), schemas/* string */.YjP()).parse(JSON.parse(value));
+        return zod__WEBPACK_IMPORTED_MODULE_10__/* .record */ .g1P(zod__WEBPACK_IMPORTED_MODULE_10__/* .string */ .YjP(), zod__WEBPACK_IMPORTED_MODULE_10__/* .string */ .YjP()).parse(JSON.parse(value));
     }
     catch {
         throw new Error(`${envName} must be a JSON object with string values`);
@@ -1687,7 +1718,7 @@ function piUsageToStats(usage) {
     };
 }
 function aggregatePiUsage(messages) {
-    return (0,usage/* aggregateUsage */.Z$)(messages.map((message) => piUsageToStats(message.usage)));
+    return (0,_usage_js__WEBPACK_IMPORTED_MODULE_11__/* .aggregateUsage */ .Z$)(messages.map((message) => piUsageToStats(message.usage)));
 }
 function statusFromPiMessage(message, hitMaxTurns) {
     if (hitMaxTurns) {
@@ -1701,7 +1732,7 @@ function statusFromPiMessage(message, hitMaxTurns) {
         case 'toolUse':
             return 'provider_error';
         case 'error':
-            return message.errorMessage && (0,errors/* isAuthenticationErrorMessage */.Ip)(message.errorMessage)
+            return message.errorMessage && (0,_errors_js__WEBPACK_IMPORTED_MODULE_5__/* .isAuthenticationErrorMessage */ .Ip)(message.errorMessage)
                 ? 'auth_error'
                 : 'provider_error';
         case 'aborted':
@@ -1737,11 +1768,12 @@ function normalizePiResult(run, maxTokens) {
         sessionId: run.sessionId,
         durationMs: run.durationMs,
         numTurns: run.numTurns,
+        evidence: run.evidence,
     };
 }
 function buildSettingsManager(timeout, maxRetries) {
     const providerMaxRetries = maxRetries ?? DEFAULT_PI_PROVIDER_MAX_RETRIES;
-    return dist.SettingsManager.inMemory({
+    return _earendil_works_pi_coding_agent__WEBPACK_IMPORTED_MODULE_0__.SettingsManager.inMemory({
         compaction: { enabled: false },
         retry: {
             // Provider retries are independent from Pi's agent-level transient retry loop.
@@ -1791,12 +1823,12 @@ async function promptWithTimeout(session, userPrompt, timeout) {
 }
 async function runPiPrompt(options) {
     const warnings = [];
-    (0,utils/* bridgeWardenProviderApiKeyEnv */.cw)();
+    (0,_utils_index_js__WEBPACK_IMPORTED_MODULE_3__/* .bridgeWardenProviderApiKeyEnv */ .cw)();
     const modelRuntime = await createModelRuntime(options.model, options.legacyAnthropicApiKey, options.abortController?.signal);
     const model = resolvePiModel(options.model, modelRuntime);
     const settingsManager = buildSettingsManager(options.timeout, options.maxRetries);
-    const agentDir = (0,dist.getAgentDir)();
-    const resourceLoader = new dist.DefaultResourceLoader({
+    const agentDir = (0,_earendil_works_pi_coding_agent__WEBPACK_IMPORTED_MODULE_0__.getAgentDir)();
+    const resourceLoader = new _earendil_works_pi_coding_agent__WEBPACK_IMPORTED_MODULE_0__.DefaultResourceLoader({
         cwd: options.cwd,
         agentDir,
         settingsManager,
@@ -1821,9 +1853,11 @@ async function runPiPrompt(options) {
     // Same-name custom tools override its built-ins, so file access stays in the checkout.
     const customTools = options.customTools ?? [];
     const customToolNames = new Set(customTools.map((tool) => tool.name));
-    const checkoutFileTools = createCheckoutFileTools(options.cwd, options.toolNames.filter((toolName) => !customToolNames.has(toolName)), options.skillRoot);
+    const evidence = [];
+    let toolCalls = 0;
+    const checkoutFileTools = (0,_pi_file_tools_js__WEBPACK_IMPORTED_MODULE_8__/* .createCheckoutFileTools */ .Gt)(options.cwd, options.toolNames.filter((toolName) => !customToolNames.has(toolName)), options.skillRoot, (entry) => evidence.push(entry));
     const sessionCustomTools = [...customTools, ...checkoutFileTools];
-    const buildToolAttributes = (args) => (0,otel/* genAiToolCallAttributes */.Mf)({
+    const buildToolAttributes = (args) => (0,_otel_js__WEBPACK_IMPORTED_MODULE_6__/* .genAiToolCallAttributes */ .Mf)({
         agentName: options.agentName,
         toolName: args.toolName,
         toolDescription: options.toolDescriptions?.[args.toolName],
@@ -1835,8 +1869,8 @@ async function runPiPrompt(options) {
     });
     function startToolSpan(event) {
         try {
-            const parentSpan = options.parentSpan ?? sentry/* Sentry.getActiveSpan */.sQ.getActiveSpan();
-            const span = (0,sentry_trace/* startInactiveTracedSpan */.By)({
+            const parentSpan = options.parentSpan ?? _sentry_js__WEBPACK_IMPORTED_MODULE_1__/* .Sentry.getActiveSpan */ .sQ.getActiveSpan();
+            const span = (0,_sentry_trace_js__WEBPACK_IMPORTED_MODULE_2__/* .startInactiveTracedSpan */ .By)({
                 op: 'gen_ai.execute_tool',
                 name: `execute_tool ${event.toolName}`,
                 ...(parentSpan && { parentSpan }),
@@ -1854,8 +1888,8 @@ async function runPiPrompt(options) {
     }
     function finishToolSpan(event) {
         try {
-            const parentSpan = options.parentSpan ?? sentry/* Sentry.getActiveSpan */.sQ.getActiveSpan();
-            const span = activeToolSpans.get(event.toolCallId) ?? (0,sentry_trace/* startInactiveTracedSpan */.By)({
+            const parentSpan = options.parentSpan ?? _sentry_js__WEBPACK_IMPORTED_MODULE_1__/* .Sentry.getActiveSpan */ .sQ.getActiveSpan();
+            const span = activeToolSpans.get(event.toolCallId) ?? (0,_sentry_trace_js__WEBPACK_IMPORTED_MODULE_2__/* .startInactiveTracedSpan */ .By)({
                 op: 'gen_ai.execute_tool',
                 name: `execute_tool ${event.toolName}`,
                 ...(parentSpan && { parentSpan }),
@@ -1871,7 +1905,7 @@ async function runPiPrompt(options) {
                 span.setAttribute('error.type', 'tool_error');
             }
             span.end();
-            (0,sentry_trace/* recordTracedSpan */.hb)(span, options.traceRecorder);
+            (0,_sentry_trace_js__WEBPACK_IMPORTED_MODULE_2__/* .recordTracedSpan */ .hb)(span, options.traceRecorder);
         }
         catch {
             // Telemetry should never break the workflow.
@@ -1882,7 +1916,7 @@ async function runPiPrompt(options) {
             try {
                 span.setAttribute('error.type', errorType);
                 span.end();
-                (0,sentry_trace/* recordTracedSpan */.hb)(span, options.traceRecorder);
+                (0,_sentry_trace_js__WEBPACK_IMPORTED_MODULE_2__/* .recordTracedSpan */ .hb)(span, options.traceRecorder);
             }
             catch {
                 // Telemetry should never break the workflow.
@@ -1899,22 +1933,22 @@ async function runPiPrompt(options) {
         const followUpMessages = toolResults ?? [];
         const requestModel = options.model ?? message.model ?? message.responseModel;
         try {
-            const usageAttrs = (0,otel/* genAiUsageAttributes */.bO)(piUsageToStats(message.usage));
-            (0,sentry_trace/* startTracedSpan */.wZ)({
+            const usageAttrs = (0,_otel_js__WEBPACK_IMPORTED_MODULE_6__/* .genAiUsageAttributes */ .bO)(piUsageToStats(message.usage));
+            (0,_sentry_trace_js__WEBPACK_IMPORTED_MODULE_2__/* .startTracedSpan */ .wZ)({
                 op: 'gen_ai.chat',
-                name: (0,otel/* genAiSpanName */.kj)('chat', requestModel),
+                name: (0,_otel_js__WEBPACK_IMPORTED_MODULE_6__/* .genAiSpanName */ .kj)('chat', requestModel),
                 ...(options.parentSpan ? { parentSpan: options.parentSpan } : {}),
                 attributes: {
                     'gen_ai.operation.name': 'chat',
-                    'gen_ai.provider.name': message.provider ?? (0,otel/* genAiProviderName */.Jo)('pi', options.model),
+                    'gen_ai.provider.name': message.provider ?? (0,_otel_js__WEBPACK_IMPORTED_MODULE_6__/* .genAiProviderName */ .Jo)('pi', options.model),
                     ...(options.agentName ? { 'gen_ai.agent.name': options.agentName } : {}),
                     ...(requestModel ? { 'gen_ai.request.model': requestModel } : {}),
                     'gen_ai.response.model': message.responseModel ?? message.model,
                     ...usageAttrs,
                 },
             }, (span) => {
-                (0,otel/* setGenAiInputMessageHashesAttr */.vL)(span, conversationMessages);
-                (0,otel/* setGenAiOutputMessagesAttrFromMessages */.L6)(span, [outputMessage]);
+                (0,_otel_js__WEBPACK_IMPORTED_MODULE_6__/* .setGenAiInputMessageHashesAttr */ .vL)(span, conversationMessages);
+                (0,_otel_js__WEBPACK_IMPORTED_MODULE_6__/* .setGenAiOutputMessagesAttrFromMessages */ .L6)(span, [outputMessage]);
             }, options.traceRecorder);
         }
         catch {
@@ -1923,7 +1957,7 @@ async function runPiPrompt(options) {
         conversationMessages.push(outputMessage, ...followUpMessages);
     }
     try {
-        const result = await (0,dist.createAgentSession)({
+        const result = await (0,_earendil_works_pi_coding_agent__WEBPACK_IMPORTED_MODULE_0__.createAgentSession)({
             cwd: options.cwd,
             agentDir,
             modelRuntime,
@@ -1933,7 +1967,7 @@ async function runPiPrompt(options) {
             noTools: options.toolNames.length === 0 ? 'all' : undefined,
             customTools: sessionCustomTools.length > 0 ? sessionCustomTools : undefined,
             resourceLoader,
-            sessionManager: dist.SessionManager.inMemory(options.cwd),
+            sessionManager: _earendil_works_pi_coding_agent__WEBPACK_IMPORTED_MODULE_0__.SessionManager.inMemory(options.cwd),
             settingsManager,
         });
         session = result.session;
@@ -1963,6 +1997,7 @@ async function runPiPrompt(options) {
                 agentEndMessages = [...event.messages];
             }
             else if (event.type === 'tool_execution_start') {
+                toolCalls++;
                 startToolSpan(event);
             }
             else if (event.type === 'tool_execution_end') {
@@ -2022,10 +2057,11 @@ async function runPiPrompt(options) {
         numTurns,
         hitMaxTurns,
         warnings,
+        evidence: evidence.length === toolCalls ? evidence : undefined,
     };
 }
 function toStructuredPrompt(kind, task, schema) {
-    const jsonSchema = json_schema_processors/* toJSONSchema */.bl(schema);
+    const jsonSchema = zod__WEBPACK_IMPORTED_MODULE_12__/* .toJSONSchema */ .bl(schema);
     return [
         `You are Warden's ${kind} structured-output runtime.`,
         task ? `Task: ${task}` : undefined,
@@ -2038,12 +2074,12 @@ function toPiCustomTools(tools, executeTool) {
     if (!tools || tools.length === 0) {
         return undefined;
     }
-    return tools.map((tool) => (0,dist.defineTool)({
+    return tools.map((tool) => (0,_earendil_works_pi_coding_agent__WEBPACK_IMPORTED_MODULE_0__.defineTool)({
         name: tool.name,
         label: tool.name,
         description: tool.description ?? '',
         promptSnippet: `${tool.name}: ${tool.description ?? 'custom tool'}`,
-        parameters: build.Type.Unsafe(tool.inputSchema),
+        parameters: _earendil_works_pi_ai__WEBPACK_IMPORTED_MODULE_13__.Type.Unsafe(tool.inputSchema),
         async execute(_toolCallId, params) {
             const result = await (executeTool ?? (async () => ''))(tool.name, params);
             return {
@@ -2064,12 +2100,12 @@ async function runStructured(request) {
     const systemPrompt = toStructuredPrompt(request.kind, request.task, request.schema);
     const toolNames = customTools?.map((tool) => tool.name) ?? [];
     const toolDescriptions = toolDescriptionsByName(request.tools);
-    return (0,sentry_trace/* startTracedSpan */.wZ)({
+    return (0,_sentry_trace_js__WEBPACK_IMPORTED_MODULE_2__/* .startTracedSpan */ .wZ)({
         op: 'gen_ai.invoke_agent',
-        name: (0,otel/* genAiSpanName */.kj)('invoke_agent', request.agentName),
+        name: (0,_otel_js__WEBPACK_IMPORTED_MODULE_6__/* .genAiSpanName */ .kj)('invoke_agent', request.agentName),
         attributes: {
             'gen_ai.operation.name': 'invoke_agent',
-            'gen_ai.provider.name': (0,otel/* genAiProviderName */.Jo)('pi', request.model),
+            'gen_ai.provider.name': (0,_otel_js__WEBPACK_IMPORTED_MODULE_6__/* .genAiProviderName */ .Jo)('pi', request.model),
             ...(request.agentName ? { 'gen_ai.agent.name': request.agentName } : {}),
             ...(request.task ? { 'warden.ai.task': request.task } : {}),
             ...(request.model ? { 'gen_ai.request.model': request.model } : {}),
@@ -2077,8 +2113,8 @@ async function runStructured(request) {
             'gen_ai.output.type': 'json',
         },
     }, async (span) => {
-        (0,otel/* setGenAiSystemInstructionsAttr */.kq)(span, systemPrompt);
-        (0,otel/* setGenAiInputMessageHashesAttr */.vL)(span, [{ role: 'user', content: request.prompt }]);
+        (0,_otel_js__WEBPACK_IMPORTED_MODULE_6__/* .setGenAiSystemInstructionsAttr */ .kq)(span, systemPrompt);
+        (0,_otel_js__WEBPACK_IMPORTED_MODULE_6__/* .setGenAiInputMessageHashesAttr */ .vL)(span, [{ role: 'user', content: request.prompt }]);
         try {
             const run = await runPiPrompt({
                 cwd: process.cwd(),
@@ -2105,7 +2141,7 @@ async function runStructured(request) {
             if (run.lastAssistant?.provider) {
                 span.setAttribute('gen_ai.provider.name', run.lastAssistant.provider);
             }
-            (0,otel/* setGenAiUsageAttrs */.qk)(span, result.usage);
+            (0,_otel_js__WEBPACK_IMPORTED_MODULE_6__/* .setGenAiUsageAttrs */ .qk)(span, result.usage);
             if (result.responseId) {
                 span.setAttribute('gen_ai.response.id', result.responseId);
             }
@@ -2113,7 +2149,7 @@ async function runStructured(request) {
                 span.setAttribute('gen_ai.response.model', result.responseModel);
             }
             span.setAttribute('gen_ai.response.finish_reasons', [run.lastAssistant?.stopReason ?? result.status]);
-            (0,otel/* setGenAiOutputMessagesAttr */.hX)(span, result.text, run.lastAssistant?.stopReason ?? result.status);
+            (0,_otel_js__WEBPACK_IMPORTED_MODULE_6__/* .setGenAiOutputMessagesAttr */ .hX)(span, result.text, run.lastAssistant?.stopReason ?? result.status);
             if (result.status !== 'success') {
                 span.setAttribute('error.type', result.status);
                 return {
@@ -2122,7 +2158,7 @@ async function runStructured(request) {
                     usage: result.usage,
                 };
             }
-            const json = (0,haiku/* extractJson */.eg)(result.text);
+            const json = (0,_haiku_js__WEBPACK_IMPORTED_MODULE_4__/* .extractJson */ .eg)(result.text);
             if (!json) {
                 span.setAttribute('error.type', 'invalid_json');
                 return { success: false, error: 'No JSON found in response', usage: result.usage };
@@ -2137,7 +2173,7 @@ async function runStructured(request) {
         }
         catch (error) {
             span.setAttribute('error.type', error instanceof Error ? error.name : '_OTHER');
-            return { success: false, error: errorMessage(error), usage: (0,usage/* emptyUsage */.ly)() };
+            return { success: false, error: errorMessage(error), usage: (0,_usage_js__WEBPACK_IMPORTED_MODULE_11__/* .emptyUsage */ .ly)() };
         }
     });
 }
@@ -2147,20 +2183,20 @@ const piRuntime = {
         const { systemPrompt, userPrompt, repoPath, apiKey, options, skillName, tools, allowMutatingTools, } = request;
         const { maxTurns = 50, model, effort, abortController } = options;
         const skillTools = resolvePiSkillTools(tools, allowMutatingTools);
-        return (0,sentry_trace/* startTracedSpan */.wZ)({
+        return (0,_sentry_trace_js__WEBPACK_IMPORTED_MODULE_2__/* .startTracedSpan */ .wZ)({
             op: 'gen_ai.invoke_agent',
-            name: (0,otel/* genAiSpanName */.kj)('invoke_agent', skillName),
+            name: (0,_otel_js__WEBPACK_IMPORTED_MODULE_6__/* .genAiSpanName */ .kj)('invoke_agent', skillName),
             ...(request.parentSpan ? { parentSpan: request.parentSpan } : {}),
             attributes: {
                 'gen_ai.operation.name': 'invoke_agent',
-                'gen_ai.provider.name': (0,otel/* genAiProviderName */.Jo)('pi', model),
+                'gen_ai.provider.name': (0,_otel_js__WEBPACK_IMPORTED_MODULE_6__/* .genAiProviderName */ .Jo)('pi', model),
                 'gen_ai.agent.name': skillName,
                 ...(model ? { 'gen_ai.request.model': model } : {}),
                 'warden.request.max_turns': maxTurns,
             },
         }, async (span) => {
-            (0,otel/* setGenAiSystemInstructionsAttr */.kq)(span, systemPrompt);
-            (0,otel/* setGenAiInputMessageHashesAttr */.vL)(span, [{ role: 'user', content: userPrompt }]);
+            (0,_otel_js__WEBPACK_IMPORTED_MODULE_6__/* .setGenAiSystemInstructionsAttr */ .kq)(span, systemPrompt);
+            (0,_otel_js__WEBPACK_IMPORTED_MODULE_6__/* .setGenAiInputMessageHashesAttr */ .vL)(span, [{ role: 'user', content: userPrompt }]);
             try {
                 const run = await runPiPrompt({
                     cwd: repoPath,
@@ -2184,7 +2220,7 @@ const piRuntime = {
                     if (run.lastAssistant?.provider) {
                         span.setAttribute('gen_ai.provider.name', run.lastAssistant.provider);
                     }
-                    (0,otel/* setGenAiUsageAttrs */.qk)(span, result.usage);
+                    (0,_otel_js__WEBPACK_IMPORTED_MODULE_6__/* .setGenAiUsageAttrs */ .qk)(span, result.usage);
                     if (result.responseId) {
                         span.setAttribute('gen_ai.response.id', result.responseId);
                     }
@@ -2193,7 +2229,7 @@ const piRuntime = {
                     }
                     span.setAttribute('gen_ai.response.finish_reasons', [run.lastAssistant?.stopReason ?? result.status]);
                     if (result.text) {
-                        (0,otel/* setGenAiOutputMessagesAttr */.hX)(span, result.text, run.lastAssistant?.stopReason ?? result.status);
+                        (0,_otel_js__WEBPACK_IMPORTED_MODULE_6__/* .setGenAiOutputMessagesAttr */ .hX)(span, result.text, run.lastAssistant?.stopReason ?? result.status);
                     }
                     if (result.status !== 'success') {
                         span.setAttribute('error.type', result.status);
@@ -2215,7 +2251,7 @@ const piRuntime = {
             }
             catch (error) {
                 const message = errorMessage(error);
-                if ((0,errors/* isAuthenticationErrorMessage */.Ip)(message)) {
+                if ((0,_errors_js__WEBPACK_IMPORTED_MODULE_5__/* .isAuthenticationErrorMessage */ .Ip)(message)) {
                     span.setAttribute('error.type', 'auth_error');
                     return { authError: message };
                 }
