@@ -98,7 +98,6 @@ async function resolveAllowedPath(checkoutPath: string, requestedPath: string, s
   throw checkoutPathError(requestedPath, checkout);
 }
 
-
 /** Grep match (`path:12: text`) and context (`path-12- text`) lines. */
 const GREP_LINE = /^(.+?)([:-])\d+\2/;
 
@@ -106,7 +105,7 @@ const GREP_LINE = /^(.+?)([:-])\d+\2/;
  * Hash a tool result. Search and listing output order is not stable, so lines are sorted. Grep line
  * numbers are dropped so a match that only moved, because lines were added above it, hashes the same.
  */
-export function hashToolOutput(toolName: string, result: unknown): string {
+function hashToolOutput(toolName: string, result: unknown): string {
   const content = (result as { content?: { type?: string; text?: string; data?: string; mimeType?: string }[] } | undefined)?.content ?? [];
   // Hash image bytes too: the text note Pi adds for an image is the same for any image of that type.
   const text = content.map((part) => (part.type === 'text'
@@ -120,28 +119,20 @@ export function hashToolOutput(toolName: string, result: unknown): string {
   return createHash('sha256').update(canonical).digest('hex');
 }
 
-const SKILL_PATH_PREFIX = 'skill:';
-
 /**
- * Record a requested path so it replays on another machine: skill resources become `skill:<relative>`
- * and absolute checkout paths become repository-relative. Both roots differ between Action runs.
+ * Record a requested path so it replays on another machine. Skill resources are stored relative to the
+ * skill root and absolute checkout paths relative to the checkout; both roots differ between Action runs.
  */
-function portablePath(requestedPath: string, checkoutPath: string, skillRoot?: string): string {
-  if (!isAbsolute(requestedPath)) return requestedPath;
+function portablePath(requestedPath: string, checkoutPath: string, skillRoot?: string): { path: string; skillResource?: true } {
+  if (!isAbsolute(requestedPath)) return { path: requestedPath };
   const target = resolve(requestedPath);
   if (skillRoot && isWithinPath(resolve(skillRoot), target)) {
-    return `${SKILL_PATH_PREFIX}${relative(resolve(skillRoot), target)}`;
+    return { path: relative(resolve(skillRoot), target), skillResource: true };
   }
   if (isWithinPath(resolve(checkoutPath), target)) {
-    return relative(resolve(checkoutPath), target) || '.';
+    return { path: relative(resolve(checkoutPath), target) || '.' };
   }
-  return requestedPath;
-}
-
-function replayParams(params: Record<string, unknown>, skillRoot?: string): Record<string, unknown> {
-  const path = params['path'];
-  if (typeof path !== 'string' || !path.startsWith(SKILL_PATH_PREFIX) || !skillRoot) return params;
-  return { ...params, path: resolve(skillRoot, path.slice(SKILL_PATH_PREFIX.length)) };
+  return { path: requestedPath };
 }
 
 /**
@@ -154,8 +145,10 @@ function isReplayable(toolName: string, result: unknown): boolean {
   return !details?.['matchLimitReached'] && !details?.['resultLimitReached'] && !details?.['truncation'];
 }
 
-function hashToolError(error: unknown): string {
-  return createHash('sha256').update(error instanceof Error ? error.message : String(error)).digest('hex');
+/** Hash an error without the checkout location, which appears in path errors and differs between runners. */
+function hashToolError(error: unknown, checkoutPath: string): string {
+  const message = error instanceof Error ? error.message : String(error);
+  return createHash('sha256').update(message.replaceAll(resolve(checkoutPath), '<checkout>')).digest('hex');
 }
 
 function confineTool<TParams extends TSchema, TDetails, TState>(
@@ -179,8 +172,9 @@ function confineTool<TParams extends TSchema, TDetails, TState>(
       const requestedPath = typeof input.path === 'string' ? input.path : '.';
       const record = (outputHash: string, isError: boolean): void => {
         const recordedParams: Record<string, unknown> = { ...(params as Record<string, unknown>) };
-        if (typeof input.path === 'string') recordedParams['path'] = portablePath(input.path, checkoutPath, skillRoot);
-        onEvidence?.({ tool: tool.name, params: recordedParams, outputHash, isError });
+        const portable = typeof input.path === 'string' ? portablePath(input.path, checkoutPath, skillRoot) : undefined;
+        if (portable) recordedParams['path'] = portable.path;
+        onEvidence?.({ tool: tool.name, params: recordedParams, outputHash, isError, ...(portable?.skillResource ? { skillResource: true } : {}) });
       };
       try {
         const confinedPath = await resolveAllowedPath(checkoutPath, requestedPath, skillRoot);
@@ -193,7 +187,7 @@ function confineTool<TParams extends TSchema, TDetails, TState>(
         if (isReplayable(tool.name, result)) record(hashToolOutput(tool.name, result), false);
         return result;
       } catch (error) {
-        record(hashToolError(error), true);
+        record(hashToolError(error, checkoutPath), true);
         throw error;
       }
     },
@@ -249,11 +243,14 @@ export async function changedToolEvidence(
     let outputHash: string;
     let isError = false;
     try {
-      const result = await tool.execute('replay', replayParams(entry.params, skillRoot), undefined, undefined, undefined as never);
+      const params = entry.skillResource && skillRoot && typeof entry.params['path'] === 'string'
+        ? { ...entry.params, path: resolve(skillRoot, entry.params['path']) }
+        : entry.params;
+      const result = await tool.execute('replay', params, undefined, undefined, undefined as never);
       outputHash = hashToolOutput(entry.tool, result);
     } catch (error) {
       isError = true;
-      outputHash = hashToolError(error);
+      outputHash = hashToolError(error, checkoutPath);
     }
     if (outputHash !== entry.outputHash || isError !== entry.isError) {
       changed.push(entry);

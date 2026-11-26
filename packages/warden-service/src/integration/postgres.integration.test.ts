@@ -461,7 +461,7 @@ function defineDriverIntegration(driver: DatabaseDriver, environmentName: string
       tenantIds.push(tenantA, tenantB);
       const contextA: ServiceContext = { tenantId: tenantA, tokenId: randomUUID(), roles: ['admin'], repositoryAllowlist: null };
       const contextB: ServiceContext = { tenantId: tenantB, tokenId: randomUUID(), roles: ['admin'], repositoryAllowlist: null };
-      await ingestRun(database, contextA, metricsEnvelope(`hunks-${randomUUID()}`));
+      // Tenant A has never published a run: recording must create its repository row.
       await ingestRun(database, contextB, metricsEnvelope(`hunks-${randomUUID()}`));
       const repository = metricsEnvelope('unused').repository;
       const key = 'a'.repeat(64);
@@ -478,6 +478,17 @@ function defineDriverIntegration(driver: DatabaseDriver, environmentName: string
         .resolves.toEqual({ reviews: [{ key, evidence: evidence('2'.repeat(64)) }] });
       await expect(recallHunkReviews(database, contextB, { protocolVersion: 1, repository, keys: [key] }))
         .resolves.toEqual({ reviews: [] });
+
+      const ingestOnly = await createServiceToken(database, { tenantId: tenantA, name: 'Runs', roles: ['ingest'] });
+      const reviewWriter = await createServiceToken(database, { tenantId: tenantA, name: 'Warden', roles: ['review_cache'] });
+      const service = createWardenService({ database });
+      const post = (token: string) => service.request('/api/v1/hunk-reviews', {
+        method: 'POST',
+        headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+        body: JSON.stringify({ protocolVersion: 1, repository, reviews: [{ key, skill: 'security-review', evidence: [] }] }),
+      });
+      expect((await post(ingestOnly.token)).status).toBe(403);
+      expect((await post(reviewWriter.token)).status).toBe(200);
 
       await database.query("UPDATE hunk_reviews SET expires_at = now() - interval '1 minute' WHERE tenant_id = $1", [tenantA]);
       await expect(recallHunkReviews(database, contextA, { protocolVersion: 1, repository, keys: [key] }))

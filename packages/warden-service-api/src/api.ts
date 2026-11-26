@@ -305,6 +305,7 @@ export const HunkReviewEvidenceSchema = z.object({
   params: HunkReviewToolParamsSchema,
   outputHash: z.string().regex(/^[0-9a-f]{64}$/),
   isError: z.boolean(),
+  skillResource: z.literal(true).optional(),
 }).strict();
 export type HunkReviewEvidence = z.infer<typeof HunkReviewEvidenceSchema>;
 

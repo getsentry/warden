@@ -12,7 +12,8 @@ import { recallHunkReviews, recordHunkReviews } from './store.js';
 
 /** Register routes for storing and recalling clean hunk reviews. */
 export function registerHunkReviewRoutes(app: Hono<{ Variables: ServiceVariables }>, database: WardenDatabase): void {
-  app.post('/api/v1/hunk-reviews', requireRole('ingest'), async (context) => {
+  // Stored reviews let later runs skip analysis, so writing them needs its own role, not plain ingest.
+  app.post('/api/v1/hunk-reviews', requireRole('review_cache'), async (context) => {
     const body = HunkReviewRecordRequestSchema.safeParse(await context.req.json().catch(() => null));
     if (!body.success) return context.json({ error: { code: 'invalid_request', message: 'Hunk review request is not valid.' } }, 400);
     return context.json(HunkReviewRecordResponseSchema.parse(await recordHunkReviews(database, context.get('serviceContext'), body.data)));

@@ -923,7 +923,6 @@ export async function analyzeFile(
             extractionPreview: result.extractionPreview,
             auxiliaryUsage: result.auxiliaryUsage,
             trace: result.trace,
-            ...(reused ? { reused: true } : {}),
           };
           callbacks?.onChunkComplete?.(chunkResult);
 

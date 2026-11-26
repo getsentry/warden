@@ -173,7 +173,7 @@ export async function deleteTenant(
 }
 
 export interface ServiceExportRecord {
-  type: 'repository' | 'run' | 'skill' | 'usage' | 'finding' | 'memory';
+  type: 'repository' | 'run' | 'skill' | 'usage' | 'finding' | 'memory' | 'hunk_review';
   id: string;
   repositoryId?: string;
   data: Record<string, unknown>;
@@ -245,8 +245,13 @@ export async function exportServiceData(
         'observedAt', observed_at, 'expiresAt', expires_at
       ) AS data FROM memories WHERE tenant_id = $1 AND repository_id = ANY($2::uuid[]) LIMIT 10_000
     `, [context.tenantId, repositoryIds]),
+    database.query<{ id: string; repository_id: string; data: Record<string, unknown> }>(`
+      SELECT review_key AS id, repository_id, jsonb_build_object(
+        'skill', skill, 'reviewedSha', reviewed_sha, 'evidence', evidence, 'expiresAt', expires_at
+      ) AS data FROM hunk_reviews WHERE tenant_id = $1 AND repository_id = ANY($2::uuid[]) LIMIT 50_000
+    `, [context.tenantId, repositoryIds]),
   ]);
-  const types = ['run', 'skill', 'usage', 'finding', 'memory'] as const;
+  const types = ['run', 'skill', 'usage', 'finding', 'memory', 'hunk_review'] as const;
   return [
     ...repositories.rows.map((row): ServiceExportRecord => ({
       type: 'repository', id: row.id, repositoryId: row.id,

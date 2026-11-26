@@ -21,7 +21,7 @@ const timestamps = {
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 };
 
-export const serviceRoleEnum = pgEnum('service_role', ['ingest', 'read', 'admin']);
+export const serviceRoleEnum = pgEnum('service_role', ['ingest', 'read', 'admin', 'review_cache']);
 export const runOutcomeEnum = pgEnum('run_outcome', ['success', 'failure', 'cancelled', 'skipped']);
 export const runSourceEnum = pgEnum('run_source', ['cli', 'action', 'sdk', 'replay']);
 export const dataProfileEnum = pgEnum('data_profile', ['metrics', 'findings', 'code']);

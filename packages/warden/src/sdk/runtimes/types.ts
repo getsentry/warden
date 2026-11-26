@@ -68,6 +68,8 @@ export interface ToolEvidence {
   params: Record<string, unknown>;
   outputHash: string;
   isError: boolean;
+  /** Set when `params.path` is relative to the skill root rather than the checkout. */
+  skillResource?: true;
 }
 
 export interface SkillRunResult {

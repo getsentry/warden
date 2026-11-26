@@ -10,7 +10,7 @@ import type { ServiceContext } from '../context.js';
 import type { DatabaseClient, WardenDatabase } from '../db/database.js';
 
 /** Clean hunk reviews are reusable for this long unless tenant retention removes them sooner. */
-export const HUNK_REVIEW_TTL_DAYS = 30;
+const HUNK_REVIEW_TTL_DAYS = 30;
 
 async function findRepositoryId(
   client: DatabaseClient,
@@ -26,6 +26,22 @@ async function findRepositoryId(
   return result.rows[0]?.id;
 }
 
+/** Find or create the repository row. Reviews are recorded before the run that produced them is published. */
+async function upsertRepositoryId(
+  client: DatabaseClient,
+  context: ServiceContext,
+  identity: RepositoryIdentity,
+): Promise<string | undefined> {
+  if (!canAccessRepository(context, identity.fullName)) return undefined;
+  const result = await client.query<{ id: string }>(`
+    INSERT INTO repositories (tenant_id, provider, owner, name, full_name, memory_enabled)
+    VALUES ($1, $2, $3, $4, $5, false)
+    ON CONFLICT (tenant_id, provider, owner, name) DO UPDATE SET full_name = EXCLUDED.full_name, updated_at = now()
+    RETURNING id
+  `, [context.tenantId, identity.provider, identity.owner, identity.name, identity.fullName]);
+  return result.rows[0]?.id;
+}
+
 /** Store clean hunk reviews, replacing earlier reviews with the same key. */
 export async function recordHunkReviews(
   database: WardenDatabase,
@@ -35,7 +51,7 @@ export async function recordHunkReviews(
   const context = requireServiceContext(contextInput);
   if (request.reviews.length === 0) return { recorded: 0 };
   return database.transaction(async (client) => {
-    const repositoryId = await findRepositoryId(client, context, request.repository);
+    const repositoryId = await upsertRepositoryId(client, context, request.repository);
     if (!repositoryId) return { recorded: 0 };
     const result = await client.query(`
       INSERT INTO hunk_reviews (tenant_id, repository_id, review_key, skill, reviewed_sha, evidence, expires_at)

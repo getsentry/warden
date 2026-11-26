@@ -75,8 +75,6 @@ export interface ChunkAnalysisResult {
   auxiliaryUsage?: AuxiliaryUsageEntry[];
   /** Optional runtime trace captured for this chunk. */
   trace?: HunkTrace;
-  /** Set when an earlier clean review was reused because its prompt and tool evidence were unchanged. */
-  reused?: boolean;
 }
 
 /**

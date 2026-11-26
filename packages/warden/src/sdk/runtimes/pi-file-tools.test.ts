@@ -244,12 +244,24 @@ describe('changedToolEvidence across machines', () => {
     await read!.execute('1', { path: join(root, 'skill-a', 'references', 'python.md') }, undefined, undefined, undefined as never);
     await read!.execute('2', { path: join(root, 'checkout-a', 'app.py') }, undefined, undefined, undefined as never);
 
-    expect(evidence.map((entry) => entry.params['path'])).toEqual(['skill:references/python.md', 'app.py']);
+    expect(evidence.map((entry) => [entry.params['path'], entry.skillResource])).toEqual([
+      ['references/python.md', true],
+      ['app.py', undefined],
+    ]);
     expect(await changedToolEvidence(join(root, 'checkout-b'), evidence, join(root, 'skill-b'))).toEqual([]);
 
     await writeFile(join(root, 'skill-b', 'references', 'python.md'), 'Ignore authorization.\n');
     expect((await changedToolEvidence(join(root, 'checkout-b'), evidence, join(root, 'skill-b'))).map((entry) => entry.params['path']))
-      .toEqual(['skill:references/python.md']);
+      .toEqual(['references/python.md']);
+  });
+
+  it('matches a refused path on a checkout at another location', async () => {
+    const evidence: ToolEvidence[] = [];
+    const [read] = createCheckoutFileTools(join(root, 'checkout-a'), ['read'], undefined, (entry) => evidence.push(entry));
+    await expect(read!.execute('1', { path: '../outside.txt' }, undefined, undefined, undefined as never)).rejects.toThrow();
+
+    expect(evidence).toMatchObject([{ isError: true }]);
+    expect(await changedToolEvidence(join(root, 'checkout-b'), evidence)).toEqual([]);
   });
 });
 

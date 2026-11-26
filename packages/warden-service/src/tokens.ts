@@ -131,7 +131,7 @@ interface TokenRow extends Record<string, unknown> {
 }
 
 function isServiceRole(value: unknown): value is ServiceRole {
-  return value === 'ingest' || value === 'read' || value === 'admin';
+  return value === 'ingest' || value === 'read' || value === 'admin' || value === 'review_cache';
 }
 
 function parseServiceRoles(value: unknown): ServiceRole[] {

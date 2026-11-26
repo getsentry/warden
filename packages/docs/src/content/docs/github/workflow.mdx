@@ -278,10 +278,15 @@ incremental = "evidence"
 
 Reviews are stored in the [Warden service](/service/) for 30 days, or less
 when the tenant keeps findings for less time. They hold file paths, search
-patterns, and output hashes, not file contents. The cache needs a service
-`data` profile other than `metrics`, and only the Pi runtime records the
-evidence it relies on. If the service is unreachable, Warden reviews every
-hunk.
+patterns, and output hashes, not file contents. Recalled repository memory is
+not part of the match, so a new memory reaches an unchanged hunk when its
+stored review expires or the hunk changes.
+
+Evidence mode needs a service `data` profile other than `metrics`, a service
+token with the `review_cache` role (plus `read` to recall reviews), and the Pi
+runtime, which records the evidence it relies on. A stored review lets later
+runs skip the hunk, so only the Warden workflow's token should have that role.
+If the service is unreachable, Warden reviews every hunk.
 
 ## Required Status Checks
 

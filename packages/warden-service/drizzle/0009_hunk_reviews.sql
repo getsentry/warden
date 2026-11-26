@@ -1,3 +1,4 @@
+ALTER TYPE "public"."service_role" ADD VALUE 'review_cache';--> statement-breakpoint
 CREATE TABLE "hunk_reviews" (
 	"tenant_id" uuid NOT NULL,
 	"repository_id" uuid NOT NULL,

@@ -35,7 +35,7 @@ pnpm --filter @sentry/warden-service cli token create \
   --tenant "$TENANT_ID" --name ingest --role ingest --repository acme/widgets
 ```
 
-The `ingest` role can submit runs and request server-side memory extraction. It cannot read findings, history, costs, or memory. Memory recall requires `read`; only combine `--role ingest --role read` on a repository-scoped token. Do not distribute a tenant-wide read token through organization-level Actions secrets.
+The `ingest` role can submit runs and request server-side memory extraction. It cannot read findings, history, costs, or memory. The `review_cache` role can store clean hunk reviews for [evidence mode](/github/workflow/#evidence-mode), which later runs use to skip analysis, so grant it only to the token in the Warden workflow, as you would its GitHub App key. Memory recall requires `read`; only combine `--role ingest --role read` on a repository-scoped token. Do not distribute a tenant-wide read token through organization-level Actions secrets.
 
 The dashboard uses the same stateless Better Auth Google OAuth design as Junior:
 

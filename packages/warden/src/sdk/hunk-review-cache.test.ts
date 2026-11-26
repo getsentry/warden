@@ -9,7 +9,7 @@ import { HunkReviewSession, hunkReviewKey, type CleanHunkReview, type HunkReview
 import { getRuntime, type Runtime } from './runtimes/index.js';
 import { createCheckoutFileTools } from './runtimes/pi-file-tools.js';
 import type { ToolEvidence } from './runtimes/types.js';
-import type { PreparedFile } from './types.js';
+import type { PreparedFile, SkillRunnerOptions } from './types.js';
 
 vi.mock('./runtimes/index.js', () => ({
   getRuntime: vi.fn(),
@@ -48,12 +48,13 @@ function memoryCache(): HunkReviewCache & { stored: Map<string, ToolEvidence[]> 
 }
 
 describe('hunkReviewKey', () => {
-  it('ignores where the hunk sits but not what the agent is told', () => {
+  it('ignores where the hunk sits and recalled memory, but not what the skill tells the agent', () => {
     const key = hunkReviewKey(skill, hunkAt(10), { model: 'openrouter/x-ai/grok-4.5' });
 
     expect(hunkReviewKey(skill, hunkAt(42), { model: 'openrouter/x-ai/grok-4.5' })).toBe(key);
     expect(hunkReviewKey(skill, hunkAt(10), { model: 'openrouter/x-ai/grok-4.6' })).not.toBe(key);
-    expect(hunkReviewKey(skill, hunkAt(10), { model: 'openrouter/x-ai/grok-4.5', historicalEvidence: 'Prior bug here.' })).not.toBe(key);
+    const withMemory: SkillRunnerOptions = { model: 'openrouter/x-ai/grok-4.5', historicalEvidence: 'Prior bug here.' };
+    expect(hunkReviewKey(skill, hunkAt(10), withMemory)).toBe(key);
     expect(hunkReviewKey({ ...skill, prompt: 'Find bugs.' }, hunkAt(10), { model: 'openrouter/x-ai/grok-4.5' })).not.toBe(key);
   });
 
@@ -97,26 +98,24 @@ describe('HunkReviewSession', () => {
     return run;
   }
 
-  async function review(cache: HunkReviewCache) {
+  /** Review the file once and return how many hunks were reused. */
+  async function review(cache: HunkReviewCache): Promise<number> {
     const session = await HunkReviewSession.open(cache, skill, [file], { runtime: 'pi' });
-    const chunks: { reused?: boolean }[] = [];
-    await analyzeFile(skill, file, checkout, { runtime: 'pi' }, {
-      onChunkComplete: (chunk) => chunks.push(chunk),
-    }, undefined, undefined, session);
+    await analyzeFile(skill, file, checkout, { runtime: 'pi' }, undefined, undefined, undefined, session);
     await session.flush();
-    return chunks;
+    return session.reused;
   }
 
   it('reuses a clean review until a file it read changes', async () => {
     const cache = memoryCache();
     const run = mockRuntime('{"findings":[]}', await readEvidence());
 
-    expect(await review(cache)).toEqual([expect.not.objectContaining({ reused: true })]);
-    expect(await review(cache)).toEqual([expect.objectContaining({ reused: true })]);
+    expect(await review(cache)).toBe(0);
+    expect(await review(cache)).toBe(1);
     expect(run).toHaveBeenCalledTimes(1);
 
     await writeFile(join(checkout, 'src', 'auth.py'), 'def require_admin(user):\n    return True\n');
-    expect(await review(cache)).toEqual([expect.not.objectContaining({ reused: true })]);
+    expect(await review(cache)).toBe(0);
     expect(run).toHaveBeenCalledTimes(2);
   });
 

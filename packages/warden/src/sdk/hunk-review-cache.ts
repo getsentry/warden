@@ -39,23 +39,23 @@ const TEMPLATE_PROBE: HunkWithContext = {
 const MAX_EVIDENCE_PER_REVIEW = 200;
 
 /**
- * Key a hunk review by what the agent is shown: the system prompt (with any recalled memory), the
- * user prompt template, PR title and body, the hunk and its surrounding lines without positions, and
- * the model settings. The title and body stay in the key so text in one PR's description cannot earn
- * a clean review that another PR reuses. The changed-file list is left out because it changes on
- * most pushes.
+ * Key a hunk review by what the agent is shown: the skill's system prompt, the user prompt template,
+ * PR title and body, the hunk and its surrounding lines without positions, and the model settings.
+ * The title and body stay in the key so text in one PR's description cannot earn a clean review that
+ * another PR reuses. Recalled memory and the changed-file list are left out: both change on most
+ * pushes, and memory is lower-authority guidance that expires with the review.
  */
 export function hunkReviewKey(
   skill: SkillDefinition,
   hunkCtx: HunkWithContext,
-  options: Pick<SkillRunnerOptions, 'model' | 'runtime' | 'effort' | 'maxTurns' | 'historicalEvidence'>,
+  options: Pick<SkillRunnerOptions, 'model' | 'runtime' | 'effort' | 'maxTurns'>,
   prContext?: Pick<PRPromptContext, 'title' | 'body'>,
 ): string {
   return sha256(JSON.stringify([
     skill.name,
     sha256(JSON.stringify([prContext?.title ?? null, prContext?.body ?? null])),
     skill.tools ?? null,
-    sha256(buildHunkSystemPrompt(skill, options.historicalEvidence)),
+    sha256(buildHunkSystemPrompt(skill)),
     sha256(buildHunkUserPrompt(skill, TEMPLATE_PROBE)),
     hunkContextFingerprint(hunkCtx),
     options.runtime ?? 'pi',
