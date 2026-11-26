@@ -1,0 +1,10 @@
+{
+  "kind": "clean",
+  "summary": "The URL pattern scheme [a-zA-Z][a-zA-Z0-9+\\-.]* is unbounded, so an event message with a long run of scheme-valid characters and no :// makes the regex retry from every position, giving quadratic CPU per message during grouping (ReDoS on event data)",
+  "repository": "getsentry/sentry",
+  "ref": "a111b7473cc002875a38a7ffd3792ee1d395f362",
+  "targets": [
+    "src/sentry/grouping/parameterization.py"
+  ],
+  "source": "https://github.com/getsentry/sentry/commit/a111b7473cc002875a38a7ffd3792ee1d395f362"
+}

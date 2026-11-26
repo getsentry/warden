@@ -1,0 +1,10 @@
+{
+  "kind": "clean",
+  "summary": "_get_missing_organization_members in organization_missing_org_members.py f-string interpolates shared_domain, the email domain shared by the org owners, into the raw CommitAuthor SQL LIKE clause instead of passing it as a query parameter, so an owner email whose domain carries SQL (via import, relocation, or any path that skips Django email validation) injects into a query against the shared database",
+  "repository": "getsentry/sentry",
+  "ref": "dd85c7170dd98bbe2e5fc37c2ac7d182e4152bfc",
+  "targets": [
+    "src/sentry/api/endpoints/organization_missing_org_members.py"
+  ],
+  "source": "https://github.com/getsentry/sentry/commit/dd85c7170dd98bbe2e5fc37c2ac7d182e4152bfc"
+}

@@ -1,0 +1,10 @@
+{
+  "kind": "clean",
+  "summary": "get_robots_txt_parser / check_url_robots_txt fetch robots.txt for event-derived URLs through RobotFileParser.read (raw urllib), bypassing safe_urlopen and its restricted-IP checks, so an attacker-supplied URL makes Sentry request internal or cloud metadata addresses (SSRF)",
+  "repository": "getsentry/sentry",
+  "ref": "e84e7a45b001de51cab826593b8a2f5f0f0b323b",
+  "targets": [
+    "src/sentry/uptime/autodetect/tasks.py"
+  ],
+  "source": "https://github.com/getsentry/sentry/commit/e84e7a45b001de51cab826593b8a2f5f0f0b323b"
+}

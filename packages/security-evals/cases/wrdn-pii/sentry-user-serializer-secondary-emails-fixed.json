@@ -1,0 +1,10 @@
+{
+  "kind": "clean",
+  "summary": "UserSerializer.serialize returns every serialized user's full list of secondary email addresses (with verification state) no matter who is asking, so any endpoint that serializes another user without popping emails, such as organization user details, hands org members each other's private secondary emails",
+  "repository": "getsentry/sentry",
+  "ref": "58b51b430f0883cd5560eca37dbb7a8427e5a8c1",
+  "targets": [
+    "src/sentry/users/api/serializers/user.py"
+  ],
+  "source": "https://github.com/getsentry/sentry/commit/58b51b430f0883cd5560eca37dbb7a8427e5a8c1"
+}

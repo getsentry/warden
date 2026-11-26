@@ -1,0 +1,11 @@
+{
+  "kind": "bug",
+  "summary": "PUT replaces the workflow's project selection with the caller-supplied IDs after checking access only to those IDs, which deletes existing links to projects the caller cannot access and lets a member without global access convert an all_projects workflow to a narrower selection",
+  "repository": "getsentry/sentry",
+  "ref": "d74d48356f2c822f69463c41922823908683e084",
+  "targets": [
+    "src/sentry/seer/endpoints/organization_seer_workflow_configs.py"
+  ],
+  "source": "https://github.com/getsentry/sentry/pull/129734",
+  "noClean": "Production Warden catch on this pull request commit. No fixed commit has been verified, so there is no clean twin yet."
+}

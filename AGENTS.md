@@ -39,6 +39,7 @@ packages/
 │       └── examples/  # Example configurations
 ├── docs/              # Astro docs site (warden-docs), deployed via Vercel
 ├── evals/             # Private eval package: runner, scenarios, fixtures, test skills
+├── security-evals/    # Optional security skill matrix over the sentry corpus (pnpm evals:security)
 ```
 
 ## Key Conventions
