@@ -470,8 +470,12 @@ function defineDriverIntegration(driver: DatabaseDriver, environmentName: string
       await expect(recordHunkReviews(database, contextA, {
         protocolVersion: 1, repository, reviews: [{ key, skill: 'security-review', reviewedSha: 'abc123', evidence: evidence('1'.repeat(64)) }],
       })).resolves.toEqual({ recorded: 1 });
+      // A repeated key in one batch keeps the last review instead of failing the batch.
       await recordHunkReviews(database, contextA, {
-        protocolVersion: 1, repository, reviews: [{ key, skill: 'security-review', evidence: evidence('2'.repeat(64)) }],
+        protocolVersion: 1, repository, reviews: [
+          { key, skill: 'security-review', evidence: evidence('3'.repeat(64)) },
+          { key, skill: 'security-review', evidence: evidence('2'.repeat(64)) },
+        ],
       });
 
       await expect(recallHunkReviews(database, contextA, { protocolVersion: 1, repository, keys: [key, 'b'.repeat(64)] }))

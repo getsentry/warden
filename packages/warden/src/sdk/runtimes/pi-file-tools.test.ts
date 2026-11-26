@@ -182,11 +182,17 @@ describe('changedToolEvidence', () => {
     expect((await changedToolEvidence(checkoutPath, evidence)).map((entry) => entry.tool)).toEqual(['read']);
   });
 
-  it('ignores a search match that only moved down the file', async () => {
-    const evidence = await record();
-    await writeFile(join(checkoutPath, 'src', 'views.py'), '# header\n\nfrom auth import require_admin\n');
+  it('reports a search whose match moved to a different file', async () => {
+    await mkdir(join(checkoutPath, 'src', 'svc-1-api'), { recursive: true });
+    await mkdir(join(checkoutPath, 'src', 'svc-2-api'), { recursive: true });
+    await writeFile(join(checkoutPath, 'src', 'svc-1-api', 'views.py'), 'TOKEN = 1\n');
+    const evidence: ToolEvidence[] = [];
+    const [grep] = createCheckoutFileTools(checkoutPath, ['grep'], undefined, (entry) => evidence.push(entry));
+    await grep!.execute('1', { pattern: 'TOKEN', path: 'src' }, undefined, undefined, undefined as never);
+    await rm(join(checkoutPath, 'src', 'svc-1-api'), { recursive: true });
+    await writeFile(join(checkoutPath, 'src', 'svc-2-api', 'views.py'), 'TOKEN = 1\n');
 
-    expect(await changedToolEvidence(checkoutPath, evidence)).toEqual([]);
+    expect(await changedToolEvidence(checkoutPath, evidence)).toHaveLength(1);
   });
 
   it('reports an image read whose bytes changed', async () => {

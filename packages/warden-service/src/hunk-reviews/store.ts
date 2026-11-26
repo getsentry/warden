@@ -55,8 +55,11 @@ export async function recordHunkReviews(
     if (!repositoryId) return { recorded: 0 };
     const result = await client.query(`
       INSERT INTO hunk_reviews (tenant_id, repository_id, review_key, skill, reviewed_sha, evidence, expires_at)
-      SELECT $1, $2, r.key, r.skill, r.reviewed_sha, r.evidence, now() + ($4 * interval '1 day')
-      FROM jsonb_to_recordset($3::jsonb) AS r(key text, skill text, reviewed_sha text, evidence jsonb)
+      SELECT DISTINCT ON (r.key) $1, $2, r.key, r.skill, r.reviewed_sha, r.evidence, now() + ($4 * interval '1 day')
+      -- One upsert cannot touch a row twice, so keep the last review for a repeated key.
+      FROM ROWS FROM (jsonb_to_recordset($3::jsonb) AS (key text, skill text, reviewed_sha text, evidence jsonb))
+        WITH ORDINALITY AS r(key, skill, reviewed_sha, evidence, position)
+      ORDER BY r.key, r.position DESC
       ON CONFLICT (tenant_id, repository_id, review_key) DO UPDATE SET
         skill = EXCLUDED.skill,
         reviewed_sha = EXCLUDED.reviewed_sha,
