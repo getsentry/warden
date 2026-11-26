@@ -19,6 +19,8 @@ import {
   listSkills,
   summarizeOutcomes,
 } from '../history/store.js';
+import { applyTenantRetention } from '../administration/store.js';
+import { recallHunkReviews, recordHunkReviews } from '../hunk-reviews/store.js';
 import { createMemory } from '../memory/store.js';
 import { persistPassiveMemoryCandidate } from '../memory/passive-store.js';
 import type { PassiveEvidence } from '../memory/passive.js';
@@ -451,6 +453,40 @@ function defineDriverIntegration(driver: DatabaseDriver, environmentName: string
         [tenantId, memory!.id],
       );
       expect(evidenceRows.rows[0]?.count).toBe(2);
+    }, 30_000);
+
+    it('records, replaces, isolates, and expires clean hunk reviews', async () => {
+      const tenantA = await createTenant(database, { slug: `hunks-a-${randomUUID()}`, name: 'Hunks A' });
+      const tenantB = await createTenant(database, { slug: `hunks-b-${randomUUID()}`, name: 'Hunks B' });
+      tenantIds.push(tenantA, tenantB);
+      const contextA: ServiceContext = { tenantId: tenantA, tokenId: randomUUID(), roles: ['admin'], repositoryAllowlist: null };
+      const contextB: ServiceContext = { tenantId: tenantB, tokenId: randomUUID(), roles: ['admin'], repositoryAllowlist: null };
+      await ingestRun(database, contextA, metricsEnvelope(`hunks-${randomUUID()}`));
+      await ingestRun(database, contextB, metricsEnvelope(`hunks-${randomUUID()}`));
+      const repository = metricsEnvelope('unused').repository;
+      const key = 'a'.repeat(64);
+      const evidence = (outputHash: string) => [{ tool: 'read', params: { path: 'src/auth.py' }, outputHash, isError: false }];
+
+      await expect(recordHunkReviews(database, contextA, {
+        protocolVersion: 1, repository, reviews: [{ key, skill: 'security-review', reviewedSha: 'abc123', evidence: evidence('1'.repeat(64)) }],
+      })).resolves.toEqual({ recorded: 1 });
+      await recordHunkReviews(database, contextA, {
+        protocolVersion: 1, repository, reviews: [{ key, skill: 'security-review', evidence: evidence('2'.repeat(64)) }],
+      });
+
+      await expect(recallHunkReviews(database, contextA, { protocolVersion: 1, repository, keys: [key, 'b'.repeat(64)] }))
+        .resolves.toEqual({ reviews: [{ key, evidence: evidence('2'.repeat(64)) }] });
+      await expect(recallHunkReviews(database, contextB, { protocolVersion: 1, repository, keys: [key] }))
+        .resolves.toEqual({ reviews: [] });
+
+      await database.query("UPDATE hunk_reviews SET expires_at = now() - interval '1 minute' WHERE tenant_id = $1", [tenantA]);
+      await expect(recallHunkReviews(database, contextA, { protocolVersion: 1, repository, keys: [key] }))
+        .resolves.toEqual({ reviews: [] });
+      await applyTenantRetention(database, tenantA);
+      const remaining = await database.query<{ count: number }>(
+        'SELECT count(*)::integer AS count FROM hunk_reviews WHERE tenant_id = $1', [tenantA],
+      );
+      expect(remaining.rows[0]?.count).toBe(0);
     }, 30_000);
   });
 }

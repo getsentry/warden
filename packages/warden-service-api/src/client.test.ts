@@ -196,4 +196,37 @@ describe('createWardenServiceClient', () => {
       kind: 'invalid_response',
     });
   });
+
+  it('records and recalls hunk reviews on their endpoints', async () => {
+    const review = {
+      key: 'b'.repeat(64),
+      skill: 'security-review',
+      reviewedSha: 'c'.repeat(40),
+      evidence: [{ tool: 'read', params: { path: 'src/auth.py' }, outputHash: 'd'.repeat(64), isError: false }],
+    };
+    const fetchMock = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(Response.json({ recorded: 1 }))
+      .mockResolvedValueOnce(Response.json({ reviews: [{ key: review.key, evidence: review.evidence }] }));
+    const client = createWardenServiceClient({
+      baseUrl: 'https://warden.example.com',
+      token: 'secret-token',
+      fetch: fetchMock,
+    });
+
+    await expect(client.recordHunkReviews({
+      protocolVersion: 1,
+      repository: envelope.repository,
+      reviews: [review],
+    })).resolves.toEqual({ recorded: 1 });
+    await expect(client.recallHunkReviews({
+      protocolVersion: 1,
+      repository: envelope.repository,
+      keys: [review.key],
+    })).resolves.toEqual({ reviews: [{ key: review.key, evidence: review.evidence }] });
+
+    expect(fetchMock.mock.calls.map(([url]) => String(url))).toEqual([
+      'https://warden.example.com/api/v1/hunk-reviews',
+      'https://warden.example.com/api/v1/hunk-reviews/recall',
+    ]);
+  });
 });

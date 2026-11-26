@@ -13,6 +13,7 @@ import { registerHistoryRoutes } from './history/routes.js';
 import { getFindingDetail } from './history/store.js';
 import { registerJobRoutes } from './jobs/routes.js';
 import type { JobHandlers } from './jobs/runner.js';
+import { registerHunkReviewRoutes } from './hunk-reviews/routes.js';
 import { registerMemoryRoutes } from './memory/routes.js';
 import type { RecallMemoryOptions } from './memory/store.js';
 import { registerAdministrationRoutes } from './administration/routes.js';
@@ -281,6 +282,7 @@ export function createWardenService(options: CreateWardenServiceOptions = {}) {
     registerRunRoutes(app, options.database);
     registerHistoryRoutes(app, options.database);
     registerMemoryRoutes(app, options.database, options.memoryRecall);
+    registerHunkReviewRoutes(app, options.database);
     registerAdministrationRoutes(app, options.database);
     registerPersonalTokenRoutes(app, options.database);
     if (options.cronSecret && jobHandlers) {

@@ -1,9 +1,17 @@
 import type { z } from 'zod';
 import {
+  HunkReviewRecallRequestSchema,
+  HunkReviewRecallResponseSchema,
+  HunkReviewRecordRequestSchema,
+  HunkReviewRecordResponseSchema,
   IngestRunResponseSchema,
   MemoryRecallResponseSchema,
 } from './api.js';
 import type {
+  HunkReviewRecallRequest,
+  HunkReviewRecallResponse,
+  HunkReviewRecordRequest,
+  HunkReviewRecordResponse,
   IngestRunResponse,
   MemoryRecallRequest,
   MemoryRecallResponse,
@@ -18,7 +26,7 @@ import {
 import type { RunEnvelopeV1 } from './protocol.js';
 import { sha256Checksum } from './checksum.js';
 
-export type ServiceClientOperation = 'publish_run' | 'recall_memory';
+export type ServiceClientOperation = 'publish_run' | 'recall_memory' | 'record_hunk_reviews' | 'recall_hunk_reviews';
 export type ServiceClientErrorKind = 'network' | 'timeout' | 'http' | 'invalid_response';
 
 export class ServiceClientError extends Error {
@@ -183,6 +191,24 @@ export function createWardenServiceClient(options: WardenServiceClientOptions) {
         throw new ServiceClientError({ operation: 'recall_memory', kind: 'invalid_response' });
       }
       return response;
+    },
+
+    async recordHunkReviews(input: HunkReviewRecordRequest): Promise<HunkReviewRecordResponse> {
+      return request({
+        operation: 'record_hunk_reviews',
+        path: 'api/v1/hunk-reviews',
+        body: HunkReviewRecordRequestSchema.parse(input),
+        responseSchema: HunkReviewRecordResponseSchema,
+      });
+    },
+
+    async recallHunkReviews(input: HunkReviewRecallRequest): Promise<HunkReviewRecallResponse> {
+      return request({
+        operation: 'recall_hunk_reviews',
+        path: 'api/v1/hunk-reviews/recall',
+        body: HunkReviewRecallRequestSchema.parse(input),
+        responseSchema: HunkReviewRecallResponseSchema,
+      });
     },
   };
 }

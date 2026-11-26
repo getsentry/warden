@@ -92,6 +92,10 @@ export async function applyTenantRetention(database: WardenDatabase, tenantId: s
       DELETE FROM memories WHERE tenant_id = $1 AND lifecycle IN ('archived', 'expired', 'superseded')
         AND updated_at < now() - ($2 * interval '1 day')
     `, [tenantId, settings.lifecycle_retention_days]);
+    await client.query(`
+      DELETE FROM hunk_reviews WHERE tenant_id = $1
+        AND (expires_at < now() OR updated_at < now() - ($2 * interval '1 day'))
+    `, [tenantId, settings.findings_retention_days]);
   });
 }
 
