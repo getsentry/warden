@@ -189,6 +189,19 @@ describe('changedToolEvidence', () => {
     expect(await changedToolEvidence(checkoutPath, evidence)).toEqual([]);
   });
 
+  it('reports an image read whose bytes changed', async () => {
+    // 1x1 PNGs, red then blue.
+    const red = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg==';
+    const blue = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPj/HwADBwIAMCbHYQAAAABJRU5ErkJggg==';
+    await writeFile(join(checkoutPath, 'src', 'logo.png'), Buffer.from(red, 'base64'));
+    const evidence: ToolEvidence[] = [];
+    const [read] = createCheckoutFileTools(checkoutPath, ['read'], undefined, (entry) => evidence.push(entry));
+    await read!.execute('1', { path: 'src/logo.png' }, undefined, undefined, undefined as never);
+    await writeFile(join(checkoutPath, 'src', 'logo.png'), Buffer.from(blue, 'base64'));
+
+    expect(await changedToolEvidence(checkoutPath, evidence)).toHaveLength(1);
+  });
+
   it('does not record a search cut short by its match limit', async () => {
     const evidence: ToolEvidence[] = [];
     const [grep] = createCheckoutFileTools(checkoutPath, ['grep'], undefined, (entry) => evidence.push(entry));

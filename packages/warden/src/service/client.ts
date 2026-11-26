@@ -1,4 +1,4 @@
-import { createWardenServiceClient } from '@sentry/warden-service-api';
+import { createWardenServiceClient, HunkReviewSchema } from '@sentry/warden-service-api';
 import type { RunEnvelopeV1 } from '@sentry/warden-service-api';
 import type {
   MemoryRecallRequest,
@@ -87,13 +87,14 @@ export function createServiceHunkReviewCache(
       return recalled;
     },
     async record(reviews) {
+      // Drop reviews the service would reject, such as tool calls with unknown arguments, so one bad
+      // review does not fail its whole batch.
+      const storable = reviews
+        .map((review) => ({ ...review, ...(reviewedSha ? { reviewedSha } : {}) }))
+        .filter((review) => HunkReviewSchema.safeParse(review).success);
       try {
-        for (const batch of batches(reviews, RECORD_BATCH)) {
-          await client.recordHunkReviews({
-            protocolVersion: 1,
-            repository,
-            reviews: batch.map((review) => ({ ...review, ...(reviewedSha ? { reviewedSha } : {}) })),
-          });
+        for (const batch of batches(storable, RECORD_BATCH)) {
+          await client.recordHunkReviews({ protocolVersion: 1, repository, reviews: batch });
         }
       } catch {
         onWarning?.('Warden service could not store hunk reviews. Later runs will review these hunks again.');

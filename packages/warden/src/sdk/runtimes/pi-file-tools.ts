@@ -107,8 +107,11 @@ const GREP_LINE = /^(.+?)([:-])\d+\2/;
  * numbers are dropped so a match that only moved, because lines were added above it, hashes the same.
  */
 export function hashToolOutput(toolName: string, result: unknown): string {
-  const content = (result as { content?: { type?: string; text?: string }[] } | undefined)?.content ?? [];
-  const text = content.map((part) => (part.type === 'text' ? part.text ?? '' : `[${part.type}]`)).join('\n');
+  const content = (result as { content?: { type?: string; text?: string; data?: string; mimeType?: string }[] } | undefined)?.content ?? [];
+  // Hash image bytes too: the text note Pi adds for an image is the same for any image of that type.
+  const text = content.map((part) => (part.type === 'text'
+    ? part.text ?? ''
+    : `[${part.type}:${part.mimeType ?? ''}:${part.data ?? ''}]`)).join('\n');
   let canonical = text;
   if (toolName !== 'read') {
     const lines = text.split('\n');

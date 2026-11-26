@@ -285,9 +285,24 @@ export const MemoryDetailResponseSchema = z.object({
 export type MemoryDetailResponse = z.infer<typeof MemoryDetailResponseSchema>;
 
 /** One file-tool call from a hunk review and a hash of what it returned. */
+const ToolTextParamSchema = z.string().max(4_000);
+const ToolNumberParamSchema = z.number().int().nonnegative().max(1_000_000);
+
+/** Arguments of the checkout file tools (read, grep, find, ls). Bounded because they come from clients. */
+const HunkReviewToolParamsSchema = z.object({
+  path: ToolTextParamSchema.optional(),
+  pattern: ToolTextParamSchema.optional(),
+  glob: ToolTextParamSchema.optional(),
+  offset: ToolNumberParamSchema.optional(),
+  limit: ToolNumberParamSchema.optional(),
+  context: ToolNumberParamSchema.optional(),
+  ignoreCase: z.boolean().optional(),
+  literal: z.boolean().optional(),
+}).strict();
+
 export const HunkReviewEvidenceSchema = z.object({
   tool: z.string().trim().min(1).max(64),
-  params: z.record(z.string(), z.unknown()),
+  params: HunkReviewToolParamsSchema,
   outputHash: z.string().regex(/^[0-9a-f]{64}$/),
   isError: z.boolean(),
 }).strict();

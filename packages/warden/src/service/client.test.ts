@@ -15,4 +15,20 @@ describe('createServiceHunkReviewCache', () => {
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('could not store hunk reviews'));
     vi.unstubAllGlobals();
   });
+
+  it('stores reviews the service accepts and drops ones it would reject', async () => {
+    const fetchMock = vi.fn(async () => Response.json({ recorded: 1 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const cache = createServiceHunkReviewCache(service, repository, 'abc123');
+    const read = { tool: 'read', params: { path: 'src/auth.py' }, outputHash: 'b'.repeat(64), isError: false };
+
+    await cache.record([
+      { key: 'a'.repeat(64), skill: 'security-review', evidence: [read] },
+      { key: 'c'.repeat(64), skill: 'security-review', evidence: [{ ...read, params: { path: 'x', mode: 'raw' } }] },
+    ]);
+
+    const body = JSON.parse(String((fetchMock.mock.calls[0] as unknown as [string, RequestInit])[1].body));
+    expect(body.reviews.map((review: { key: string }) => review.key)).toEqual(['a'.repeat(64)]);
+    vi.unstubAllGlobals();
+  });
 });
