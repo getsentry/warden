@@ -103,11 +103,21 @@ export interface ToolEvidence {
   isError: boolean;
 }
 
-/** Hash a tool result. Search and listing output order is not stable, so its lines are sorted first. */
+/** Grep match (`path:12: text`) and context (`path-12- text`) lines. */
+const GREP_LINE = /^(.+?)([:-])\d+\2/;
+
+/**
+ * Hash a tool result. Search and listing output order is not stable, so lines are sorted. Grep line
+ * numbers are dropped so a match that only moved, because lines were added above it, hashes the same.
+ */
 export function hashToolOutput(toolName: string, result: unknown): string {
   const content = (result as { content?: { type?: string; text?: string }[] } | undefined)?.content ?? [];
   const text = content.map((part) => (part.type === 'text' ? part.text ?? '' : `[${part.type}]`)).join('\n');
-  const canonical = toolName === 'read' ? text : text.split('\n').sort().join('\n');
+  let canonical = text;
+  if (toolName !== 'read') {
+    const lines = text.split('\n');
+    canonical = (toolName === 'grep' ? lines.map((line) => line.replace(GREP_LINE, '$1$2')) : lines).sort().join('\n');
+  }
   return createHash('sha256').update(canonical).digest('hex');
 }
 

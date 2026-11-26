@@ -6,6 +6,7 @@ import {
   expandHunkContext,
   expandDiffContext,
   formatHunkForAnalysis,
+  hunkContextFingerprint,
 } from './context.js';
 import type { DiffHunk, ParsedDiff } from './parser.js';
 
@@ -222,5 +223,34 @@ describe('formatHunkForAnalysis', () => {
     const output = formatHunkForAnalysis(hunkCtx);
 
     expect(output).not.toContain('## Scope:');
+  });
+});
+
+describe('hunkContextFingerprint', () => {
+  function hunkAt(newStart: number, contextBefore = ['import os']) {
+    return {
+      filename: 'src/auth.py',
+      hunk: {
+        oldStart: newStart,
+        oldCount: 1,
+        newStart,
+        newCount: 1,
+        header: 'def check(user):',
+        content: `@@ -${newStart},1 +${newStart},1 @@ def check(user):\n-    return False\n+    return user.is_admin`,
+        lines: ['-    return False', '+    return user.is_admin'],
+      },
+      contextBefore,
+      contextAfter: ['', 'def other():'],
+      contextStartLine: newStart - contextBefore.length,
+      language: 'python',
+    };
+  }
+
+  it('ignores where the hunk sits in the file', () => {
+    expect(hunkContextFingerprint(hunkAt(10))).toBe(hunkContextFingerprint(hunkAt(42)));
+  });
+
+  it('changes when surrounding lines change', () => {
+    expect(hunkContextFingerprint(hunkAt(10))).not.toBe(hunkContextFingerprint(hunkAt(10, ['import sys'])));
   });
 });

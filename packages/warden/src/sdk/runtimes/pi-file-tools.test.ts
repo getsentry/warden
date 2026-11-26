@@ -182,6 +182,13 @@ describe('changedToolEvidence', () => {
     expect((await changedToolEvidence(checkoutPath, evidence)).map((entry) => entry.tool)).toEqual(['read']);
   });
 
+  it('ignores a search match that only moved down the file', async () => {
+    const evidence = await record();
+    await writeFile(join(checkoutPath, 'src', 'views.py'), '# header\n\nfrom auth import require_admin\n');
+
+    expect(await changedToolEvidence(checkoutPath, evidence)).toEqual([]);
+  });
+
   it('reports a search that gained a match', async () => {
     const evidence = await record();
     await writeFile(join(checkoutPath, 'src', 'admin.py'), 'from auth import require_admin\n');
