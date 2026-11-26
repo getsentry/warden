@@ -206,25 +206,24 @@ describe('resolveSkillConfigs', () => {
     ]);
   });
 
-  it('reviewCache follows 3-level merge (trigger > skill > defaults)', () => {
+  it('lets each skill pick its incremental mode', () => {
     const config: WardenConfig = {
       version: 1,
-      defaults: { reviewCache: true },
+      defaults: { incremental: true, incrementalApp: 'sentry-warden' },
       skills: [
-        { name: 'from-defaults' },
-        { name: 'skill-off', reviewCache: false },
+        { name: 'code-review' },
+        { name: 'security-review', incremental: 'evidence' },
         {
-          name: 'trigger-on',
-          reviewCache: false,
-          triggers: [{ type: 'pull_request', actions: ['opened'], reviewCache: true }],
+          name: 'trigger-evidence',
+          triggers: [{ type: 'pull_request', actions: ['opened'], incremental: 'evidence' }],
         },
       ],
     };
 
-    expect(resolveSkillConfigs(config).map((t) => [t.name, t.reviewCache])).toEqual([
-      ['from-defaults', true],
-      ['skill-off', false],
-      ['trigger-on', true],
+    expect(resolveSkillConfigs(config).map((t) => [t.name, t.incremental])).toEqual([
+      ['code-review', true],
+      ['security-review', 'evidence'],
+      ['trigger-evidence', 'evidence'],
     ]);
   });
 

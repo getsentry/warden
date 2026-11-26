@@ -647,7 +647,7 @@ function checkHistoryFor(
   matchedTriggers: readonly ResolvedTrigger[]
 ): PullRequestCheckHistory | undefined {
   if (context.eventType !== 'pull_request' || !context.pullRequest) return undefined;
-  if (!matchedTriggers.some((trigger) => trigger.incremental || trigger.incrementalApp)) return undefined;
+  if (!matchedTriggers.some((trigger) => trigger.incremental === true || trigger.incrementalApp)) return undefined;
   return createIncrementalBaselineSource(octokit, {
     owner: context.repository.owner,
     repo: context.repository.name,
@@ -666,7 +666,7 @@ function hunkReviewCacheFor(
 ): HunkReviewCache | undefined {
   if (!service || service.data === 'metrics') return undefined;
   if (context.eventType !== 'pull_request' || !context.pullRequest) return undefined;
-  if (!matchedTriggers.some((trigger) => trigger.reviewCache)) return undefined;
+  if (!matchedTriggers.some((trigger) => trigger.incremental === 'evidence')) return undefined;
   return createServiceHunkReviewCache(service, {
     provider: 'github',
     owner: context.repository.owner,

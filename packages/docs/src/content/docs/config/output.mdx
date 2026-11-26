@@ -55,16 +55,9 @@ and runtime defaults live under [Models and Runtimes](/config/models/).
   <div>
     <dt>
       <code>incremental</code>
-      <span class="sentry-property-meta">boolean</span>
+      <span class="sentry-property-meta">boolean | "evidence"</span>
     </dt>
-    <dd>Skip hunks that an earlier clean run on the same pull request already reviewed. GitHub Action pull request runs only. Needs <code>defaults.incrementalApp</code>. See <a href="/github/workflow/#incremental-review">Incremental Review</a>. Default: <code>false</code>.</dd>
-  </div>
-  <div>
-    <dt>
-      <code>reviewCache</code>
-      <span class="sentry-property-meta">boolean</span>
-    </dt>
-    <dd>Reuse a hunk review that found nothing when its prompt is unchanged and every file read and search it made returns the same output. Stored in the Warden service. GitHub Action pull request runs only. See <a href="/github/workflow/#review-cache">Review Cache</a>. Default: <code>false</code>.</dd>
+    <dd><code>true</code> skips hunks that an earlier clean run on the same pull request already reviewed, and needs <code>defaults.incrementalApp</code>. <code>"evidence"</code> skips a hunk only when an earlier review found nothing and everything it read or searched is unchanged, and needs the Warden service. GitHub Action pull request runs only. See <a href="/github/workflow/#incremental-review">Incremental Review</a>. Default: <code>false</code>.</dd>
   </div>
 </dl>
 

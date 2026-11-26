@@ -131,7 +131,7 @@ export interface TriggerExecutorDeps {
   checks?: TriggerCheckReporter;
   /** Lower-authority repository memory recalled once for the Action run. */
   historicalEvidence?: string;
-  /** Clean hunk review store for triggers with `reviewCache` on. */
+  /** Clean hunk review store for triggers with `incremental = "evidence"`. */
   hunkReviewCache?: HunkReviewCache;
   /** Baseline lookup for triggers with `incremental` on. Omit to review the full PR. */
   incremental?: IncrementalBaselineSource;
@@ -235,7 +235,7 @@ export async function executeTrigger(
       try {
         assertValidPiModelSelectors([trigger]);
 
-        const incremental = deps.incremental && trigger.incremental
+        const incremental = deps.incremental && trigger.incremental === true
           ? await prepareIncrementalReview(deps.incremental, trigger, triggerContext, resolveSkill, policy)
           : undefined;
         const gateScope = deps.gateScope
@@ -270,7 +270,7 @@ export async function executeTrigger(
             circuitBreaker: deps.circuitBreaker,
             historicalEvidence: deps.historicalEvidence,
             skipHunks: incremental?.skipHunks,
-            hunkReviewCache: trigger.reviewCache ? deps.hunkReviewCache : undefined,
+            hunkReviewCache: trigger.incremental === 'evidence' ? deps.hunkReviewCache : undefined,
           },
         };
 

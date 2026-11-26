@@ -246,12 +246,12 @@ even when the gate skipped most hunks. Neutral checks for skipped triggers do
 not count. Without a covered run among the last 10 commits, the gate sees the
 full pull request. Without `incrementalApp`, it sees only the triggering push.
 
-### Review Cache
+### Evidence Mode
 
-Incremental review does not look at code outside the hunk, so a guard removed
-elsewhere does not trigger a re-review. `reviewCache = true` is a stricter
-alternative for skills such as `security-review`. Warden reuses an earlier
-review only if it found nothing and would see the same thing now:
+`incremental = true` does not look at code outside the hunk, so a guard removed
+elsewhere does not trigger a re-review. `incremental = "evidence"` is a stricter
+mode for skills such as `security-review`. Warden reuses an earlier review only
+if it found nothing and would see the same thing now:
 
 - the same skill prompt, model settings, pull request title and body, hunk,
   and surrounding lines; line numbers and the changed-file list are ignored
@@ -264,10 +264,16 @@ one pull request's description cannot earn a clean review that another pull
 request reuses.
 
 ```toml title="warden.toml"
+[defaults]
+incremental = true
+incrementalApp = "github-actions"
+
+[[skills]]
+name = "code-review"
+
 [[skills]]
 name = "security-review"
-incremental = false
-reviewCache = true
+incremental = "evidence"
 ```
 
 Reviews are stored in the [Warden service](/service/) for 30 days, or less

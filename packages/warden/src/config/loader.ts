@@ -22,6 +22,7 @@ import {
   type RuntimeName,
   type AgentRuntimeConfig,
   type AuxiliaryRuntimeConfig,
+  type IncrementalMode,
 } from './schema.js';
 import type { SeverityThreshold, ConfidenceThreshold } from '../types/index.js';
 
@@ -479,11 +480,9 @@ export interface ResolvedTrigger {
   /** Fail the check run when findings exceed failOn */
   failCheck?: boolean;
   /** Incremental PR review (merged: trigger > skill > defaults) */
-  incremental?: boolean;
+  incremental?: IncrementalMode;
   /** GitHub App slug whose checks count as incremental baselines (defaults only) */
   incrementalApp?: string;
-  /** Reuse clean hunk reviews with unchanged evidence (merged: trigger > skill > defaults) */
-  reviewCache?: boolean;
   /** Model (merged: trigger > skill > defaults > cli > env) */
   model?: string;
   /** Max agentic turns (merged: trigger > skill > defaults) */
@@ -655,7 +654,6 @@ export function resolveSkillConfigs(
         failCheck: skill.failCheck ?? defaults?.failCheck,
         incremental: skill.incremental ?? defaults?.incremental,
         incrementalApp: defaults?.incrementalApp,
-        reviewCache: skill.reviewCache ?? defaults?.reviewCache,
         model: baseModel,
         maxTurns: baseMaxTurns,
         effort,
@@ -695,7 +693,6 @@ export function resolveSkillConfigs(
           failCheck: trigger.failCheck ?? skill.failCheck ?? defaults?.failCheck,
           incremental: trigger.incremental ?? skill.incremental ?? defaults?.incremental,
           incrementalApp: defaults?.incrementalApp,
-          reviewCache: trigger.reviewCache ?? skill.reviewCache ?? defaults?.reviewCache,
           model: emptyToUndefined(trigger.model) ?? baseModel,
           maxTurns: trigger.maxTurns ?? baseMaxTurns,
           effort,

@@ -48,6 +48,10 @@ export type TriggerType = z.infer<typeof TriggerTypeSchema>;
 export { RuntimeNameSchema };
 export type { RuntimeName };
 
+/** Incremental review: `true` matches hunk text, `"evidence"` also requires unchanged review evidence. */
+export const IncrementalModeSchema = z.union([z.boolean(), z.literal('evidence')]);
+export type IncrementalMode = z.infer<typeof IncrementalModeSchema>;
+
 export const EffortSchema = z.enum(['off', 'low', 'medium', 'high', 'xhigh', 'max']);
 export type Effort = z.infer<typeof EffortSchema>;
 
@@ -102,10 +106,8 @@ export const SkillTriggerSchema = z.object({
   requestChanges: z.boolean().optional(),
   /** Fail the check run when findings exceed failOn */
   failCheck: z.boolean().optional(),
-  /** Skip hunks an earlier clean run on this PR already reviewed. Overrides skill/defaults. */
-  incremental: z.boolean().optional(),
-  /** Reuse clean hunk reviews whose prompt and tool evidence are unchanged. Overrides skill/defaults. */
-  reviewCache: z.boolean().optional(),
+  /** Incremental review mode. Overrides skill/defaults. */
+  incremental: IncrementalModeSchema.optional(),
   model: z.string().optional(),
   maxTurns: z.number().int().positive().optional(),
   /** Candidate finding verification. Overrides skill/defaults verification. */
@@ -151,10 +153,8 @@ export const SkillConfigSchema = z.object({
   requestChanges: z.boolean().optional(),
   /** Fail the check run when findings exceed failOn */
   failCheck: z.boolean().optional(),
-  /** Skip hunks an earlier clean run on this PR already reviewed. Overrides defaults.incremental. */
-  incremental: z.boolean().optional(),
-  /** Reuse clean hunk reviews whose prompt and tool evidence are unchanged. Overrides defaults.reviewCache. */
-  reviewCache: z.boolean().optional(),
+  /** Incremental review mode. Overrides defaults.incremental. */
+  incremental: IncrementalModeSchema.optional(),
   /** Model to use for this skill (e.g., 'openai/gpt-5.5'). Uses SDK default if not specified. */
   model: z.string().optional(),
   /** Maximum agentic turns (API round-trips) per hunk analysis. Overrides defaults.maxTurns. */
@@ -245,16 +245,13 @@ export const DefaultsSchema = z.object({
   /** Fail the check run when findings exceed failOn. Default: false */
   failCheck: z.boolean().optional(),
   /**
-   * Skip hunks an earlier clean run on this PR already reviewed with the same
-   * skill config. Pull request runs in the GitHub Action only. Default: false
+   * Incremental review mode. Pull request runs in the GitHub Action only. Default: false
+   * - `true`: skip hunks an earlier clean run on this PR already reviewed with the same skill config.
+   * - `"evidence"`: skip a hunk only when an earlier review found nothing, its prompt is unchanged,
+   *   and every file read or search it made returns the same output. Stored in the Warden service;
+   *   needs a non-metrics data profile and the Pi runtime.
    */
-  incremental: z.boolean().optional(),
-  /**
-   * Reuse a hunk review that found nothing when its prompt is unchanged and every file read or
-   * search it made returns the same output. Stored in the Warden service; needs a non-metrics data
-   * profile. Pull request runs in the GitHub Action only. Default: false
-   */
-  reviewCache: z.boolean().optional(),
+  incremental: IncrementalModeSchema.optional(),
   /**
    * Slug of the GitHub App that writes Warden's check runs. Only its checks
    * count as incremental baselines or as runs that covered the PR for a

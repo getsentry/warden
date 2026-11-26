@@ -201,6 +201,25 @@ describe('executeTrigger', () => {
       expect(vi.mocked(updateSkillCheck).mock.calls[0]?.[3]).not.toHaveProperty('externalId');
     });
 
+    it('routes evidence mode to the review cache and text mode to hunk baselines', async () => {
+      vi.mocked(runSkillTask).mockResolvedValue({ name: 'test-trigger', report: createReport() });
+      const hunkReviewCache = { recall: vi.fn(), record: vi.fn() };
+      const baselineFor = vi.fn(async () => undefined);
+
+      await executeTrigger({ ...incrementalTrigger, incremental: 'evidence' }, {
+        ...mockDeps, context: incrementalContext, incremental: { baselineFor }, hunkReviewCache,
+      });
+      await executeTrigger(incrementalTrigger, {
+        ...mockDeps, context: incrementalContext, incremental: { baselineFor }, hunkReviewCache,
+      });
+
+      const [evidenceRun, textRun] = vi.mocked(runSkillTask).mock.calls.map((call) => call[0].runnerOptions);
+      expect(evidenceRun?.hunkReviewCache).toBe(hunkReviewCache);
+      expect(evidenceRun?.skipHunks).toBeUndefined();
+      expect(textRun?.hunkReviewCache).toBeUndefined();
+      expect(baselineFor).toHaveBeenCalledTimes(1);
+    });
+
     it('reviews the full PR and still records a baseline when none exists', async () => {
       vi.mocked(runSkillTask).mockResolvedValue({ name: 'test-trigger', report: createReport() });
 
