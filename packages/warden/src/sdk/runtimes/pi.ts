@@ -75,10 +75,10 @@ const UNSUPPORTED_TOOLS: ToolName[] = ['WebFetch', 'WebSearch'];
 const DEFAULT_PI_PROVIDER_MAX_RETRIES = 2;
 const PI_SKILL_PROVIDER_MAX_RETRIES = 0;
 /**
- * Wall-clock limit for one skill model request. Over 7 days, 0.09% of OpenRouter
- * requests ran past 2 minutes, and most of those hung for 40+ minutes.
+ * Wall-clock limit for one skill model request. Over 30 days, 0.05% of OpenRouter
+ * requests ran past 10 minutes, and 93% of those ran past 20 minutes.
  */
-const PI_SKILL_REQUEST_DEADLINE_MS = 180_000;
+const PI_SKILL_REQUEST_DEADLINE_MS = 600_000;
 /** Pi agent-level retries per skill turn. Worst case per request: 3 x deadline plus backoff. */
 const PI_SKILL_TURN_MAX_RETRIES = 2;
 const PI_MODEL_REFRESH_TIMEOUT_MS = 15_000;

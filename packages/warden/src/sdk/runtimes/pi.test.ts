@@ -503,7 +503,7 @@ describe('piRuntime.runSkill', () => {
     const timedOutMessage = assistantMessage({
       stopReason: 'error',
       content: [],
-      errorMessage: 'Model request timed out after 180000ms',
+      errorMessage: 'Model request timed out after 600000ms',
     });
     const toolUseMessage = assistantMessage({
       stopReason: 'toolUse',
@@ -538,7 +538,7 @@ describe('piRuntime.runSkill', () => {
     const timedOutMessage = assistantMessage({
       stopReason: 'error',
       content: [],
-      errorMessage: 'Model request timed out after 180000ms',
+      errorMessage: 'Model request timed out after 600000ms',
     });
     piMocks.session.prompt.mockImplementation(async () => {
       const listener = piMocks.listeners[0];
