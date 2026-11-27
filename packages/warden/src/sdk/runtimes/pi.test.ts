@@ -7,8 +7,6 @@ import {
   SettingsManager,
   createAgentSession,
 } from '@earendil-works/pi-coding-agent';
-import { createAssistantMessageEventStream } from '@earendil-works/pi-ai';
-import type * as PiAi from '@earendil-works/pi-ai';
 import { piRuntime } from './pi.js';
 import { mergeCrossLocationFindings } from '../extract.js';
 import { consolidateBatchFindings, deduplicateFindings, findingToExistingComment } from '../../output/dedup.js';
@@ -77,15 +75,11 @@ const piMocks = vi.hoisted(() => {
   };
 });
 
-vi.mock('@earendil-works/pi-ai', async (importOriginal) => {
-  const actual = await importOriginal<typeof PiAi>();
-  return {
-    Type: {
-      Unsafe: vi.fn((schema: unknown) => schema),
-    },
-    createAssistantMessageEventStream: actual.createAssistantMessageEventStream,
-  };
-});
+vi.mock('@earendil-works/pi-ai', () => ({
+  Type: {
+    Unsafe: vi.fn((schema: unknown) => schema),
+  },
+}));
 
 vi.mock('./pi-file-tools.js', () => ({
   createCheckoutFileTools: vi.fn((_cwd: string, toolNames: readonly string[]) =>
@@ -192,29 +186,9 @@ describe('piRuntime.runSkill', () => {
     piMocks.listeners = [];
     piMocks.resourceLoaderOptions = [];
     piMocks.customTools = [];
-    piMocks.streamFunction.mockReset();
-    piMocks.session.agent.streamFunction = piMocks.streamFunction;
     piMocks.session.prompt.mockImplementation(async () => emitSuccessfulRun());
     piMocks.modelRuntime.getModel.mockReturnValue(piMocks.model);
     piMocks.modelRuntime.getModels.mockReturnValue([piMocks.model]);
-  });
-
-  it('bounds each skill model request with its own abort signal', async () => {
-    piMocks.streamFunction.mockImplementation(() => {
-      const stream = createAssistantMessageEventStream();
-      stream.end();
-      return stream;
-    });
-    piMocks.session.prompt.mockImplementation(async () => {
-      await piMocks.session.agent.streamFunction(piMocks.model, { messages: [] }, {});
-      emitSuccessfulRun();
-    });
-
-    await piRuntime.runSkill(baseSkillRequest());
-
-    expect(piMocks.streamFunction).toHaveBeenCalledWith(piMocks.model, { messages: [] }, {
-      signal: expect.any(AbortSignal),
-    });
   });
 
   it('leaves the model untouched when no base URL override is set', async () => {
@@ -343,7 +317,6 @@ describe('piRuntime.runSkill', () => {
       compaction: { enabled: false },
       retry: expect.objectContaining({
         enabled: true,
-        maxRetries: 2,
         provider: expect.objectContaining({ maxRetries: 0 }),
       }),
     }));
@@ -499,69 +472,20 @@ describe('piRuntime.runSkill', () => {
     });
   });
 
-  it('does not count a turn that Pi retries toward the max turn limit', async () => {
-    const timedOutMessage = assistantMessage({
-      stopReason: 'error',
-      content: [],
-      errorMessage: 'Model request timed out after 600000ms',
-    });
-    const toolUseMessage = assistantMessage({
-      stopReason: 'toolUse',
-      content: [{ type: 'toolCall', id: 'tool-1', name: 'read', arguments: { path: 'README.md' } }],
-    });
-    const finalMessage = assistantMessage();
-    piMocks.session.prompt.mockImplementation(async () => {
-      const listener = piMocks.listeners[0];
-      if (!listener) {
-        throw new Error('Pi session listener was not registered');
-      }
-      listener({ type: 'message_end', message: timedOutMessage });
-      listener({ type: 'turn_end', message: timedOutMessage, toolResults: [] });
-      listener({ type: 'auto_retry_start', attempt: 1, maxAttempts: 2, delayMs: 2_000, errorMessage: 'timed out' });
-      listener({ type: 'message_end', message: toolUseMessage });
-      listener({ type: 'turn_end', message: toolUseMessage, toolResults: [] });
-      listener({ type: 'message_end', message: finalMessage });
-      listener({ type: 'turn_end', message: finalMessage, toolResults: [] });
-      listener({ type: 'agent_end', messages: [toolUseMessage, finalMessage] });
-    });
+  it('fails a skill run that exceeds the time limit', async () => {
+    vi.useFakeTimers();
+    try {
+      piMocks.session.prompt.mockImplementation(() => new Promise(() => undefined));
 
-    const result = await piRuntime.runSkill({
-      ...baseSkillRequest(),
-      options: { model: 'openai/gpt-test', maxTurns: 2 },
-    });
+      const run = expect(piRuntime.runSkill(baseSkillRequest()))
+        .rejects.toThrow('Pi runtime timed out after 600000ms');
+      await vi.advanceTimersByTimeAsync(600_000);
+      await run;
 
-    expect(piMocks.session.abort).not.toHaveBeenCalled();
-    expect(result.result).toMatchObject({ status: 'success', numTurns: 2 });
-  });
-
-  it('records the retried turn with the same input transcript as the failed attempt', async () => {
-    const timedOutMessage = assistantMessage({
-      stopReason: 'error',
-      content: [],
-      errorMessage: 'Model request timed out after 600000ms',
-    });
-    piMocks.session.prompt.mockImplementation(async () => {
-      const listener = piMocks.listeners[0];
-      if (!listener) {
-        throw new Error('Pi session listener was not registered');
-      }
-      listener({ type: 'turn_end', message: timedOutMessage, toolResults: [] });
-      listener({ type: 'auto_retry_start', attempt: 1, maxAttempts: 2, delayMs: 2_000, errorMessage: 'timed out' });
-      emitSuccessfulRun();
-    });
-
-    let spans: TraceSpan[] | undefined;
-    await Sentry.startSpan({ op: 'test', name: 'parent' }, async (span) => {
-      const recorder = startTraceRecorder(span);
-      await withTraceRecorder(recorder, () => piRuntime.runSkill(baseSkillRequest()));
-      spans = recorder?.snapshot();
-    });
-
-    const inputHashes = spans
-      ?.filter((span) => span.op === 'gen_ai.chat')
-      .map((span) => span.attributes?.['warden.gen_ai.input.message_hashes']);
-    expect(inputHashes).toHaveLength(2);
-    expect(inputHashes?.[1]).toEqual(inputHashes?.[0]);
+      expect(piMocks.session.abort).toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('passes effort as Pi thinking level', async () => {
