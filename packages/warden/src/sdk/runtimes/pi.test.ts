@@ -472,6 +472,22 @@ describe('piRuntime.runSkill', () => {
     });
   });
 
+  it('fails a skill run that exceeds the time limit', async () => {
+    vi.useFakeTimers();
+    try {
+      piMocks.session.prompt.mockImplementation(() => new Promise(() => undefined));
+
+      const run = expect(piRuntime.runSkill(baseSkillRequest()))
+        .rejects.toThrow('Pi runtime timed out after 600000ms');
+      await vi.advanceTimersByTimeAsync(600_000);
+      await run;
+
+      expect(piMocks.session.abort).toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('passes effort as Pi thinking level', async () => {
     await piRuntime.runSkill({
       ...baseSkillRequest(),

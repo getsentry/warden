@@ -1344,6 +1344,11 @@ const MUTATING_TOOLS = ['Write', 'Edit', 'Bash'];
 const UNSUPPORTED_TOOLS = ['WebFetch', 'WebSearch'];
 const DEFAULT_PI_PROVIDER_MAX_RETRIES = 2;
 const PI_SKILL_PROVIDER_MAX_RETRIES = 0;
+/**
+ * Wall-clock limit for one skill run. Over 30 days, p99 was 2.5 minutes, and
+ * 92% of the runs that passed 10 minutes also passed 20 minutes.
+ */
+const PI_SKILL_TIMEOUT_MS = 600_000;
 const PI_MODEL_REFRESH_TIMEOUT_MS = 15_000;
 const activeProviderCatalogRefreshes = new Map();
 const PI_TOOL_NAMES = {
@@ -2111,6 +2116,7 @@ const piRuntime = {
                     maxTurns,
                     effort,
                     maxRetries: PI_SKILL_PROVIDER_MAX_RETRIES,
+                    timeout: PI_SKILL_TIMEOUT_MS,
                     abortController,
                     parentSpan: span,
                     traceRecorder: request.traceRecorder,
