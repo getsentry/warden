@@ -1,5 +1,5 @@
-export const id = 334;
-export const ids = [334,834,453];
+export const id = 663;
+export const ids = [663,834,453];
 export const modules = {
 
 /***/ 14420:
@@ -1159,7 +1159,7 @@ function assertValidPiModelSelectors(targets) {
 
 /***/ }),
 
-/***/ 10959:
+/***/ 60522:
 /***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
 
 // ESM COMPAT FLAG
@@ -1196,137 +1196,6 @@ var usage = __webpack_require__(44759);
 var model_selectors = __webpack_require__(85286);
 // EXTERNAL MODULE: ./src/sdk/offline.ts
 var offline = __webpack_require__(8695);
-;// CONCATENATED MODULE: ./src/sdk/runtimes/abort-signals.ts
-/**
- * Combine abort signals without AbortSignal.any (Node < 20.3).
- * Warden's engines field allows Node >= 20.0.0.
- */
-function anyAbortSignal(...signals) {
-    if (typeof AbortSignal.any === 'function') {
-        return AbortSignal.any(signals);
-    }
-    const controller = new AbortController();
-    const onAbort = () => {
-        controller.abort();
-        for (const signal of signals) {
-            signal.removeEventListener('abort', onAbort);
-        }
-    };
-    for (const signal of signals) {
-        if (signal.aborted) {
-            onAbort();
-            break;
-        }
-        signal.addEventListener('abort', onAbort, { once: true });
-    }
-    return controller.signal;
-}
-/**
- * Build a timeout signal without AbortSignal.timeout (Node < 20.3).
- * Same engines window as anyAbortSignal above.
- */
-function timeoutAbortSignal(ms) {
-    if (typeof AbortSignal.timeout === 'function') {
-        return AbortSignal.timeout(ms);
-    }
-    const controller = new AbortController();
-    const timer = setTimeout(() => {
-        controller.abort(new DOMException('The operation was aborted due to timeout', 'TimeoutError'));
-    }, ms);
-    // Match Node's AbortSignal.timeout: do not keep the process alive for the deadline alone.
-    timer.unref?.();
-    return controller.signal;
-}
-
-// EXTERNAL MODULE: ../../node_modules/.pnpm/@earendil-works+pi-ai@0.86.1_@modelcontextprotocol+sdk@1.32.1_zod@4.6.7__ws@8.22.0_zod@4.6.7/node_modules/@earendil-works/pi-ai/dist/utils/event-stream.js
-var event_stream = __webpack_require__(45174);
-;// CONCATENATED MODULE: ./src/sdk/runtimes/pi-request-deadline.ts
-
-
-/**
- * Bound each model request by wall-clock time.
- *
- * Provider SDK timeouts stop at the response headers, and Pi's HTTP idle
- * timeout resets on every streamed byte, so a stream that keeps trickling
- * data never ends (OpenRouter streams in Warden ran 45+ minutes). On expiry
- * the request is aborted and the turn ends with a retryable error, so Pi's
- * agent-level retry resubmits the turn.
- */
-function withRequestDeadline(streamFunction, deadlineMs) {
-    return async (model, context, options) => {
-        const deadline = new AbortController();
-        const signal = options?.signal ? anyAbortSignal(options.signal, deadline.signal) : deadline.signal;
-        const relay = createTurnRelay(model);
-        const timer = setTimeout(() => {
-            const message = timeoutErrorMessage(deadlineMs);
-            deadline.abort(new Error(message));
-            relay.fail(message);
-        }, deadlineMs);
-        timer.unref?.();
-        try {
-            const source = await streamFunction(model, context, { ...options, signal });
-            void pipeTurn(source, relay).finally(() => clearTimeout(timer));
-        }
-        catch (error) {
-            clearTimeout(timer);
-            throw error;
-        }
-        return relay.output;
-    };
-}
-/** Pi retries assistant errors matching "timed out" (pi-ai `isRetryableAssistantError`). */
-function timeoutErrorMessage(deadlineMs) {
-    return `Model request timed out after ${deadlineMs}ms`;
-}
-async function pipeTurn(source, relay) {
-    try {
-        for await (const event of source) {
-            relay.forward(event);
-        }
-    }
-    catch (error) {
-        relay.fail(error instanceof Error ? error.message : String(error));
-    }
-    // A source that ends without "done" or "error" would leave the agent loop
-    // waiting on result() forever. "ended without" is also a Pi retry pattern.
-    relay.fail('Model stream ended without a terminal event');
-}
-function createTurnRelay(model) {
-    const output = (0,event_stream/* createAssistantMessageEventStream */.sM)();
-    let lastPartial;
-    return {
-        output,
-        forward(event) {
-            if ('partial' in event)
-                lastPartial = event.partial;
-            output.push(event);
-        },
-        fail(errorMessage) {
-            const base = lastPartial ?? emptyAssistantMessage(model);
-            output.push({ type: 'error', reason: 'error', error: { ...base, stopReason: 'error', errorMessage } });
-        },
-    };
-}
-function emptyAssistantMessage(model) {
-    return {
-        role: 'assistant',
-        content: [],
-        api: model.api,
-        provider: model.provider,
-        model: model.id,
-        usage: {
-            input: 0,
-            output: 0,
-            cacheRead: 0,
-            cacheWrite: 0,
-            totalTokens: 0,
-            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
-        },
-        stopReason: 'error',
-        timestamp: Date.now(),
-    };
-}
-
 // EXTERNAL MODULE: external "node:fs/promises"
 var promises_ = __webpack_require__(51455);
 // EXTERNAL MODULE: external "node:path"
@@ -1470,20 +1339,16 @@ function createCheckoutFileTools(checkoutPath, toolNames, skillRoot) {
 
 
 
-
-
 const READ_ONLY_TOOLS = ['Read', 'Grep', 'Glob'];
 const MUTATING_TOOLS = ['Write', 'Edit', 'Bash'];
 const UNSUPPORTED_TOOLS = ['WebFetch', 'WebSearch'];
 const DEFAULT_PI_PROVIDER_MAX_RETRIES = 2;
 const PI_SKILL_PROVIDER_MAX_RETRIES = 0;
 /**
- * Wall-clock limit for one skill model request. Over 30 days, 0.05% of OpenRouter
- * requests ran past 10 minutes, and 93% of those ran past 20 minutes.
+ * Wall-clock limit for one skill run. Over 30 days, p99 was 2.5 minutes, and
+ * 92% of the runs that passed 10 minutes also passed 20 minutes.
  */
-const PI_SKILL_REQUEST_DEADLINE_MS = 600_000;
-/** Pi agent-level retries per skill turn. Worst case per request: 3 x deadline plus backoff. */
-const PI_SKILL_TURN_MAX_RETRIES = 2;
+const PI_SKILL_TIMEOUT_MS = 600_000;
 const PI_MODEL_REFRESH_TIMEOUT_MS = 15_000;
 const activeProviderCatalogRefreshes = new Map();
 const PI_TOOL_NAMES = {
@@ -1513,6 +1378,46 @@ function legacyApiKeyProvider(model) {
     }
     const selector = parseModelSelector(model);
     return selector.provider === 'anthropic' ? 'anthropic' : undefined;
+}
+/**
+ * Combine abort signals without AbortSignal.any (Node < 20.3).
+ * Warden's engines field allows Node >= 20.0.0.
+ */
+function anyAbortSignal(...signals) {
+    if (typeof AbortSignal.any === 'function') {
+        return AbortSignal.any(signals);
+    }
+    const controller = new AbortController();
+    const onAbort = () => {
+        controller.abort();
+        for (const signal of signals) {
+            signal.removeEventListener('abort', onAbort);
+        }
+    };
+    for (const signal of signals) {
+        if (signal.aborted) {
+            onAbort();
+            break;
+        }
+        signal.addEventListener('abort', onAbort, { once: true });
+    }
+    return controller.signal;
+}
+/**
+ * Build a timeout signal without AbortSignal.timeout (Node < 20.3).
+ * Same engines window as anyAbortSignal above.
+ */
+function timeoutAbortSignal(ms) {
+    if (typeof AbortSignal.timeout === 'function') {
+        return AbortSignal.timeout(ms);
+    }
+    const controller = new AbortController();
+    const timer = setTimeout(() => {
+        controller.abort(new DOMException('The operation was aborted due to timeout', 'TimeoutError'));
+    }, ms);
+    // Match Node's AbortSignal.timeout: do not keep the process alive for the deadline alone.
+    timer.unref?.();
+    return controller.signal;
 }
 function refreshSignal(abortSignal) {
     const timeoutSignal = timeoutAbortSignal(PI_MODEL_REFRESH_TIMEOUT_MS);
@@ -1776,15 +1681,13 @@ function normalizePiResult(run, maxTokens) {
         numTurns: run.numTurns,
     };
 }
-function buildSettingsManager(options) {
-    const { timeout, maxRetries, turnMaxRetries } = options;
+function buildSettingsManager(timeout, maxRetries) {
     const providerMaxRetries = maxRetries ?? DEFAULT_PI_PROVIDER_MAX_RETRIES;
     return dist.SettingsManager.inMemory({
         compaction: { enabled: false },
         retry: {
             // Provider retries are independent from Pi's agent-level transient retry loop.
             enabled: true,
-            ...(turnMaxRetries !== undefined ? { maxRetries: turnMaxRetries } : {}),
             provider: {
                 ...(timeout !== undefined ? { timeoutMs: timeout } : {}),
                 maxRetries: providerMaxRetries,
@@ -1833,7 +1736,7 @@ async function runPiPrompt(options) {
     (0,utils/* bridgeWardenProviderApiKeyEnv */.cw)();
     const modelRuntime = await createModelRuntime(options.model, options.legacyAnthropicApiKey, options.abortController?.signal);
     const model = resolvePiModel(options.model, modelRuntime);
-    const settingsManager = buildSettingsManager(options);
+    const settingsManager = buildSettingsManager(options.timeout, options.maxRetries);
     const agentDir = (0,dist.getAgentDir)();
     const resourceLoader = new dist.DefaultResourceLoader({
         cwd: options.cwd,
@@ -1961,15 +1864,6 @@ async function runPiPrompt(options) {
         }
         conversationMessages.push(outputMessage, ...followUpMessages);
     }
-    /**
-     * Pi drops a failed turn from its context before an automatic retry.
-     * Undo that turn's count and transcript entry so retries do not use up
-     * maxTurns. The failed turn's chat span and usage stay recorded.
-     */
-    function discardRetriedTurn() {
-        numTurns--;
-        conversationMessages.pop();
-    }
     try {
         const result = await (0,dist.createAgentSession)({
             cwd: options.cwd,
@@ -1985,9 +1879,6 @@ async function runPiPrompt(options) {
             settingsManager,
         });
         session = result.session;
-        if (options.requestDeadlineMs !== undefined) {
-            session.agent.streamFunction = withRequestDeadline(session.agent.streamFunction, options.requestDeadlineMs);
-        }
         if (options.maxTokens !== undefined) {
             // Preserve Pi's provider/auth wrapper while forwarding the caller's cap.
             // Otherwise structured calls silently use the model's full output limit.
@@ -2018,9 +1909,6 @@ async function runPiPrompt(options) {
             }
             else if (event.type === 'tool_execution_end') {
                 finishToolSpan(event);
-            }
-            else if (event.type === 'auto_retry_start') {
-                discardRetriedTurn();
             }
             else if (event.type === 'turn_end') {
                 if (isAssistantMessage(event.message)) {
@@ -2228,8 +2116,7 @@ const piRuntime = {
                     maxTurns,
                     effort,
                     maxRetries: PI_SKILL_PROVIDER_MAX_RETRIES,
-                    requestDeadlineMs: PI_SKILL_REQUEST_DEADLINE_MS,
-                    turnMaxRetries: PI_SKILL_TURN_MAX_RETRIES,
+                    timeout: PI_SKILL_TIMEOUT_MS,
                     abortController,
                     parentSpan: span,
                     traceRecorder: request.traceRecorder,
